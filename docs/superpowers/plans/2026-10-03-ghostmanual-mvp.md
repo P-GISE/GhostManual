@@ -51,7 +51,7 @@
 ## Task 1: 실행 환경과 typed 입력 경계
 **Files:** package/config 파일, src/lib/{schemas,types,errors}.ts, tests/unit/input.test.ts, tests/unit/manual-contract.test.ts.
 **Interfaces:** SourceInputSchema, ManualDraftSchema, QuestionInputSchema, AnswerModelSchema; WorkspaceId/SessionId/SourceId/ManualId/RevisionId branded UUID; AppError(code,httpStatus,retryable).
-- [ ] Step 1: npm 기반 설정·테스트 러너만 준비하고 아래 테스트를 먼저 작성한다.
+- [x] Step 1: npm 기반 설정·테스트 러너만 준비하고 아래 테스트를 먼저 작성한다.
 ```typescript
 it("rejects a 20001-character source", () => {
   expect(SourceInputSchema.safeParse({title:"업무",text:"가".repeat(20001)}).success).toBe(false);
@@ -61,10 +61,10 @@ it("accepts the 100-character minimum", () => {
 });
 ```
 추가: 99자·120/121자 제목·1000/1001자 질문·256KiB 경계·UTF-8 오류·NUL·TXT/MD 외 파일을 구분한다. 파일 검증은 parseSourceUpload(input: File|text): Promise<SourceInput>.
-- [ ] Step 2: npm test -- tests/unit/input.test.ts 실행. Expected: 미구현 경계의 테스트 RED. 러너 오류는 수정하고 실제 행동 실패 확인.
-- [ ] Step 3: Zod schema·typed 에러·업로드 parser 구현. 배열·외부 입력은 unknown에서 parse한다.
-- [ ] Step 4: npm test 및 npm run typecheck. Expected: 전체 테스트·타입검사 종료 0.
-- [ ] Step 5: Git 초기화 후 feat/ghostmanual-mvp 브랜치에서 config+경계 변경을 커밋, ledger 기록. 기존 docs·.codegraph를 삭제하지 않는다.
+- [x] Step 2: npm test -- tests/unit/input.test.ts 실행. Expected: 미구현 경계의 테스트 RED. 러너 오류는 수정하고 실제 행동 실패 확인.
+- [x] Step 3: Zod schema·typed 에러·업로드 parser 구현. 배열·외부 입력은 unknown에서 parse한다.
+- [x] Step 4: npm test 및 npm run typecheck. Expected: 전체 테스트·타입검사 종료 0.
+- [x] Step 5: Git 초기화 후 feat/ghostmanual-mvp 브랜치에서 config+경계 변경을 커밋, ledger 기록. 기존 docs·.codegraph를 삭제하지 않는다.
 
 ## Task 2: 실제 PostgreSQL 저장·세션·자료
 **Files:** db/migrations/001_initial.sql, src/lib/{db,session,sources}.ts, scripts/{migrate,seed}.ts, 관련 API routes, tests/integration/sources.test.ts.
