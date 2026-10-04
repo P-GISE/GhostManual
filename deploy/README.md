@@ -44,3 +44,5 @@ Cloudflare의 GhostManual 전용 hostname을 loopback3200에 연결한 후 외�
 이전 앱 image digest와 이전 compose/.env 설정을 배포 전 보관한다(비밀 설정은 안전한 서버 내부에만). 실패 시 `GHOSTMANUAL_IMAGE`를 이전 digest로 바꾸고 `docker compose --env-file .env up -d --no-deps app`를 실행한다. DB image/볼륨은 그대로 둔다. 현재 migration은 자동 down migration을 제공하지 않으므로 이전 앱이 새 schema와 호환되는지 사전 격리 DB에서 확인해야 한다. 호환되지 않는 schema 변경은 공개 전 롤백 계획을 별도로 준비한다. `docker compose down -v`, 다른 프로젝트 restart, host-wide Docker prune은 사용하지 않는다.
 
 Cloudflare tunnel이 host loopback3200만 호출하는 배포에서 Compose는 TRUST_CLOUDFLARE=true로 CF-Connecting-IP를 신뢰한다. 임의 외부 클라이언트가 앱 포트에 직접 접근할 수 있는 구성에서는 true를 사용하지 않는다. 로컬 개발은 false이며 공유 local bucket을 사용한다.
+
+2026-10-05 실제 호스트 journal의 MaxRetentionSec 미설정 및 syslog forwarding을 확인했다. 이 호스트에서는 deploy/compose.no-logs.yaml을 서버 compose.yaml과 같은 디렉터리에 두고 모든 compose 명령에 -f compose.yaml -f compose.no-logs.yaml을 적용한다. cleanup unit도 같은 overlay를 사용하며 출력은 null로 보내 전역 journal 정책을 변경하지 않는다. 프로젝트 로그 영구 보관은 없으며 별도 요청/내용 로그도 만들지 않는다.

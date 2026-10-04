@@ -12,3 +12,5 @@ docs
 deploy
 *.log
 *.tsbuildinfo
+scripts/evaluate.ts
+scripts/capture-qa.mjs
