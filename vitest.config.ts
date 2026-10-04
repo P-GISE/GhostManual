@@ -6,6 +6,7 @@ export default defineConfig({
       {
         test: {
           name: "integration",
+          globalSetup: ["./tests/reset-db.ts"],
           include: ["tests/integration/**/*.test.ts"],
           fileParallelism: false,
           testTimeout: 15000,

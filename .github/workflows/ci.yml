@@ -1,0 +1,52 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18.4-bookworm@sha256:882236b897e39051d2368c5ccc6cda944904723506b2dfc97f2a8f5bc9afa382
+        env:
+          POSTGRES_USER: ghostmanual
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: ghostmanual_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ghostmanual -d ghostmanual_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://ghostmanual:ci-only-password@localhost:5432/ghostmanual_test
+      APP_ORIGIN: http://localhost:3200
+      IP_HASH_SECRET: ci-only-hash-secret-at-least-32-characters
+      AI_ENABLED: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run db:migrate
+      - run: npm run test:integration
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Build deployment image without credentials
+        run: docker build -t ghostmanual:${{ github.sha }} .
+      - name: Export verified deployment image
+        run: docker save ghostmanual:${{ github.sha }} | gzip > ghostmanual-image.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ghostmanual-image-${{ github.sha }}
+          path: ghostmanual-image.tar.gz
+          retention-days: 1

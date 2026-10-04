@@ -1,0 +1,11 @@
+[Unit]
+Description=Delete expired GhostManual demo data
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ghostmanual
+ExecStart=/usr/bin/docker compose --env-file .env -f compose.yaml run --rm --no-deps app node scripts/cleanup.ts
+TimeoutStartSec=300
+UMask=0077

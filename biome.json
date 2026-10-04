@@ -10,7 +10,9 @@
       "!!playwright-report",
       "!!package-lock.json",
       "!!.codegraph",
-      "!!docs/requirements"
+      "!!docs/requirements",
+      "!!next-env.d.ts",
+      "!!.superpowers"
     ]
   },
   "formatter": {
