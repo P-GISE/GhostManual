@@ -1,11 +1,12 @@
 export class AppError extends Error {
-  constructor(
-    public readonly code: string,
-    public readonly httpStatus: number,
-    message: string,
-    public readonly retryable = false,
-  ) {
+  readonly code: string;
+  readonly httpStatus: number;
+  readonly retryable: boolean;
+  constructor(code: string, httpStatus: number, message: string, retryable = false) {
     super(message);
     this.name = "AppError";
+    this.code = code;
+    this.httpStatus = httpStatus;
+    this.retryable = retryable;
   }
 }
