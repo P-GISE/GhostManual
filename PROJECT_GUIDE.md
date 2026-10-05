@@ -14,8 +14,8 @@ Source(원본), Manual(검수 매뉴얼), Answer(근거 답변)를 구분한다.
 - 보유 AWS·Cloudflare·Tailscale·GitHub P-GISE를 활용한다.
 - 2026-10-03 사용자의 '프로젝트 가이드 업데이트 하고 계속해서 작업 진행'을 상세 설계 승인 및 구현 계획 진행 요청으로 반영했다.
 - 상세 설계와 문서 기반 작성 완료. [구현 계획](docs/superpowers/plans/2026-10-03-ghostmanual-mvp.md)을 작성했다.
-- 사용자의 “엉 굳 좋아 진행해”로 구현 계획과 직접 실행이 승인됐다. 입력·DB·세션·매뉴얼 버전·공유·검색·한국어 화면을 구현했다. 실제 PostgreSQL 통합 30개와 데스크톱 브라우저 정상 흐름 2개를 확인했으며, 원본 변경 후 재검수·생성 경계·모바일·독립 리뷰를 추가 검증 중이다.
-- 목표 주소는 ghostmanual.pigs0516.com이며 DNS·앱 배포는 아직 생성하지 않았다.
+- 사용자의 “엉 굳 좋아 진행해”로 구현 계획과 직접 실행이 승인됐다. 입력·DB·세션·매뉴얼 버전·공유·검색·한국어 화면을 구현했다. 단위 41개·실제 PostgreSQL 통합 39개·Chrome E2E 20개(desktop10/mobile10)를 기존 CI에서 확인했다. 이후 모바일 한글 줄바꿈·터치 영역 수정의 production build는 성공했으며 최종 E2E·전체 페이지 캡처·독립 화면 검증은 진행 중이다.
+- 목표 주소는 ghostmanual.pigs0516.com이다. AWS 비공개 앱 배포와 런타임 흐름은 확인했으며 공개 DNS·HTTPS 연결은 아직 생성하지 않았다.
 
 ## 핵심 MVP
 
@@ -35,14 +35,14 @@ AI_ENABLED는 기본 false. 키 없는 fixture 검증과 실제 AI 실행을 구
 | 항목 | 실제 확인 결과 |
 |---|---|
 | Cloudflare | pigs0516.com 및 기존 AWS 터널 DNS 확인 |
-| GitHub | P-GISE CLI 인증 확인; GhostManual 저장소 미생성 |
+| GitHub | [P-GISE/GhostManual](https://github.com/P-GISE/GhostManual) 비공개 저장소 생성; CI37217328340 전체 성공 |
 | AWS 접속 | Tailscale SSH 추가 인증 갱신 후 읽기 전용 조사 성공 |
-| 서버 | Linux, Docker 29.5.3, 메모리 약1906MB/가용805MB, 디스크 여유13GB |
+| 서버 | Linux, Docker 29.5.3, 메모리 약1906MB/비공개 앱 검증 후 가용725MB, 디스크 여유13GB |
 | 기존 서비스 | 앱 포트3000·3100 사용 중. 3100은 EventOps |
-| GhostManual 제안 포트 | 127.0.0.1:3200, 별도 Compose 프로젝트·DB·볼륨 |
+| GhostManual 배포 | 127.0.0.1:3200, 별도 Compose 프로젝트·DB·볼륨, migration001·HTTP200 확인 |
 | 로컬 | Node24.20.0/npm11.19.0 실행 확인; Docker 소켓 오류, 전용 native PostgreSQL18.4로 DB 검증 |
 
-관찰 시점의 값이며 영구적인 가용 용량을 보장하지 않는다. 배포 전 다시 조사하고 runtime 부하를 확인한다.
+관찰 시점의 값이며 영구적인 가용 용량을 보장하지 않는다. 비공개 앱의 8개 동시 읽기 요청은 모두200(전체209ms), 앱·DB OOM=false를 확인했다. 지속 부하·AI 부하와 공개 접속은 별도 검증한다. [비공개 런타임 기록](docs/qa/2026-10-05/private-runtime.md)을 따른다.
 서버에서 새 Next.js 빌드를 수행하기보다 로컬/CI에서 빌드한다. DB 공개 포트를 만들지 않는다. 기존 DB를 개발 테스트에 사용하지 않는다.
 
 ## 구현 순서와 검증

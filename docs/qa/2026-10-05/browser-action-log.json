@@ -1,0 +1,310 @@
+{
+  "actions": [
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/\")",
+      "at": "2026-10-05T09:46:02.484Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.getByRole(\"button\", {name:\"합성 예제 열기\"}).click()",
+      "at": "2026-10-05T09:46:03.535Z"
+    },
+    {
+      "surface": "browser",
+      "invocation": "waitForVisible(\"업무 문서함\")",
+      "at": "2026-10-05T09:46:03.712Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/sources/new\")",
+      "at": "2026-10-05T09:46:04.129Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/sources/d84c0617-5768-4cc1-90b3-1e5b4082e3ad\")",
+      "at": "2026-10-05T09:46:05.063Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/manuals/3a8a4315-72bc-409c-b434-a6a9e92a21b4\")",
+      "at": "2026-10-05T09:46:06.275Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/manuals/3a8a4315-72bc-409c-b434-a6a9e92a21b4/edit\")",
+      "at": "2026-10-05T09:46:07.307Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/ask\")",
+      "at": "2026-10-05T09:46:08.367Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/privacy\")",
+      "at": "2026-10-05T09:46:09.265Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/terms\")",
+      "at": "2026-10-05T09:46:10.176Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/manuals/3a8a4315-72bc-409c-b434-a6a9e92a21b4\")",
+      "at": "2026-10-05T09:46:11.092Z"
+    },
+    {
+      "surface": "browser",
+      "invocation": "waitForVisible(\"미리 작성된 합성 예제\")",
+      "at": "2026-10-05T09:46:11.828Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.getByLabel(\"원본과 업무 내용을 확인했습니다.\").check()",
+      "at": "2026-10-05T09:46:11.828Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.getByLabel(\"미확인 항목이 남아 있음을 확인했습니다.\").check()",
+      "at": "2026-10-05T09:46:11.854Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.getByRole(\"button\", {name:\"검수 완료·버전 게시\"}).click()",
+      "at": "2026-10-05T09:46:11.887Z"
+    },
+    {
+      "surface": "browser",
+      "invocation": "waitForVisible(\"검수 완료 · 버전 1\")",
+      "at": "2026-10-05T09:46:12.018Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.getByRole(\"button\", {name:\"공유 링크 만들기\"}).click()",
+      "at": "2026-10-05T09:46:12.246Z"
+    },
+    {
+      "surface": "readerPage",
+      "invocation": "readerPage.goto(BASE_URL + \"/share#[redacted]\")",
+      "at": "2026-10-05T09:46:12.394Z"
+    },
+    {
+      "surface": "browser",
+      "invocation": "waitForVisible(\"공유 매뉴얼 제목\")",
+      "at": "2026-10-05T09:46:12.602Z"
+    },
+    {
+      "surface": "browser",
+      "invocation": "waitForVisible(\"업무 질문\")",
+      "at": "2026-10-05T09:46:13.314Z"
+    },
+    {
+      "surface": "readerPage",
+      "invocation": "readerPage.getByLabel(\"업무 질문\").fill(\"계정 발급 전에 무엇을 확인하나요?\")",
+      "at": "2026-10-05T09:46:13.314Z"
+    },
+    {
+      "surface": "readerPage",
+      "invocation": "readerPage.getByRole(\"button\", {name:\"근거 찾아 질문하기\"}).click()",
+      "at": "2026-10-05T09:46:13.321Z"
+    },
+    {
+      "surface": "browser",
+      "invocation": "waitForVisible(\"AI 답변 이용 불가\")",
+      "at": "2026-10-05T09:46:13.453Z"
+    },
+    {
+      "surface": "browser",
+      "invocation": "waitForVisible(\"검색 결과\")",
+      "at": "2026-10-05T09:46:13.455Z"
+    },
+    {
+      "surface": "readerPage",
+      "invocation": "readerPage.goto(\"http://localhost:3200/share\")",
+      "at": "2026-10-05T09:46:13.721Z"
+    },
+    {
+      "surface": "browser",
+      "invocation": "waitForVisible(\"공유 매뉴얼 제목 모바일\")",
+      "at": "2026-10-05T09:46:14.426Z"
+    },
+    {
+      "surface": "browser",
+      "invocation": "waitForVisible(\"AI 답변 이용 불가 모바일\")",
+      "at": "2026-10-05T09:46:14.763Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/manuals/3a8a4315-72bc-409c-b434-a6a9e92a21b4\")",
+      "at": "2026-10-05T09:46:14.982Z"
+    },
+    {
+      "surface": "browser",
+      "invocation": "waitForVisible(\"이 공유 취소\")",
+      "at": "2026-10-05T09:46:15.707Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.getByRole(\"button\", {name:\"이 공유 취소\"}).click()",
+      "at": "2026-10-05T09:46:15.708Z"
+    },
+    {
+      "surface": "browser",
+      "invocation": "waitForVisible(\"활성 공유가 없습니다.\")",
+      "at": "2026-10-05T09:46:15.773Z"
+    },
+    {
+      "surface": "readerPage",
+      "invocation": "readerPage.reload() after owner share revocation",
+      "at": "2026-10-05T09:46:15.773Z"
+    },
+    {
+      "surface": "browser",
+      "invocation": "waitForVisible(\"공유 취소 오류 안내\")",
+      "at": "2026-10-05T09:46:15.836Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/sources/d84c0617-5768-4cc1-90b3-1e5b4082e3ad\")",
+      "at": "2026-10-05T09:46:16.546Z"
+    },
+    {
+      "surface": "browser",
+      "invocation": "waitForVisible(\"원본 수정\")",
+      "at": "2026-10-05T09:46:17.272Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.getByRole(\"button\", {name:\"새 원본 버전 저장\"}).click()",
+      "at": "2026-10-05T09:46:17.315Z"
+    },
+    {
+      "surface": "browser",
+      "invocation": "waitForVisible(\"SOURCE / 원본 REVISION 2\")",
+      "at": "2026-10-05T09:46:17.379Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/manuals/3a8a4315-72bc-409c-b434-a6a9e92a21b4\")",
+      "at": "2026-10-05T09:46:17.379Z"
+    },
+    {
+      "surface": "browser",
+      "invocation": "waitForVisible(\"재검토 필요\")",
+      "at": "2026-10-05T09:46:18.109Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/manuals/3a8a4315-72bc-409c-b434-a6a9e92a21b4/edit\")",
+      "at": "2026-10-05T09:46:18.356Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/\")",
+      "at": "2026-10-05T09:46:19.342Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/manuals\")",
+      "at": "2026-10-05T09:46:20.244Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/sources/new\")",
+      "at": "2026-10-05T09:46:21.153Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/sources/d84c0617-5768-4cc1-90b3-1e5b4082e3ad\")",
+      "at": "2026-10-05T09:46:22.022Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/manuals/3a8a4315-72bc-409c-b434-a6a9e92a21b4\")",
+      "at": "2026-10-05T09:46:22.929Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/manuals/3a8a4315-72bc-409c-b434-a6a9e92a21b4/edit\")",
+      "at": "2026-10-05T09:46:23.840Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/ask\")",
+      "at": "2026-10-05T09:46:24.805Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/privacy\")",
+      "at": "2026-10-05T09:46:25.708Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/terms\")",
+      "at": "2026-10-05T09:46:26.613Z"
+    },
+    {
+      "surface": "readerPage",
+      "invocation": "readerPage.goto(\"http://localhost:3200/share\")",
+      "at": "2026-10-05T09:46:27.534Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.goto(\"http://localhost:3200/manuals\")",
+      "at": "2026-10-05T09:46:28.413Z"
+    },
+    {
+      "surface": "ownerPage",
+      "invocation": "ownerPage.getByRole(\"button\", {name:\"작업 공간 영구 삭제\"}).click()",
+      "at": "2026-10-05T09:46:29.203Z"
+    }
+  ],
+  "pageErrors": [],
+  "consoleErrors": [
+    {
+      "surface": "ownerPage",
+      "message": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    },
+    {
+      "surface": "readerPage",
+      "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    },
+    {
+      "surface": "readerPage",
+      "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    }
+  ],
+  "failedRequests": [],
+  "expectedNavigationAborts": {
+    "count": 219,
+    "samples": [
+      {
+        "surface": "ownerPage",
+        "url": "/manuals",
+        "failure": "net::ERR_ABORTED"
+      },
+      {
+        "surface": "ownerPage",
+        "url": "/sources/new",
+        "failure": "net::ERR_ABORTED"
+      },
+      {
+        "surface": "ownerPage",
+        "url": "/",
+        "failure": "net::ERR_ABORTED"
+      },
+      {
+        "surface": "ownerPage",
+        "url": "/terms",
+        "failure": "net::ERR_ABORTED"
+      },
+      {
+        "surface": "ownerPage",
+        "url": "/privacy",
+        "failure": "net::ERR_ABORTED"
+      }
+    ]
+  }
+}
