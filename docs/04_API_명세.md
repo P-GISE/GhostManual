@@ -8,8 +8,8 @@
 O=소유자 쿠키, R=공유 독자 쿠키. 모든 ID는 서버의 workspace 범위에서 검증한다.
 | Method / Endpoint | 인증·입력 | 응답 | 사용 화면·제안 파일 |
 |---|---|---|---|
-| POST /api/workspaces | 무인증, {mode:empty 또는 example} | 201 workspace 만료 시각, 소유자 쿠키 | 시작 / src/app/api/session/route.ts |
-| DELETE /api/workspace | O, 본문 없음 | 204 workspace 데이터 전체 삭제·쿠키 해제 | 내 데이터 삭제 / 같은 파일 |
+| POST /api/workspaces | 무인증, {mode:blank 또는 example} | 201 workspace 만료 시각, 소유자 쿠키 | 시작 / src/app/api/workspaces/route.ts |
+| DELETE /api/workspace | O, 본문 없음 | 200 {deleted:true}, workspace 데이터 전체 삭제·쿠키 해제 | 내 데이터 삭제 / src/app/api/workspace/route.ts |
 | GET /api/session | O 또는 R header | 200 role·expiresAt·manualId | 권한 확인 / src/app/api/session/route.ts |
 | GET /api/sources | O | 200 Source 목록 | 문서함 / src/app/api/sources/route.ts |
 | POST /api/manuals | O, sourceRevisionId·draft·expectedDraftRevision? | 201 저장된 초안 | 직접 작성 / src/app/api/manuals/route.ts |
@@ -18,14 +18,14 @@ O=소유자 쿠키, R=공유 독자 쿠키. 모든 ID는 서버의 workspace 범
 | POST /api/sources | O, multipart title와 text 또는 file 중 하나 | 201 Source id·revision | 자료 등록 / src/app/api/sources/route.ts |
 | GET /api/sources/:id | O 또는 해당 R, 현재 허용된 revision | 200 제목·원문·문단·revision | 원문 / src/app/api/sources/[id]/route.ts |
 | PATCH /api/sources/:id | O, {title,text,expectedRevision} | 200 새 revision·재검토 상태 | 원문 수정 / 같은 파일 |
-| DELETE /api/sources/:id | O | 204 관련 매뉴얼·공유·답변 포함 삭제 | 원문 삭제 / 같은 파일 |
+| DELETE /api/sources/:id | O | 200 {deleted:true}, 관련 매뉴얼·공유·답변 포함 삭제 | 원문 삭제 / 같은 파일 |
 | POST /api/sources/:id/generate | O, {expectedRevision}, Idempotency-Key | 201 초안 Manual 또는 처리 중이면 202 operationId | 생성 / src/app/api/sources/[id]/generate/route.ts |
 | GET /api/manuals/:id | O 또는 해당 R | 200 Owner는 draft와 게시 버전, Reader는 현재 검수본만 | 상세 / src/app/api/manuals/[id]/route.ts |
 | PATCH /api/manuals/:id | O, {sourceRevisionId,draft,expectedDraftRevision} | 200 새 draft revision | 편집 / 같은 파일 |
 | POST /api/manuals/:id/publish | O, {expectedDraftRevision,acknowledgedUnknowns} | 201 검수 버전 ID | 검수 / src/app/api/manuals/[id]/publish/route.ts |
 | POST /api/shares | O, {manualId}, 검수본·최신 원본 필요 | 201 shareId·1회 표시 공유 URL·만료 | 공유 / src/app/api/shares/route.ts |
-| DELETE /api/shares/:id | O | 204 공유 취소, 독자 세션 접근 차단 | 공유 취소 / src/app/api/shares/[id]/route.ts |
-| POST /api/share | 무인증, {token} | 200 독자 쿠키·이동 URL | 공유 진입 / src/app/api/share/route.ts |
+| DELETE /api/shares/:id | O | 200 {deleted:true}, 공유 취소·독자 세션 접근 차단 | 공유 취소 / src/app/api/shares/[id]/route.ts |
+| POST /api/share | 무인증, {token} | 200 manualId·expiresAt·독자 쿠키 | 공유 진입 / src/app/api/share/route.ts |
 | POST /api/questions | O 또는 R, {question,manualId?}, Idempotency-Key | 200 QuestionResult 또는 202 operationId | 질문 / src/app/api/questions/route.ts |
 | GET /api/questions/:id | O 또는 생성한 R | 200 답변·근거·오래됨 표시 | 결과 / src/app/api/questions/[id]/route.ts |
 | GET /api/evidence/:id | O 또는 해당 답변의 R | 200 근거 원문·위치·당시 버전 | 출처 패널 / src/app/api/evidence/[id]/route.ts |
