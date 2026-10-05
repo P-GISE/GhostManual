@@ -118,6 +118,6 @@ Ten routes were captured at 1440x900 and 390x844: /, /manuals, /sources/new, /so
 
 ## Runtime evidence
 
-- Page errors: 0; console errors: 3; failed requests: 0; expected navigation aborts: 219 (aggregated with five samples). See [browser-action-log.json](docs/qa/2026-10-05/browser-action-log.json).
-- PNG signatures and requested dimensions were checked for every screenshot; DOM overflow metrics are in [dom-metrics.json](docs/qa/2026-10-05/dom-metrics.json).
+- Page errors: 0; console errors: 3; failed requests: 0; expected navigation aborts: 219 (aggregated with five samples). See [browser-action-log.json](browser-action-log.json).
+- PNG signatures and requested dimensions were checked for every screenshot; DOM overflow metrics are in [dom-metrics.json](dom-metrics.json).
 - Every PASS references a non-empty screenshot and metrics artifact.

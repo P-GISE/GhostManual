@@ -675,8 +675,8 @@ async function main() {
         .map((item) => `| ${item.id} | ${item.kind} | ${item.description} | ${item.path} |`)
         .join("\n") +
       `\n\n## Runtime evidence\n\n` +
-      `- Page errors: ${pageErrors.length}; console errors: ${consoleErrors.length}; failed requests: ${failedRequests.length}; expected navigation aborts: ${expectedNavigationAborts.count} (aggregated with five samples). See [browser-action-log.json](${relative(logFile)}).\n` +
-      `- PNG signatures and requested dimensions were checked for every screenshot; DOM overflow metrics are in [dom-metrics.json](${relative(metricsFile)}).\n` +
+      `- Page errors: ${pageErrors.length}; console errors: ${consoleErrors.length}; failed requests: ${failedRequests.length}; expected navigation aborts: ${expectedNavigationAborts.count} (aggregated with five samples). See [browser-action-log.json](${path.basename(logFile)}).\n` +
+      `- PNG signatures and requested dimensions were checked for every screenshot; DOM overflow metrics are in [dom-metrics.json](${path.basename(metricsFile)}).\n` +
       `- Every PASS references a non-empty screenshot and metrics artifact.\n`;
     await fs.writeFile(reportFile, report, "utf8");
     await fs.rm(path.join(OUT_DIR, "capture-failure.json"), { force: true });

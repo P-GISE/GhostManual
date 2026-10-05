@@ -14,7 +14,7 @@ Source(원본), Manual(검수 매뉴얼), Answer(근거 답변)를 구분한다.
 - 보유 AWS·Cloudflare·Tailscale·GitHub P-GISE를 활용한다.
 - 2026-10-03 사용자의 '프로젝트 가이드 업데이트 하고 계속해서 작업 진행'을 상세 설계 승인 및 구현 계획 진행 요청으로 반영했다.
 - 상세 설계와 문서 기반 작성 완료. [구현 계획](docs/superpowers/plans/2026-10-03-ghostmanual-mvp.md)을 작성했다.
-- 사용자의 “엉 굳 좋아 진행해”로 구현 계획과 직접 실행이 승인됐다. 입력·DB·세션·매뉴얼 버전·공유·검색·한국어 화면을 구현했다. 단위 41개·실제 PostgreSQL 통합 39개·Chrome E2E 20개(desktop10/mobile10)를 기존 CI에서 확인했다. 이후 모바일 한글 줄바꿈·터치 영역 수정의 production build는 성공했으며 최종 E2E·전체 페이지 캡처·독립 화면 검증은 진행 중이다.
+- 사용자의 “엉 굳 좋아 진행해”로 구현 계획과 직접 실행이 승인됐다. 입력·DB·세션·매뉴얼 버전·공유·검색·한국어 화면을 구현했다. 단위 41개·실제 PostgreSQL 통합 39개·Chrome E2E 20개(desktop10/mobile10)를 기존 CI에서 확인했다. 이후 모바일 한글 줄바꿈·터치 영역 수정의 production build는 성공했으며 전체 페이지27개 캡처·두 독립 화면 검증은 통과했으며 최종 CI E2E 재실행 중이다.
 - 목표 주소는 ghostmanual.pigs0516.com이다. AWS 비공개 앱 배포와 런타임 흐름은 확인했으며 공개 DNS·HTTPS 연결은 아직 생성하지 않았다.
 
 ## 핵심 MVP
