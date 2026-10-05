@@ -30,6 +30,7 @@ textarea {
 }
 button,
 .button {
+  word-break: keep-all;
   min-height: 44px;
   padding: 10px 20px;
   border: 1px solid var(--accent);
@@ -108,6 +109,13 @@ nav a {
   text-decoration: none;
   font-size: 14px;
 }
+nav a,
+footer a,
+.row a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
 main {
   max-width: 1120px;
   margin: 0 auto;
@@ -133,6 +141,8 @@ h2,
 h3 {
   line-height: 1.35;
   letter-spacing: -0.8px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 h1 {
   font-size: 36px;
