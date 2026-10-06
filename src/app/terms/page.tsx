@@ -1,13 +1,14 @@
 export default function Page() {
   return (
     <article className="prose">
-      <span className="eyebrow">POLICY / 운영 초안</span>
+      <span className="eyebrow">POLICY / 공개 시연</span>
       <h1>이용약관 안내</h1>
-      <div className="notice">공개 운영 전 운영자 정보와 정책을 확정해야 하는 안내 초안입니다.</div>
+      <div className="notice">개인정보와 회사 기밀을 입력하지 않는 공개 시연 서비스입니다.</div>
       <h2>서비스 범위</h2>
       <p>
         GhostManual은 원본 자료를 업무 매뉴얼로 정리하고 검수한 버전을 공유하는 시연 서비스입니다.
-        AI가 작성한 내용은 담당자의 검수를 거쳐야 합니다.
+        현재 AI 생성 기능은 비활성화되어 있습니다. 담당자가 작성하거나 합성 예제를 검수한 버전을
+        게시할 수 있으며 질문에서는 근거 검색 결과를 확인할 수 있습니다.
       </p>
       <h2>이용자의 책임</h2>
       <p>
@@ -24,6 +25,11 @@ export default function Page() {
         공유 링크를 가진 사람은 검수 버전을 읽고 질문할 수 있습니다. 담당자는 공유를 취소하거나 작업
         공간을 삭제할 수 있습니다.
       </p>
+      <h2>운영 문의</h2>
+      <p>
+        GhostManual 운영 담당: <a href="mailto:paki01701@gmail.com">paki01701@gmail.com</a>
+      </p>
+      <p className="help">적용일: 2026년 10월 6일</p>
     </article>
   );
 }
