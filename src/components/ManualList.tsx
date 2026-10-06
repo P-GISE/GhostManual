@@ -16,6 +16,21 @@ export function ManualList() {
   const [sources, setSources] = useState<Source[]>([]);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("all");
+  const visibleManuals = manuals.filter(
+    (m) =>
+      m.draft.title
+        .normalize("NFKC")
+        .toLocaleLowerCase("ko-KR")
+        .includes(query.trim().normalize("NFKC").toLocaleLowerCase("ko-KR")) &&
+      (status === "all" ||
+        (status === "review"
+          ? m.needsReview
+          : status === "published"
+            ? !!m.publishedVersion && !m.needsReview
+            : !m.publishedVersion && !m.needsReview)),
+  );
   const [deleting, setDeleting] = useState(false);
   useEffect(() => {
     Promise.all([
@@ -71,7 +86,31 @@ export function ManualList() {
           <Link href="/sources/new">첫 자료 등록하기</Link>
         </div>
       )}
-      {manuals.map((m) => (
+      {!busy && manuals.length > 0 && (
+        <>
+          <label htmlFor="manual-search">매뉴얼 제목 검색</label>
+          <input
+            id="manual-search"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <label htmlFor="manual-status">검수 상태</label>
+          <select id="manual-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="all">전체</option>
+            <option value="draft">미검수 초안</option>
+            <option value="published">게시본 있음</option>
+            <option value="review">재검토 필요</option>
+          </select>
+          <p className="help" role="status">
+            전체 {manuals.length}개 중 {visibleManuals.length}개 표시
+          </p>
+          {visibleManuals.length === 0 && (
+            <p className="muted">검색·상태 조건에 맞는 매뉴얼이 없습니다.</p>
+          )}
+        </>
+      )}
+      {visibleManuals.map((m) => (
         <div className="row" key={m.id}>
           <div>
             <h3>

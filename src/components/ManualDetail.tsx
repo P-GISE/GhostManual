@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { http, type Manual, manualSchema, message, read } from "../lib/client";
 import { ManualContent } from "./ManualContent";
+import { ManualVersionComparison } from "./ManualVersionComparison";
 import { QuestionForm } from "./QuestionForm";
 
 const activeShareSchema = z.object({ id: z.uuid(), manualId: z.uuid(), expiresAt: z.string() });
@@ -218,6 +219,9 @@ export function ManualDetail({
           <summary>게시된 검수 버전 {manual.published.version} 보기</summary>
           <ManualContent content={manual.published.content} />
         </details>
+      )}
+      {!reader && manual.publishedVersion && (
+        <ManualVersionComparison id={id} latest={manual.publishedVersion} />
       )}
       <h2>이 매뉴얼에 질문</h2>
       <QuestionForm manualId={id} reader={reader} />

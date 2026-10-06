@@ -10,7 +10,7 @@ export const sourceSchema = z.object({
   text: z.string(),
   createdAt: z.string(),
 });
-const publishedSchema = z.object({
+export const publishedSchema = z.object({
   id: z.uuid(),
   manualId: z.uuid(),
   version: z.number(),

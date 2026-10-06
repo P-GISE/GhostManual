@@ -1,6 +1,6 @@
 import type { ManualDraft } from "../lib/schemas";
 
-const fields = [
+export const manualFields = [
   { key: "purpose", label: "업무 목적" },
   { key: "trigger", label: "시작 조건" },
   { key: "cadence", label: "주기" },
@@ -16,7 +16,7 @@ const fields = [
 export function ManualContent({ content }: { readonly content: ManualDraft }) {
   return (
     <article className="document">
-      {fields.map((f) => {
+      {manualFields.map((f) => {
         const value = content[f.key];
         return (
           <section key={f.key}>

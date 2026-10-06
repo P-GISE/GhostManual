@@ -229,3 +229,15 @@ export async function listManuals(ctx: SessionContext) {
     );
   });
 }
+
+export async function listManualVersions(ctx: SessionContext, id: string) {
+  return transaction(async (db) => {
+    await assertSession(db, ctx, true);
+    await manualInTransaction(db, ctx, id);
+    const rows = await db.query<Record<string, unknown>>(
+      'SELECT id,manual_id AS "manualId",version,source_revision_id AS "sourceRevisionId",content,provenance,acknowledged_unknowns AS "acknowledgedUnknowns",created_at AS "createdAt" FROM manual_versions WHERE manual_id=$1 AND workspace_id=$2 ORDER BY version DESC',
+      [id, ctx.workspaceId],
+    );
+    return rows.rows.map((row) => ManualVersionViewSchema.parse(row));
+  });
+}

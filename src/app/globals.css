@@ -25,6 +25,7 @@ a {
 }
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -53,6 +54,7 @@ button:disabled {
   cursor: wait;
 }
 input,
+select,
 textarea {
   width: 100%;
   padding: 12px;
@@ -73,6 +75,7 @@ label {
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
+select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible {
   outline: 3px solid var(--accent);
@@ -117,16 +120,16 @@ footer a,
   align-items: center;
 }
 main {
-  max-width: 1120px;
+  max-width: 1248px;
   margin: 0 auto;
   min-height: 70vh;
-  padding: 56px 0 80px;
+  padding: 56px 64px 80px;
 }
 footer {
   border-top: 1px solid var(--border);
-  max-width: 1120px;
+  max-width: 1248px;
   margin: auto;
-  padding: 24px 0 36px;
+  padding: 24px 64px 36px;
   display: flex;
   justify-content: space-between;
   font-size: 13px;
@@ -176,7 +179,7 @@ p {
 }
 .start {
   display: grid;
-  grid-template-columns: 1.2fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 64px;
   align-items: start;
 }
@@ -230,7 +233,7 @@ p {
 }
 .split {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 32px;
 }
 .document {

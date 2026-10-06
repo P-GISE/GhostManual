@@ -1,4 +1,4 @@
-@media (max-width: 760px) {
+@media (max-width: 960px) {
   .shell-header {
     padding: 20px 24px;
     align-items: flex-start;
@@ -37,7 +37,8 @@
     flex-direction: column;
   }
   footer {
-    margin: 0 24px;
+    margin: 0;
+    padding: 24px 24px 36px;
     flex-direction: column;
     gap: 12px;
   }
