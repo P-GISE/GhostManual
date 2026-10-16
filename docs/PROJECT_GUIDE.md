@@ -20,7 +20,7 @@
 | GitHub 저장소 | P-GISE/GhostManual |
 | 작업 브랜치 | feat/windows-poc-core (분리 작업 공간 /workspace/GhostManual-core) |
 | 초기화 기준 commit | d13fe601d64c4af27bfde050f10a22b564fcfdc7 |
-| 반영 상태 | 확인 시점 [PR #1](https://github.com/P-GISE/GhostManual/pull/1) open·미병합. 기본 브랜치 초기화와 구분 |
+| 반영 상태 | 초기화/가이드 [PR #1](https://github.com/P-GISE/GhostManual/pull/1), 그 작업 브랜치를 대상으로 한 Core [PR #2](https://github.com/P-GISE/GhostManual/pull/2) open·미병합. 기본 브랜치·배포 반영과 구분 |
 | 복구 기준 | backup/before-reset-2026-10-16, commit381f687 |
 | 파일 구성 | 개발 도구·가이드·기획/PoC 입력 자료 + 새 Core·단위 테스트 |
 | 구현 범위 | 세션 상태·이벤트 계약·메타데이터 스냅샷 저장. Windows 앱·화면·생성·DB·제품 CI·배포 없음 |
