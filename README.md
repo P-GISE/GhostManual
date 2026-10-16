@@ -12,7 +12,7 @@ npm test, npm run typecheck, npm run lint, npm run build를 실행합니다. 실
 ## 현재 상태
 로컬 unit41·PostgreSQL integration39·Chrome desktop/mobile E2E20 통과. 원본 수정 후 버전2 재검수·Reader 원본열람·reload 공유취소·개별삭제·초안/게시본 구분을 확인했습니다. 실 AI·공개HTTPS·운영부하는 미검증입니다.
 
-[프로젝트 가이드](PROJECT_GUIDE.md), [문서 가이드](docs/00_문서_가이드.md), [진행 기록](docs/구현_진행_기록.md), [배포 절차](deploy/README.md)를 참고하세요.
+[프로젝트 가이드](docs/README.md), [문서 가이드](docs/00_문서_가이드.md), [진행 기록](docs/구현_진행_기록.md), [배포 절차](deploy/README.md)를 참고하세요.
 
 ## 개발 도구
 
