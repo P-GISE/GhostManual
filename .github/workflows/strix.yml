@@ -1,0 +1,34 @@
+name: Strix (manual)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: strix-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+      - name: Install pinned Strix
+        run: uv tool install --python 3.12 strix-agent==1.7.0
+      - name: Check configuration and scan repository source
+        env:
+          STRIX_LLM: ${{ secrets.STRIX_LLM }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_API_BASE: ${{ secrets.LLM_API_BASE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$STRIX_LLM" || -z "$LLM_API_KEY" ]]; then
+            echo 'Configure STRIX_LLM and LLM_API_KEY repository secrets before running this workflow.' >&2
+            exit 2
+          fi
+          docker info >/dev/null
+          strix -n -t . --scan-mode quick --fail-on high

@@ -5,6 +5,15 @@
 현재는 승인된 구현 계획 실행 단계다. 제품 기능이 존재한다고 가정하지 않는다. source·manual·answer, 검수 여부·revision·workspace 권한을 구분한다.
 기존 서비스·다른 작업자의 변경을 되돌리지 않는다. 비밀 값·토큰·개인 연락처는 문서·로그·Git에 기록하지 않는다.
 
+## 개발 도구
+
+[개발 도구 가이드](docs/개발_도구_가이드.md)와 `make -f tools/Makefile help`를 참고한다.
+기본 작업 절차는 Superpowers, 기획은 PM Skills, 재사용·간소화 검토는 Ponytail을 사용한다. 저장소·사용자 지시가 plugin 기본값보다 우선하며 필수 검증·권한 확인을 줄이지 않는다.
+LazyCodex는 사용자가 선택한 작업에서 대체 오케스트레이터로 사용한다. 같은 작업에 Superpowers와 LazyCodex 계획·반복 루프를 중복 실행하지 않는다.
+Iron Laws 전체 점검의 기존 지적과 PR 변경 파일 점검을 구분한다. 도구의 오탐을 확인 없이 규칙 비활성화·baseline 등록으로 숨기지 않는다.
+OmniRoute와 Headroom은 개발자 도구이며 제품 AI 제공자 설정이 아니다. 압축은 한 계층부터 평가하고 두 도구의 압축을 중복 활성화하지 않는다.
+`.dev-tools/`, `.codegraph/`, `strix_runs/`는 로컬 산출물이다. 실제 업무 원문·키를 테스트 입력이나 보고서에 넣지 않는다.
+
 <!-- CODEGRAPH_START -->
 ## CodeGraph
 

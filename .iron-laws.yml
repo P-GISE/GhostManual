@@ -1,0 +1,13 @@
+fail_on: HIGH
+respect_gitignore: true
+excludes:
+  - .git
+  - .dev-tools
+  - .codegraph
+  - .superpowers
+  - node_modules
+  - .next
+  - coverage
+  - test-results
+  - playwright-report
+  - strix_runs

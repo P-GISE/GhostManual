@@ -10,6 +10,8 @@
       "!!playwright-report",
       "!!package-lock.json",
       "!!.codegraph",
+      "!!.dev-tools",
+      "!!strix_runs",
       "!!docs/requirements",
       "!!next-env.d.ts",
       "!!.superpowers"

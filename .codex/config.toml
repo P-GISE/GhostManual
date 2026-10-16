@@ -1,0 +1,9 @@
+# Project trust and a fresh Codex session are required to load this configuration.
+[mcp_servers.codegraph]
+command = "npx"
+args = ["--yes", "--package=@colbymchenry/codegraph@1.6.2", "codegraph", "serve", "--mcp"]
+startup_timeout_sec = 120
+
+[mcp_servers.codegraph.env]
+CODEGRAPH_TELEMETRY = "0"
+DO_NOT_TRACK = "1"

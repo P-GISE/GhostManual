@@ -1,0 +1,33 @@
+name: Iron Laws
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: iron-laws-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+      - name: Install pinned Iron Laws
+        run: |
+          uv tool install --python 3.12 git+https://github.com/JinHo-von-Choi/iron-laws.git@2b98ecd687ed1e2aaedc13ff243f9a9a401fa4fa
+      - name: Check changed files on PRs; whole repository on manual runs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$BASE_SHA" ]]; then
+            iron-laws check . --changed-since "$BASE_SHA" --fail-on HIGH
+          else
+            iron-laws check . --fail-on HIGH
+          fi

@@ -13,3 +13,7 @@ npm test, npm run typecheck, npm run lint, npm run build를 실행합니다. 실
 로컬 unit41·PostgreSQL integration39·Chrome desktop/mobile E2E20 통과. 원본 수정 후 버전2 재검수·Reader 원본열람·reload 공유취소·개별삭제·초안/게시본 구분을 확인했습니다. 실 AI·공개HTTPS·운영부하는 미검증입니다.
 
 [프로젝트 가이드](PROJECT_GUIDE.md), [문서 가이드](docs/00_문서_가이드.md), [진행 기록](docs/구현_진행_기록.md), [배포 절차](deploy/README.md)를 참고하세요.
+
+## 개발 도구
+
+9개 도구의 설치·역할·선택 실행은 [개발 도구 가이드](docs/개발_도구_가이드.md)를 참고하세요. Linux/macOS/WSL에서 `make -f tools/Makefile help`로 명령을 확인하고 `make -f tools/Makefile install`로 프로젝트 전용 CLI를 설치합니다. Codex plugin 설치는 별도 `plugins` 명령이며 사용자 전역에 적용됩니다.

@@ -14,3 +14,10 @@ deploy
 *.tsbuildinfo
 scripts/evaluate.ts
 scripts/capture-qa.mjs
+.dev-tools
+.agents
+.codex
+tools
+strix_runs
+.superpowers
+.iron-laws.yml

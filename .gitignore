@@ -11,3 +11,5 @@ test-results/
 *.tsbuildinfo
 
 *.log
+.dev-tools/
+strix_runs/
