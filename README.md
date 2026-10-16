@@ -10,6 +10,7 @@ AI_ENABLED=false가 기본입니다. 합성 예제는 미리 작성된 자료이
 npm test, npm run typecheck, npm run lint, npm run build를 실행합니다. 실제 DB 통합과 E2E에는 명시적인 DATABASE_URL의 DB 이름이 _test로 끝나야 합니다. npm run db:migrate 후 npm run test:integration, npm run test:e2e를 실행합니다. 테스트 setup은 전용 테스트 DB의 usage/rate counter만 초기화합니다. 운영 DB에는 적용하지 마세요.
 
 ## 현재 상태
-로컬 unit41·PostgreSQL integration39·Chrome desktop/mobile E2E20 통과. 원본 수정 후 버전2 재검수·Reader 원본열람·reload 공유취소·개별삭제·초안/게시본 구분을 확인했습니다. 실 AI·공개HTTPS·운영부하는 미검증입니다.
+
+[공개 데모](https://ghostmanual.pigs0516.com)는 AI 비활성 상태로 배포·공개 검증을 완료했습니다. 2026-10-17 기록 기준 desktop5/mobile5 흐름10개와 검증 공간 정리를 확인했고, 인계된 최신 소스 검증은 단위41·PostgreSQL 통합40·E2E24·빌드·타입·린트 통과입니다. 실제 AI·지속 부하·전체 접근성·이미지 provenance는 별도 범위입니다. 이번 가이드 갱신에서 제품 검증을 반복하지 않았습니다.
 
 [프로젝트 가이드](PROJECT_GUIDE.md), [문서 가이드](docs/00_문서_가이드.md), [진행 기록](docs/구현_진행_기록.md), [배포 절차](deploy/README.md)를 참고하세요.

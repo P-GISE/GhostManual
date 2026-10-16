@@ -15,7 +15,7 @@
 | DB 실행 기간 | docker ps 출력 시 Up 12 days |
 | DB 포트 | 컨테이너5432/tcp, 호스트 포트 매핑 없음 |
 
-앱 태그는 현재 저장소 HEAD와 일치한다. 이미지 태그와 실제 이미지 ID·원격 build ID를 확보하여 원격 배포 식별 및 실행 상태 확인 항목을 완료한다. 태그가 소스 provenance를 암호학적으로 보증하는 것은 아니며 이미지 revision label/서명 또는 CI 산출물 digest 대조는 수행하지 않았다.
+앱 태그는 검증된 제품 소스58d9ebd1eac5f80f7fb66364ece4950e87a25ebf와 일치한다. 이후 문서 commit d493c8c와 이번 가이드 commit은 실행 이미지 태그와 구분한다. 이미지 태그와 실제 이미지 ID·원격 build ID를 확보하여 원격 배포 식별 및 실행 상태 확인 항목을 완료한다. 태그가 소스 provenance를 암호학적으로 보증하는 것은 아니며 이미지 revision label/서명 또는 CI 산출물 digest 대조는 수행하지 않았다.
 
 이전 로컬 build ID 0bYd-CJQ4c0aA4_VrAuRQ와 원격 build ID는 다르다. 앞선 공개 자산14개 해시 일치와 공개 desktop/mobile10/10 결과는 해당 관찰 시점의 독립 증거로 유지한다. build ID 차이만으로 기능 오류나 오래된 배포라고 판단하지 않으며 로컬/원격 이미지가 동일하다고 주장하지 않는다. 이를 이유로 재배포·재시작하지 않았다.
 
