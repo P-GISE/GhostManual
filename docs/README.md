@@ -32,3 +32,12 @@ AGENTS와 00~10·99 문서를 함께 **프로젝트 가이드**라고 부른다.
 - [개념 ERD](03_데이터베이스_설계.md)
 
 확정 방향은 PC 화면·여러 앱의 업무 과정을 자동 수집하는 GhostManual이다. 위 문서의 세부 범위·성공 기준·데이터 모델은 검토용 제안이며 제품 구현·실험 결과는 아니다.
+
+## PoC 구현 검토 자료
+
+- [Windows 로컬 수집 설계 제안](superpowers/specs/2026-10-16-windows-local-poc-design.md)
+- [작업별 구현·검증 계획](superpowers/plans/2026-10-16-windows-local-poc.md)
+- [인수 시나리오 TC-01~06](기획/04_Windows_PoC_인수_시나리오.md)
+- [Pre-mortem 위험 검토](기획/PreMortem-GhostManual-2026-10-16.md)
+
+설계/계획 제안과 제품 구현·실험 결과는 구분한다.

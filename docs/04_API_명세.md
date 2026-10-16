@@ -17,3 +17,7 @@ HTTP endpoint·전송 방식·인증·서버 유무는 아직 미정이다. PC �
 실제 타입·오류 코드·중복/오프라인 동기화·대용량 업로드·접근 제어는 OS·처리 구조·데이터량과 PoC 결과를 바탕으로 확정한다. 원본 인증정보·키를 요청 예시에 넣지 않는다.
 
 [기능](02_기능_설계.md) · [ERD](03_데이터베이스_설계.md) · [서버 경계](07_백엔드_구조.md)
+
+## PoC의 인터페이스 배치 제안
+
+[로컬 설계](superpowers/specs/2026-10-16-windows-local-poc-design.md)는 초기 HTTP 서버 없이 Core 함수와 Windows adapter 사이 계약을 먼저 제안한다. 이벤트v1·상태·입력 manifest·template/provider 경계를 검토하며 실제 타입/파일은 [작업 계획](superpowers/plans/2026-10-16-windows-local-poc.md)에 제안했다. 구현되지 않은 endpoint를 동작하는 API로 표시하지 않는다.
