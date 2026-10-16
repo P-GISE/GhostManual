@@ -13,3 +13,9 @@ test-results/
 *.log
 .dev-tools/
 strix_runs/
+
+# .NET build and local IDE state
+**/bin/
+**/obj/
+.vs/
+TestResults/

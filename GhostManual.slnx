@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/GhostManual.Core/GhostManual.Core.csproj" />
+  <Project Path="tests/GhostManual.Core.Tests/GhostManual.Core.Tests.csproj" />
+</Solution>
