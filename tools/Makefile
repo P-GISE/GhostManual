@@ -74,3 +74,14 @@ doctor:
 	"$(BIN)/strix" --version
 	HEADROOM_BEACON=off "$(BIN)/headroom" --version
 	cd "$(CACHE)/gateway" && DATA_DIR="$(CACHE)/gateway-data" OMNIROUTE_CLI_SKIP_REPO_ENV=1 "$(OMNIROUTE)" --version
+
+# Optional infrastructure clients. Installation does not authenticate or deploy.
+.PHONY: infra-install infra-doctor
+infra-install:
+	@test -x "$(CACHE)/infra-venv/bin/python" || uv venv "$(CACHE)/infra-venv" --python 3.12
+	uv pip install --python "$(CACHE)/infra-venv/bin/python" -r "$(TOOLS_DIR)/infra-requirements.txt"
+
+infra-doctor:
+	"$(CACHE)/infra-venv/bin/aws" --version
+	"$(CACHE)/infra-venv/bin/python" -c 'from cloudflare import Cloudflare; from importlib.metadata import version; print("cloudflare " + version("cloudflare"))'
+	@command -v ssh
