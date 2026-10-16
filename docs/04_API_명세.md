@@ -21,3 +21,11 @@ HTTP endpoint·전송 방식·인증·서버 유무는 아직 미정이다. PC �
 ## PoC의 인터페이스 배치 제안
 
 [로컬 설계](superpowers/specs/2026-10-16-windows-local-poc-design.md)는 초기 HTTP 서버 없이 Core 함수와 Windows adapter 사이 계약을 먼저 제안한다. 이벤트v1·상태·입력 manifest·template/provider 경계를 검토하며 실제 타입/파일은 [작업 계획](superpowers/plans/2026-10-16-windows-local-poc.md)에 제안했다. 구현되지 않은 endpoint를 동작하는 API로 표시하지 않는다.
+
+## Task1 실제 Core 인터페이스
+
+- [Session](../src/GhostManual.Core/Session.cs): 허용 앱 표시 ID·TimeProvider를 받아 Start/Pause/Resume/Stop/Cancel, Append를 제공한다. Append는 신규 수락 시 true, 동일 이벤트 재전송은 false, 상태/계약 위반은 예외다. sequence는1부터 연속 증가하며 내용이 다른 동일 ID는 거부한다.
+- [CaptureEvent](../src/GhostManual.Core/CaptureEvent.cs): Parse/ToJson에서 v1·필수 필드·UTC·UUID·kind·노트1000 UTF-16 단위를 검증한다. 알 수 없는 필드·중복 JSON 필드·버전은 거부한다. 허용 앱 여부와 sessionId 일치는 Session에서 확인한다.
+- [SessionStore](../src/GhostManual.Core/SessionStore.cs): SaveAsync(session, CancellationToken)는 게시한 snapshot 경로, GetCurrentSnapshotAsync(sessionId, CancellationToken)는 현재 snapshot 경로를 반환한다. 파일 IO·취소 실패는 성공 결과로 변환하지 않는다. 저장 루트는 사용자 설정이며 세션/snapshot 경로는 UUID만 사용한다.
+
+HTTP·인증·앱 수집 adapter·생성/provider API는 아직 구현하지 않았다.

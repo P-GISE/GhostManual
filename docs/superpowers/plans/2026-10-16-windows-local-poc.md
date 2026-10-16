@@ -6,7 +6,7 @@
 
 **Architecture:** 순수 Core와 Windows collector/UI를 분리한다. 안전한 이벤트 JSONL과 승인된 이미지 파일만 로컬 보존하고 provider는 opt-in 경계로 둔다.
 
-**Tech Stack:** 제안 baseline .NET10/C#, WPF/Windows11 x64. SDK와 테스트 패키지의 호환 버전은 착수 시 실제 조회해 고정한다. 아직 설치·빌드된 조합이 아니다.
+**Tech Stack:** 제안 baseline .NET10/C#, WPF/Windows11 x64. SDK와 테스트 패키지의 호환 버전은 착수 시 실제 조회해 고정한다. Task1 Core는 SDK10.0.402·패키지 고정 후 Linux 빌드/단위 검증했다. WPF/Windows 조합은 아직 빌드·실행하지 않았다.
 
 **Spec:** [Windows 로컬 PoC 설계](../specs/2026-10-16-windows-local-poc-design.md)
 
@@ -34,11 +34,11 @@
 **Consumes:** 설계의 이벤트 v1·상태·한도·안전한 필드 정의.
 **Produces:** Session.Start/Pause/Resume/Stop/Cancel, Append(CaptureEvent), SessionStore.SaveAsync(session, CancellationToken), 안전한 session.json/events.jsonl.
 
-- [ ] SDK·테스트 패키지의 실제 지원 버전을 확인해 global.json/중앙 패키지 버전에 고정한다. Core만 Linux에서도 빌드되게 하고 Windows 프로젝트는 분리한다.
-- [ ] 상태 전이·20분 경과 후 재개 거부·비허용 앱·동일eventId·순서 역전·정지 후 이벤트·safeNote 1000/1001 경계·알 수 없는 버전/필드 거부·허용 필드만 직렬화·쓰기 실패 테스트를 먼저 작성한다.
-- [ ] `dotnet test tests/GhostManual.Core.Tests`를 실행해 미구현 동작 실패를 확인한다. SDK/러너 오류를 RED로 기록하지 않는다.
-- [ ] 계약·원자적 안전 메타데이터 저장을 최소 구현한다. 생성된 UUID 외 사용자 텍스트를 경로로 쓰지 않는다.
-- [ ] 같은 명령과 관련 전체 suite를 실행한다. Expected: 종료0, 실제 결과를 10에 기록하고 Task1 커밋.
+- [x] SDK·테스트 패키지의 실제 지원 버전을 확인해 global.json/중앙 패키지 버전에 고정한다. Core만 Linux에서도 빌드되게 하고 Windows 프로젝트는 분리한다.
+- [x] 상태 전이·20분 경과 후 재개 거부·비허용 앱·동일eventId·순서 역전·정지 후 이벤트·safeNote 1000/1001 경계·알 수 없는 버전/필드 거부·허용 필드만 직렬화·쓰기 실패 테스트를 먼저 작성한다.
+- [x] `dotnet test tests/GhostManual.Core.Tests`를 실행해 미구현 동작 실패를 확인한다. SDK/러너 오류를 RED로 기록하지 않는다.
+- [x] 계약·원자적 안전 메타데이터 저장을 최소 구현한다. 생성된 UUID 외 사용자 텍스트를 경로로 쓰지 않는다.
+- [x] 같은 명령과 관련 전체 suite를 실행한다. Expected: 종료0, 실제 결과를 10에 기록하고 Task1 커밋.
 
 ## Task 2: Windows metadata collector·상태 UI
 
@@ -79,4 +79,4 @@
 
 독립 기능인 provider/회사 배포/멀티테넌시/자동 업무 실행은 위 Task에 끼워 넣지 않는다. 실 장비가 없으면 Core 개발을 진행할 수 있어도 Windows 수집 Task의 실제 인수 검증은 차단으로 남긴다.
 
-계획 검토 후 직접 실행을 권고한다. 같은 세션/manifest/근거 타입을 순서대로 사용하는 작은 PoC라 병렬 구현보다 통합 확인이 쉽다. 제품 코드는 아직 작성하지 않았다.
+계획 검토 후 직접 실행을 권고한다. 같은 세션/manifest/근거 타입을 순서대로 사용하는 작은 PoC라 병렬 구현보다 통합 확인이 쉽다. Task1 Core와 단위 테스트는 구현했다. Task2~4는 미구현이며 실제 Windows 단계는 장비 확인 전 차단이다.

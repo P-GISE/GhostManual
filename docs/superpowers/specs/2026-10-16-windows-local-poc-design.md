@@ -1,6 +1,6 @@
 # Windows 로컬 수집 PoC 구현 설계 제안
 
-상태: 검토용 제안. 사용자 확인은 Windows·PC 업무 자동 수집·웹→Excel→결과 문서 흐름이다. 아래 기술·지원 버전·보관·한도는 구현 기준으로 검토할 제안이며 아직 사용자 장비에서 검증하지 않았다.
+상태: Task1 Core 구현·Linux 단위 검증. Windows/화면/생성 부분은 검토용 제안. 사용자 확인은 Windows·PC 업무 자동 수집·웹→Excel→결과 문서 흐름이다. 아래 기술·지원 버전·보관·한도는 구현 기준으로 검토할 제안이며 아직 사용자 장비에서 검증하지 않았다.
 
 기준: [제품 기획](../../기획/01_제품_기획서.md), [PoC](../../기획/02_PoC_검증_계획.md), [S-01](../../기획/03_Windows_대표업무_시나리오.md).
 
@@ -34,7 +34,7 @@ Session 상태: prepared → recording ↔ paused → stopped, 어느 활성 상
 
 CaptureEvent v1: schemaVersion=1, sessionId, eventId, sequence, observedAtUtc, kind(app_focus/gap/annotation/evidence_request), appId(optional), safeNote(optional). 제목/경로/입력 원문 필드는 계약에 두지 않는다. 알 수 없는 schemaVersion/필드는 읽기 경계에서 거부하고 safeNote는 선택 문자열·최대1000 UTF-16 code unit으로 제한한다. 시간은 UTC·순서는 단조 증가 sequence이며 같은 eventId 재전송은 중복 저장하지 않는다.
 
-pause·resume·stop은 세션 제어 이력으로 별도 보존한다. 수집 완료와 생성 완료를 같은 상태로 합치지 않는다. 수동/자동 화면 후보는 evidence_request 이벤트를 근거 anchor로 사용한다. appId는 허용 앱의 표시용 식별자이며 실제 실행파일 경로를 저장하지 않는다. 새 세션의 sequence는1부터 시작한다. resume 후 첫 관찰은 새 focus anchor로 기록한다. Polling 사이에 보지 못한 전환은 자동으로 복원할 수 없으며 알려진 API 실패/중단만 gap으로 표기한다.
+pause·resume·stop은 세션 제어 이력으로 별도 보존한다. 수집 완료와 생성 완료를 같은 상태로 합치지 않는다. 수동/자동 화면 후보는 evidence_request 이벤트를 근거 anchor로 사용한다. appId는 허용 앱의 표시용 식별자이며 실제 실행파일 경로를 저장하지 않는다. 새 세션의 sequence는1부터 시작하며 수락된 이벤트마다1씩 증가한다. 같은 eventId의 동일 payload만 중복으로 무시하고 내용이 다르면 거부한다. resume 후 첫 관찰은 새 focus anchor로 기록한다. Polling 사이에 보지 못한 전환은 자동으로 복원할 수 없으며 알려진 API 실패/중단만 gap으로 표기한다.
 
 ## 5. 화면 근거와 저장 제안
 
@@ -48,9 +48,12 @@ pause·resume·stop은 세션 제어 이력으로 별도 보존한다. 수집 �
 
 ```text
 sessions/<uuid>/
-  session.json
-  events.jsonl
-  controls.jsonl
+  current.json           # snapshotId: UUID, 마지막 게시된 메타데이터 버전
+  .write.lock            # 세션별 동시 저장 배제
+  snapshots/<uuid>/      # 불변, 이전 버전 유지
+    session.json
+    events.jsonl
+    controls.jsonl
   assets/<uuid>.png       # 사용자 승인·마스크 후 바이트만
   revisions/<n>.json
   exports/revision-<n>/
@@ -77,10 +80,16 @@ provider 모드는 별도 opt-in이다. 모델·키·입력 전송·비용/시�
 3. Windows 화면 근거: 캡처 기술 spike·메모리 후보·검토/마스크/승인·실 화면 제외 시험. API 지원 검증 전 fake screenshot을 성공으로 처리하지 않음.
 4. template 초안·검수·내보내기 및 S-01 실험. 별도 provider 이후 실 생성 품질/비용·후임자 재현 평가.
 
-현재 환경은 Linux이며 dotnet도 확인되지 않았다. 첫 순수 Core 구현에 SDK 설치·패키지 호환 확인이 필요하다. Windows API·UI·Office를 이 환경에서 실제 실행했다고 기록하지 않는다.
+현재 환경은 Linux이며 SDK10.0.402로 Core를 구현·단위 검증했다. Windows API·UI·Office를 이 환경에서 실제 실행했다고 기록하지 않는다.
 
 ## 8. 검토할 선택과 선행 조건
 
 Windows11/.NET10/WPF·단일 모니터 baseline, 로컬 전용/기본 외부 호출 없음, 화면 원본 메모리 전용과 한도·보관·마스크 절차, template/provider 구분을 검토한다. 실제 Windows 장비·앱·보관 조건·provider 예산이 준비되지 않은 단계는 해당 실험을 차단 상태로 둔다.
 
-이 문서는 구현 설계 제안이며 제품 코드·실험 결과는 없다. [인수 시나리오](../../기획/04_Windows_PoC_인수_시나리오.md)와 [위험 검토](../../기획/PreMortem-GhostManual-2026-10-16.md)를 함께 검토한다.
+Core의 이벤트/상태/저장은 구현했으며 나머지는 설계 제안이다. 실제 Windows 수집 실험 결과는 없다. [인수 시나리오](../../기획/04_Windows_PoC_인수_시나리오.md)와 [위험 검토](../../기획/PreMortem-GhostManual-2026-10-16.md)를 함께 검토한다.
+
+## Task1 구현 시 저장 일관성 보완
+
+세 파일을 개별 덮어쓰면 서로 다른 버전이 섞일 수 있어 snapshotId로 만든 불변 폴더를 먼저 완성하고 같은 디렉터리의 임시 포인터를 current.json으로 rename해 게시한다. 읽기는 SessionStore.GetCurrentSnapshotAsync로 선택한 snapshot 경로를 사용한다. 동일 세션의 경쟁 writer는 파일 잠금 실패를 명시적으로 반환한다. 실패/취소는 성공 경로를 반환하지 않고 이미 게시한 snapshot을 유지한다. 임시 포인터/미게시 snapshot은 정상 오류 처리 시 정리한다. 충돌·전원 장애 후 고아 snapshot 정리는 미구현이며 rename은 전원 장애 시 파일시스템 내구성 전체를 보장하지 않는다.
+
+저장 루트는 신뢰 가능한 사용자 전용 로컬 폴더여야 한다. Unix 새 폴더는0700으로 만들고 Windows는 상위 AppData 권한을 상속한다. 기존 디렉터리 권한 교정·악의적인 동일 사용자 프로세스와의 경합·외부 동기화/네트워크 파일시스템 보장은 이번 검증 범위 밖이다. 현재 원본 화면이나 파일 내용은 수집하지 않는다.
