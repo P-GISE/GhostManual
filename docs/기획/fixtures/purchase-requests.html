@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GhostManual PoC — 합성 구매 요청 자료</title>
+<style>
+body { font: 16px/1.6 system-ui, sans-serif; margin: 2rem auto; padding: 0 1rem; max-width: 68rem; color: #18202a; background: #f6f7f8; }
+.notice { padding: 1rem; border: 1px solid #a5afb9; background: #fff; }
+table { border-collapse: collapse; background: #fff; width: 100%; }
+th, td { border: 1px solid #b7c0c9; padding: .6rem; text-align: left; }
+.table-wrap { overflow-x: auto; }
+a { color: #124a8a; }
+</style>
+</head>
+<body>
+<main>
+<h1>구매 요청 현황 — 합성 자료</h1>
+<p class="notice">실제 회사·사람·거래 자료가 아닙니다. GhostManual의 업무 기록 PoC용 입력입니다.</p>
+<h2>오늘의 업무</h2>
+<p>2026-10-05부터 2026-10-09까지(양끝 포함)의 승인 요청을 대상으로 부서별 건수·금액과 전체 합계를 Excel에서 정리하고 결과 문서를 작성하세요.</p>
+<p>원화 금액은 거래별 총액이며 세금·환율·추가 계산은 적용하지 않습니다. 보고서에는 기간·상태 조건·부서별 집계·합계와 합성 자료 표기를 넣으세요.</p>
+<p><a href="purchase-requests.csv" download>전체 구매 요청 CSV 내려받기</a></p>
+<div class="table-wrap">
+<table>
+<caption>전체 요청 원자료 — 필터와 합계 계산 전</caption>
+<thead><tr><th scope="col">요청 ID</th><th scope="col">요청일</th><th scope="col">부서</th><th scope="col">상태</th><th scope="col">금액(원)</th></tr></thead>
+<tbody><tr><td>REQ-001</td><td>2026-10-05</td><td>영업팀</td><td>승인</td><td>120000</td></tr>
+<tr><td>REQ-002</td><td>2026-10-05</td><td>운영팀</td><td>승인</td><td>80000</td></tr>
+<tr><td>REQ-003</td><td>2026-10-06</td><td>영업팀</td><td>대기</td><td>50000</td></tr>
+<tr><td>REQ-004</td><td>2026-10-06</td><td>개발팀</td><td>승인</td><td>300000</td></tr>
+<tr><td>REQ-005</td><td>2026-10-07</td><td>영업팀</td><td>승인</td><td>90000</td></tr>
+<tr><td>REQ-006</td><td>2026-10-08</td><td>운영팀</td><td>승인</td><td>120000</td></tr>
+<tr><td>REQ-007</td><td>2026-10-09</td><td>개발팀</td><td>승인</td><td>200000</td></tr>
+<tr><td>REQ-008</td><td>2026-10-10</td><td>영업팀</td><td>승인</td><td>70000</td></tr>
+<tr><td>REQ-009</td><td>2026-10-04</td><td>운영팀</td><td>승인</td><td>50000</td></tr>
+<tr><td>REQ-010</td><td>2026-10-09</td><td>개발팀</td><td>반려</td><td>40000</td></tr>
+<tr><td>REQ-011</td><td>2026-10-08</td><td>영업팀</td><td>대기</td><td>60000</td></tr>
+<tr><td>REQ-012</td><td>2026-10-07</td><td>운영팀</td><td>승인</td><td>50000</td></tr></tbody>
+</table>
+</div>
+</main>
+</body>
+</html>
