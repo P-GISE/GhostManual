@@ -1,7 +1,0 @@
-services:
-  app:
-    logging:
-      driver: none
-  db:
-    logging:
-      driver: none
