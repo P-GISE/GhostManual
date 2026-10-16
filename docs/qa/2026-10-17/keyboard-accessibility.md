@@ -43,3 +43,7 @@ Playwright 관리 Chromium이 설치돼 있으면 A11Y_CHROMIUM_PATH 없이 실�
 초기 전체 lint는 이전 작업에서 남은 .dev-tools의 외부 패키지까지 검사해 실패했다. 이 캐시는 삭제하지 않고 /workspace/scratch/GhostManual-legacy-dev-tools-a11y로 보존 이동했다. 이후 기존 public-assets.json의 마지막 줄바꿈 format 오류를 정리했고 JSON 파싱 값이 HEAD와 같은 것을 확인했다. 기존 QA 결과값은 변경하지 않았다. Biome의 기존 권고1개와 info66, production test server의 standalone 사용 권고/색상 환경 경고는 남아 있으며 성공 결과를 경고0으로 표시하지 않는다.
 
 배포/원격 상태는 기존58d9ebd 태그의 인계 기록 그대로다. 이 변경이 공개 사이트에 적용됐다고 주장하지 않는다.
+
+## GitHub 상태 확인 — 후속 가이드 갱신
+
+수정 소스는160a754f37f2c8fdc8314018bc602dcafe9c4fa4다. PR #4는 가이드 PR #3의 docs/public-demo-guide 브랜치를 대상으로 하며 이번 조회에서 둘 다 open·미병합이다. 해당 소스의 GitHub verify2건은 in_progress, 결론은 아직 없다. 이 상태 확인은 로컬8개 검사를 재실행한 것이 아니며 원격 CI 통과나 공개 배포의 근거가 아니다.

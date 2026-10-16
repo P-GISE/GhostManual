@@ -14,7 +14,9 @@ GhostManual은 업무 원본 자료를 사람이 검수한 매뉴얼로 남기�
 |---|---|
 | 저장소 | [P-GISE/GhostManual](https://github.com/P-GISE/GhostManual) |
 | 기본 브랜치 | feat/ghostmanual-mvp |
-| 이번 문서 작업 시작 commit | d493c8cd9170b304486230d1e891916a70cd459c |
+| 가이드 인계 기준 commit | d493c8cd9170b304486230d1e891916a70cd459c |
+| 키보드 수정·로컬 검증 소스 | 160a754f37f2c8fdc8314018bc602dcafe9c4fa4 |
+| 현재 작업 브랜치 | fix/keyboard-accessibility |
 | 검증된 제품 소스·실행 앱 태그 | 58d9ebd1eac5f80f7fb66364ece4950e87a25ebf |
 | 공개 주소 | [ghostmanual.pigs0516.com](https://ghostmanual.pigs0516.com) |
 | 제품 기술 | Node24·Next.js/React·TypeScript·PostgreSQL, Vitest·Playwright |
@@ -40,6 +42,19 @@ Cloudflare 터널은 기존 로컬 관리 방식을 유지한다. 완료된 DNS/
 ## 후속 작업: 키보드 접근성
 
 가이드 기반 계속 진행 요청에 따라 UX-KEYBOARD를 수행했다. ‘본문으로 이동’이 대상 main에 포커스를 옮기지 못하는 문제를 재현하고, tabIndex=-1과 화면 안쪽 포커스 표시를 적용했다. 로컬 배포 모드4경로×2뷰포트8개·단위41·타입·빌드·lint 검사를 통과했다. 전체 접근성 인증·실 기기/화면 낭독기 평가는 미검증이며, 원격 배포 상태는 바꾸지 않았다. [직접 실행 근거](docs/qa/2026-10-17/keyboard-accessibility.md).
+
+## GitHub 반영과 다음 순서
+
+| 항목 | 이번 조회 시점 상태 |
+|---|---|
+| 가이드 [PR #3](https://github.com/P-GISE/GhostManual/pull/3) | open·미병합, 대상 feat/ghostmanual-mvp |
+| 키보드 수정 [PR #4](https://github.com/P-GISE/GhostManual/pull/4) | open·미병합, 대상 docs/public-demo-guide. PR #3에 의존 |
+| 수정 소스 CI | [push 실행](https://github.com/P-GISE/GhostManual/actions/runs/38940775088)·[PR 실행](https://github.com/P-GISE/GhostManual/actions/runs/38940826573) 모두 in_progress. 완료 결과 미확인 |
+| 공개 배포 | 기존58d9ebd 태그의 인계 상태 유지. 160a754 적용 여부를 확인/배포하지 않음 |
+
+다음은 CI 결과와 PR #3→#4의 의존 관계를 검토하고 기본 브랜치 반영 여부를 확인하는 것이다. PR 병합과 운영 배포는 별도 작업이다. 실제 배포 작업 시에만 새 이미지 식별과 변경된 키보드 동작을 확인하며, 기존 DNS/터널 재구성·전체 공개 QA 반복을 기본 단계로 넣지 않는다.
+
+독립 리뷰의 모바일 테두리 비가시성 P2는 실패 테스트 후 inset offset으로 수정했고 최종8개 검사가 통과했다. 전체 lint는 종료0이지만 기존 warning1/info66은 남아 있다. 가이드의 로컬 성공을 원격 CI 성공이나 공개 적용으로 표시하지 않는다.
 
 ## 남은 범위
 
