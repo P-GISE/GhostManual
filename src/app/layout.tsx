@@ -16,7 +16,9 @@ export default function Layout({ children }: { readonly children: ReactNode }) {
           본문으로 이동
         </a>
         <Navigation />
-        <main id="main">{children}</main>
+        <main id="main" tabIndex={-1}>
+          {children}
+        </main>
         <footer>
           <span>원본 → 검수 매뉴얼 → 근거 답변</span>
           <div>

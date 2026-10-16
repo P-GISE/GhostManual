@@ -41,6 +41,7 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - run: npm run test:accessibility
       - name: Build deployment image without credentials
         run: docker build -t ghostmanual:${{ github.sha }} .
       - name: Export verified deployment image

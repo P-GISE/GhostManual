@@ -77,9 +77,14 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
-summary:focus-visible {
+summary:focus-visible,
+main:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
+}
+/* Keep the skip target indicator inside full-width, vertically long content. */
+main:focus-visible {
+  outline-offset: -3px;
 }
 .shell-header {
   max-width: 1248px;
