@@ -14,7 +14,7 @@ test("direct writing opens an existing draft after source changes", async ({ pag
   const input = page.getByLabel("원본 내용", { exact: true });
   await input.fill((await input.inputValue()) + " 변경된 원본도 담당자가 확인합니다.");
   await page.getByRole("button", { name: "새 원본 버전 저장", exact: true }).click();
-  await expect(page.getByText("SOURCE / 원본 REVISION 2", { exact: true })).toBeVisible();
+  await expect(page.getByText("원본 자료 · 버전 2", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "직접 작성하기", exact: true }).click();
   await expect(page).toHaveURL(`${manualUrl}/edit`);
   await expect(page.getByLabel("업무 목적", { exact: true })).not.toHaveValue("");
