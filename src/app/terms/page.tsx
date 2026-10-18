@@ -1,7 +1,7 @@
 export default function Page() {
   return (
     <article className="prose">
-      <span className="eyebrow">POLICY / 공개 시연</span>
+      <span className="eyebrow">공개 시연 안내</span>
       <h1>이용약관 안내</h1>
       <div className="notice">개인정보와 회사 기밀을 입력하지 않는 공개 시연 서비스입니다.</div>
       <h2>서비스 범위</h2>

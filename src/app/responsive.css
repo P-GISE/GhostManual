@@ -1,53 +1,145 @@
 @media (max-width: 960px) {
-  .shell-header {
-    padding: 20px 24px;
-    align-items: flex-start;
+  :root {
+    --gutter: 32px;
+  }
+  .start {
+    column-gap: 28px;
+  }
+  .start-actions {
+    grid-template-columns: 1fr;
+  }
+  .split {
     gap: 20px;
+  }
+  .panel,
+  .document,
+  .editor-form {
+    padding: 24px;
+  }
+}
+@media (max-width: 760px) {
+  :root {
+    --gutter: 24px;
+  }
+  .shell-header {
     flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding-block: 20px 14px;
+  }
+  .brand {
+    align-self: flex-start;
+    font-size: 21px;
   }
   nav {
-    gap: 24px;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+  nav a {
+    justify-content: center;
+    padding-inline: 8px;
+    font-size: 13px;
   }
   main {
-    padding: 36px 24px 56px;
+    padding-block: 30px 48px;
+  }
+  h1 {
+    font-size: 27px;
+  }
+  h2 {
+    font-size: 19px;
   }
   .start,
   .split {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 24px;
   }
+  .start {
+    grid-template-areas: "intro" "entry" "workflow";
+    padding-block: 0;
+  }
+  .workflow {
+    margin-top: 0;
+  }
+  .shell-header > .badge {
+    align-self: flex-start;
+  }
+  .start-intro {
+    padding-block: 0;
+  }
   .start h1 {
-    font-size: 36px;
+    font-size: 33px;
   }
-  h1 {
-    font-size: 30px;
+  .start-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .panel,
-  .document {
-    padding: 24px;
+  .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .section-heading > .button {
+    align-self: flex-start;
   }
   .row {
     align-items: flex-start;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .section-heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  footer {
-    margin: 0;
-    padding: 24px 24px 36px;
-    flex-direction: column;
     gap: 12px;
   }
-  .actions > * {
-    flex: 1;
+  .row > .badge {
+    flex-shrink: 0;
+    max-width: 120px;
+  }
+  .filter-bar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    padding: 18px;
+  }
+  .prose form,
+  article.prose {
+    padding: 22px;
+  }
+  .panel,
+  .document,
+  .editor-form {
+    padding: 22px;
+  }
+  footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+    padding-block: 20px 26px;
+  }
+  footer div {
+    gap: 22px;
+  }
+}
+@media (max-width: 400px) {
+  :root {
+    --gutter: 20px;
+  }
+  .start h1 {
+    font-size: 30px;
+  }
+  .start-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .row {
+    flex-direction: column;
+  }
+  .row > .badge {
+    max-width: 100%;
+  }
+  .actions > .button,
+  .actions > button {
+    flex: 1 1 auto;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *,
+  *::before,
+  *::after {
+    transition: none;
     scroll-behavior: auto;
   }
 }

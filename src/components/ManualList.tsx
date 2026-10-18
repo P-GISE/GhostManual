@@ -58,7 +58,7 @@ export function ManualList() {
     <>
       <div className="section-heading">
         <div>
-          <span className="eyebrow">WORKSPACE</span>
+          <span className="eyebrow">작업 공간</span>
           <h1>업무 문서함</h1>
           <p className="muted">원본과 검수한 매뉴얼을 따로 관리합니다.</p>
         </div>
@@ -88,20 +88,26 @@ export function ManualList() {
       )}
       {!busy && manuals.length > 0 && (
         <>
-          <label htmlFor="manual-search">매뉴얼 제목 검색</label>
-          <input
-            id="manual-search"
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <label htmlFor="manual-status">검수 상태</label>
-          <select id="manual-status" value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="all">전체</option>
-            <option value="draft">미검수 초안</option>
-            <option value="published">게시본 있음</option>
-            <option value="review">재검토 필요</option>
-          </select>
+          <div className="filter-bar">
+            <div>
+              <label htmlFor="manual-search">매뉴얼 제목 검색</label>
+              <input
+                id="manual-search"
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="manual-status">검수 상태</label>
+              <select id="manual-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="all">전체</option>
+                <option value="draft">미검수 초안</option>
+                <option value="published">게시본 있음</option>
+                <option value="review">재검토 필요</option>
+              </select>
+            </div>
+          </div>
           <p className="help" role="status">
             전체 {manuals.length}개 중 {visibleManuals.length}개 표시
           </p>

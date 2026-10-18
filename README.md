@@ -14,3 +14,7 @@ npm test, npm run typecheck, npm run lint, npm run build를 실행합니다. 실
 [공개 데모](https://ghostmanual.pigs0516.com)는 AI 비활성 상태로 배포·공개 검증을 완료했습니다. 2026-10-17 기록 기준 desktop5/mobile5 흐름10개와 검증 공간 정리를 확인했고, 인계된 최신 소스 검증은 단위41·PostgreSQL 통합40·E2E24·빌드·타입·린트 통과입니다. 실제 AI·지속 부하·전체 접근성·이미지 provenance는 별도 범위입니다. 이번 가이드 갱신에서 제품 검증을 반복하지 않았습니다.
 
 [프로젝트 가이드](PROJECT_GUIDE.md), [문서 가이드](docs/00_문서_가이드.md), [진행 기록](docs/구현_진행_기록.md), [배포 절차](deploy/README.md)를 참고하세요.
+
+## 디자인 개선안
+
+2026-10-18 전체 화면·좌우 정렬·Pretendard 한글 글꼴 개선은 로컬 검증과 리뷰를 마쳤습니다. [화면30장·검증 범위](docs/qa/2026-10-18/design-refresh.md)를 참고하세요. 공개 서버에 적용된 상태와 구분합니다.

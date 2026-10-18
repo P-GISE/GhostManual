@@ -22,24 +22,24 @@ export function Start() {
   }
   return (
     <div className="start">
-      <section>
-        <span className="eyebrow">WORKSPACE / 업무 인수인계</span>
+      <section className="start-intro">
+        <span className="eyebrow">업무 인수인계 문서함</span>
         <h1>
-          담당자의 경험을,
+          업무를 남기고,
           <br />
-          다음 사람의 매뉴얼로.
+          다음 사람에게 이어주세요.
         </h1>
         <p className="muted">
           업무 자료를 등록하고 내용을 직접 검수하세요.
           <br />
           후임자는 검수한 매뉴얼과 원본 근거를 함께 확인합니다.
         </p>
-        <div className="notice">AI 초안은 검수 전까지 확정된 업무 규칙이 아닙니다.</div>
       </section>
       <section className="panel">
-        <h2>작업 공간 시작</h2>
+        <span className="eyebrow">시작하기</span>
+        <h2>어떤 업무를 남길까요?</h2>
         <p>방문자별 임시 공간에서 업무 문서를 정리합니다.</p>
-        <div className="actions">
+        <div className="start-actions">
           <button type="button" disabled={busy} onClick={() => start("blank")}>
             빈 공간 시작
           </button>
@@ -63,6 +63,23 @@ export function Start() {
           </p>
         )}
       </section>
+      <ol className="workflow" aria-label="매뉴얼 작성 과정">
+        {[
+          ["01", "자료 등록", "업무의 순서와 주의할 점을 원본으로 남깁니다."],
+          ["02", "내용 검수", "담당자가 확인한 내용을 게시 버전으로 보존합니다."],
+          ["03", "후임자에게 공유", "읽기 전용 문서와 원문 근거를 함께 전달합니다."],
+        ].map(([number, title, description]) => (
+          <li key={number}>
+            <span className="step-number" aria-hidden="true">
+              {number}
+            </span>
+            <div>
+              <strong>{title}</strong>
+              <p>{description}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
