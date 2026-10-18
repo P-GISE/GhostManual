@@ -39,7 +39,7 @@ export function SourceForm() {
   }
   return (
     <section className="prose">
-      <span className="eyebrow">SOURCE / 원본</span>
+      <span className="eyebrow">원본 자료</span>
       <h1>업무 자료 등록</h1>
       <p className="muted">업무 경험을 자유롭게 적어 주세요. 원본은 매뉴얼의 근거로 보존됩니다.</p>
       <div className="notice">

@@ -1,6 +1,6 @@
 # GhostManual 프로젝트 가이드
 
-갱신일: 2026-10-17 (KST). 현재 단계는 **AI 비활성 공개 데모 유지, 키보드 접근성 수정 로컬 검증 완료**다.
+갱신일: 2026-10-18 (KST). 현재 단계는 **AI 비활성 공개 데모 유지, 전체 디자인·한글 글꼴 개선 로컬 검증 완료**다.
 
 ## 제품과 현재 범위
 
@@ -16,7 +16,7 @@ GhostManual은 업무 원본 자료를 사람이 검수한 매뉴얼로 남기�
 | 기본 브랜치 | feat/ghostmanual-mvp |
 | 가이드 인계 기준 commit | d493c8cd9170b304486230d1e891916a70cd459c |
 | 키보드 수정·로컬 검증 소스 | 160a754f37f2c8fdc8314018bc602dcafe9c4fa4 |
-| 현재 작업 브랜치 | fix/keyboard-accessibility |
+| 현재 작업 브랜치 | design/document-workspace |
 | 검증된 제품 소스·실행 앱 태그 | 58d9ebd1eac5f80f7fb66364ece4950e87a25ebf |
 | 공개 주소 | [ghostmanual.pigs0516.com](https://ghostmanual.pigs0516.com) |
 | 제품 기술 | Node24·Next.js/React·TypeScript·PostgreSQL, Vitest·Playwright |
@@ -45,7 +45,7 @@ Cloudflare 터널은 기존 로컬 관리 방식을 유지한다. 완료된 DNS/
 
 ## GitHub 반영과 다음 순서
 
-| 항목 | 이번 조회 시점 상태 |
+| 항목 | 2026-10-17 조회 기록 (이번 디자인 작업에서 재조회하지 않음) |
 |---|---|
 | 가이드 [PR #3](https://github.com/P-GISE/GhostManual/pull/3) | open·미병합, 대상 feat/ghostmanual-mvp |
 | 키보드 수정 [PR #4](https://github.com/P-GISE/GhostManual/pull/4) | open·미병합, 대상 docs/public-demo-guide. PR #3에 의존 |
@@ -55,6 +55,16 @@ Cloudflare 터널은 기존 로컬 관리 방식을 유지한다. 완료된 DNS/
 다음은 CI 결과와 PR #3→#4의 의존 관계를 검토하고 기본 브랜치 반영 여부를 확인하는 것이다. PR 병합과 운영 배포는 별도 작업이다. 실제 배포 작업 시에만 새 이미지 식별과 변경된 키보드 동작을 확인하며, 기존 DNS/터널 재구성·전체 공개 QA 반복을 기본 단계로 넣지 않는다.
 
 독립 리뷰의 모바일 테두리 비가시성 P2는 실패 테스트 후 inset offset으로 수정했고 최종8개 검사가 통과했다. 전체 lint는 종료0이지만 기존 warning1/info66은 남아 있다. 가이드의 로컬 성공을 원격 CI 성공이나 공개 적용으로 표시하지 않는다.
+
+## 전체 디자인 개선 — 2026-10-18
+
+사용자의 전체 개선·좌우 대칭·글꼴 요청에 따라 공통1200px shell과 가운데 읽기 열, 동일 폭 문서/검수 열, 자체 호스팅 Pretendard를 적용했다. 문서함·등록·편집·공유·정책 화면과 모바일 시작 버튼까지 정리했다. 로컬 화면42개·단위41개·타입·빌드·lint 검증을 통과하고 독립 리뷰를 마쳤다. 10개 화면×3크기 캡처30장을 남겼다. Docker의 public 자산/라이선스 복사를 추가했다. 검증 결과·이미지·합성 데이터의 경계는 [디자인 QA](docs/qa/2026-10-18/design-refresh.md)에 기록한다. 운영 서버에는 아직 반영하지 않았다. AI 보류·기존 공개 배포 기준은 유지한다.
+
+## 디자인 업데이트 후속 — 2026-10-18
+
+사용자의 업데이트 요청으로 실제 PostgreSQL을 포함한 CI를 실행했다. 원본 버전 표시의 옛 문구를 찾던 E2E 기대값을 현재 한국어 문구로 수정했다. 소스 `7efb284ea0d4efbf428fbdebbd51f290fceb7ccd`의 lint·타입·단위·DB migration/통합·빌드·E2E·디자인/접근성 단계는 통과했다. Docker 이미지 생성과 artifact 업로드도 성공했다. 단위41·통합40·E2E24·화면42개를 CI 로그에서 직접 확인했다. 이미지 식별과 통합 PR 상태는 [업데이트 기록](docs/qa/2026-10-18/release-update.md)을 따른다. 위 PR 표는 과거 조회 기록이다.
+
+현재 작업 환경은 VPN·TCP 대상·서버 인증이 연결되어 있지 않아 원격 앱 교체와 공개 디자인 확인은 대기 상태다. 이전 환경의 접속 상태와 구분하며 DB·DNS·터널은 변경하지 않았다. GitHub 반영을 공개 배포 완료로 표시하지 않는다.
 
 ## 남은 범위
 

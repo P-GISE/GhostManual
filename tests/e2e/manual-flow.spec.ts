@@ -90,7 +90,7 @@ test("owner can revise a source then re-review the same manual", async ({ page }
   const input = page.getByLabel("원본 내용", { exact: true });
   await input.fill((await input.inputValue()) + " 새 절차: 발급 후 담당자가 기록합니다.");
   await page.getByRole("button", { name: "새 원본 버전 저장", exact: true }).click();
-  await expect(page.getByText("SOURCE / 원본 REVISION 2", { exact: true })).toBeVisible();
+  await expect(page.getByText("원본 자료 · 버전 2", { exact: true })).toBeVisible();
   await page.goto(manualUrl);
   await expect(page.getByText("재검토 필요", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "초안 수정", exact: true }).click();

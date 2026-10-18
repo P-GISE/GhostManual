@@ -89,7 +89,7 @@ export function ManualDetail({
     );
   return (
     <>
-      <span className="eyebrow">{reader ? "SHARED / 읽기·질문 전용" : "MANUAL / 업무 매뉴얼"}</span>
+      <span className="eyebrow">{reader ? "읽기·질문 전용" : "업무 매뉴얼"}</span>
       <h1>{content.title}</h1>
       <div className="actions">
         <span className="badge">
@@ -196,22 +196,24 @@ export function ManualDetail({
               ))}
             </section>
           )}
-          <h2>원본 근거</h2>
-          {content.references.length ? (
-            content.references.map((r) => (
-              <details key={`${r.paragraphId}-${r.field}-${r.quote}`}>
-                <summary>
-                  {r.field} · 문단 {r.paragraphId}
-                </summary>
-                <p className="source-text">{r.quote}</p>
-                <Link href={`/sources/${manual.sourceId}#${r.paragraphId}`}>원본 위치 보기</Link>
-              </details>
-            ))
-          ) : (
-            <p className="muted">
-              등록된 원본 인용이 없습니다. 담당자 추가 내용은 검수 시 확인하세요.
-            </p>
-          )}
+          <section className="panel evidence-panel">
+            <h2>원본 근거</h2>
+            {content.references.length ? (
+              content.references.map((r) => (
+                <details key={`${r.paragraphId}-${r.field}-${r.quote}`}>
+                  <summary>
+                    {r.field} · 문단 {r.paragraphId}
+                  </summary>
+                  <p className="source-text">{r.quote}</p>
+                  <Link href={`/sources/${manual.sourceId}#${r.paragraphId}`}>원본 위치 보기</Link>
+                </details>
+              ))
+            ) : (
+              <p className="muted">
+                등록된 원본 인용이 없습니다. 담당자 추가 내용은 검수 시 확인하세요.
+              </p>
+            )}
+          </section>
         </aside>
       </div>
       {!reader && manual.published && (

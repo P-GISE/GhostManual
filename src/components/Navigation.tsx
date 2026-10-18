@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 export function Navigation() {
-  const reader = usePathname() === "/share";
+  const pathname = usePathname();
+  const reader = pathname === "/share";
   return (
     <header className="shell-header">
       <Link className="brand" href={reader ? "/share" : "/"}>
@@ -12,9 +13,20 @@ export function Navigation() {
         <span className="badge">읽기·질문 전용 공유</span>
       ) : (
         <nav aria-label="주 메뉴">
-          <Link href="/manuals">문서함</Link>
-          <Link href="/sources/new">자료 등록</Link>
-          <Link href="/ask">질문하기</Link>
+          {[
+            { href: "/manuals", label: "문서함" },
+            { href: "/sources/new", label: "자료 등록" },
+            { href: "/ask", label: "질문하기" },
+          ].map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              aria-current={pathname === href ? "page" : undefined}
+              data-active={href === "/manuals" ? pathname.startsWith(href) : pathname === href}
+            >
+              {label}
+            </Link>
+          ))}
         </nav>
       )}
     </header>

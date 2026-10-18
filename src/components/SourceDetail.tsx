@@ -145,7 +145,7 @@ export function SourceDetail({ id }: { readonly id: string }) {
     );
   return (
     <>
-      <span className="eyebrow">SOURCE / 원본 REVISION {source.revision}</span>
+      <span className="eyebrow">원본 자료 · 버전 {source.revision}</span>
       <h1>{source.title}</h1>
       <p className="muted">
         {reader

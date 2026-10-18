@@ -100,7 +100,7 @@ export function ManualEditor({ id }: { readonly id: string }) {
   );
   return (
     <>
-      <span className="eyebrow">MANUAL / 미검수 초안</span>
+      <span className="eyebrow">미검수 초안</span>
       <h1>매뉴얼 수정</h1>
       <p className="muted">
         원본에서 확인한 내용과 담당자가 보완한 내용을 함께 검토하세요. 저장은 게시와 다릅니다.
@@ -138,7 +138,7 @@ export function ManualEditor({ id }: { readonly id: string }) {
         </p>
       )}
       <div className="split">
-        <section>
+        <section className="editor-form">
           <label htmlFor="manual-title">매뉴얼 제목</label>
           <input
             id="manual-title"

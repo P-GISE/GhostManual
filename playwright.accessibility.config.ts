@@ -16,6 +16,7 @@ export default defineConfig({
   projects: [
     { name: "desktop", use: { viewport: { width: 1440, height: 900 } } },
     { name: "mobile", use: { viewport: { width: 390, height: 844 } } },
+    { name: "tablet", use: { viewport: { width: 768, height: 1024 } } },
   ],
   webServer: {
     command: "npm run start -- --hostname 127.0.0.1 --port 3320",
