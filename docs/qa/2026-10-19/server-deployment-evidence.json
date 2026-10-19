@@ -1,0 +1,63 @@
+{
+  "source": "User-provided output from Windows Tailscale SSH; not direct agent SSH execution",
+  "dateKST": "2026-10-19",
+  "server": {
+    "hostname": "lostark-party-aws",
+    "tailscaleIP": "100.97.248.52",
+    "user": "ubuntu"
+  },
+  "artifact": {
+    "zipSHA256": "46202fbd2c3225d42b7a0d5f70692141e755300db92ce0a8c8cff0b223a395e7",
+    "archiveSHA256": "54e109ce880f51c71f1ef7a828187e8d56371e2ff6e490eadfc7f684c4b3329b",
+    "serverArchiveCheck": "OK",
+    "manifestSHA256": "87e67bb88bd4e7a0f83a3abc8906810f010f36e9cb80e7127eb1b1deea4d19c8",
+    "configSHA256": "5a71fdca04de1d055ff82ce316c3435b0331c8746e9f71886a6aac708fecb69c"
+  },
+  "app": {
+    "tag": "ghostmanual:7efb284ea0d4efbf428fbdebbd51f290fceb7ccd",
+    "imageID": "sha256:87e67bb88bd4e7a0f83a3abc8906810f010f36e9cb80e7127eb1b1deea4d19c8",
+    "buildID": "5y9UxUDQ-Nt-MqGbXQUOK",
+    "state": "running",
+    "healthcheckConfigured": false,
+    "oom": false,
+    "restarts": 0,
+    "ports": {
+      "3200/tcp": [
+        {
+          "HostIp": "127.0.0.1",
+          "HostPort": "3200"
+        }
+      ]
+    },
+    "AI_ENABLED": false
+  },
+  "db": {
+    "imageID": "sha256:882236b897e39051d2368c5ccc6cda944904723506b2dfc97f2a8f5bc9afa382",
+    "state": "running",
+    "health": "healthy",
+    "oom": false,
+    "restarts": 0,
+    "ports": {},
+    "containerUnchanged": true
+  },
+  "otherContainersPreserved": true,
+  "loopbackHTTP": {
+    "3000": 200,
+    "3100": 200,
+    "3200": 200
+  },
+  "rollback": {
+    "directory": "/opt/ghostmanual/rollback-20261019-7HCVGJ",
+    "imageTag": "ghostmanual:rollback-20261019T065254Z",
+    "oldAppTag": "ghostmanual:58d9ebd1eac5f80f7fb66364ece4950e87a25ebf",
+    "settingsMode": "0600",
+    "settingsOwner": "root:root"
+  },
+  "scope": {
+    "migration": false,
+    "serverBuild": false,
+    "dbRecreated": false,
+    "tunnelOrDNSChanged": false,
+    "fullQARepeated": false
+  }
+}

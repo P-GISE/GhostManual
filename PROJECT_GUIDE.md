@@ -1,12 +1,29 @@
 # GhostManual 프로젝트 가이드
 
-갱신일: 2026-10-19 (KST). 현재 단계는 **디자인·키보드 개선 GitHub 통합 완료, 기존 서버 배포는 연결 차단으로 미완료**다. AI는 비활성으로 유지한다.
+갱신일: 2026-10-19 (KST). 현재 단계는 **디자인·글꼴·키보드 개선의 기존 서버 배포와 공개 변경 범위 확인 완료**다. AI는 비활성으로 유지한다.
+
+## 현재 배포 — 2026-10-19
+
+검증된 소스7efb284 이미지로 앱만 교체했다. 서버 명령은 사용자가 Windows Tailscale SSH로 실행하고 출력을 제공했으며, 공개 HTTPS·자산·Chromium 검사는 에이전트가 직접 수행했다. 클라우드의 SSH 프록시 자체가 복구된 것은 아니다.
+
+| 항목 | 현재 확인 결과 |
+|---|---|
+| 서버 | ubuntu@lostark-party-aws, Tailscale100.97.248.52 |
+| 실행 태그 | ghostmanual:7efb284ea0d4efbf428fbdebbd51f290fceb7ccd |
+| manifest digest·서버 image ID | sha256:87e67bb88bd4e7a0f83a3abc8906810f010f36e9cb80e7127eb1b1deea4d19c8 |
+| config digest | sha256:5a71fdca04de1d055ff82ce316c3435b0331c8746e9f71886a6aac708fecb69c |
+| Next build ID | 5y9UxUDQ-Nt-MqGbXQUOK |
+| 앱·DB | running, OOM=false, 재시작0; DB healthy·동일 container ID |
+| 기존 서비스 | 사전 목록의 앱 외 container ID 모두 유지,3000·3100·3200 HTTP200 |
+| 공개 확인 | 4경로×desktop/mobile8화면 HTTP200·Pretendard loaded8/8·본문 main 포커스8/8·가로넘침0 |
+
+ZIP/전달 archive 해시와 OCI manifest→config 관계를 대조했다. 과거 ‘이미지 ID5a71…’는 config digest이며 서버 표시87e67…와 구분한다. 공개 WOFF2 해시는 원본과 일치하고 라이선스도 정상 제공된다. root 전용 롤백 설정과 이전 이미지 태그를 서버에 보존했다. DB migration·서버 빌드·DNS/터널 변경·전체 QA 재실행은 하지 않았다. [최종 실행 주체·오류 해결·서버 상태·공개 측정과 캡처](docs/qa/2026-10-19/deployment-complete.md)를 따른다. 아래의 미완료/미적용 표기는 각 시점의 배포 전 이력이다.
 
 ## 후속 정정: 서버 IP와 장비 이름 불일치
 
-사용자가 Windows에서 `tailscale ssh ubuntu@100.108.2.6`를 실행한 출력은 대상 장비를 **lostark-party-windows**로 식별하고22번 연결 timeout을 반환했다. 배포 대상 **lostark-party-aws**와 이름이 다르므로 `100.108.2.6/32`를 AWS 서버 TCP 허용 대상으로 확정한 이전 안내를 정정한다. 이 내용은 사용자 실행 출력 근거이며 에이전트의 직접 서버 조회가 아니다. 실제 AWS Tailscale IP는 아직 미확인이다. `tailscale status`에서 장비 이름·IP·상태를 확인하고 `tailscale ssh ubuntu@lostark-party-aws`로 올바른 대상을 먼저 검사한다. 다른 허용 IP를 추정하여 대체하지 않는다. 이전 cloud proxy8088 연결 거부는 목적지 인증 전의 별도 관찰로 유지한다.
+사용자가 Windows에서 `tailscale ssh ubuntu@100.108.2.6`를 실행한 출력은 대상 장비를 **lostark-party-windows**로 식별했다. 이후 `tailscale status`와 실제 SSH 성공으로 **lostark-party-aws =100.97.248.52**를 확인했다. 이전100.108.2.6/32 서버 허용 안내를 정정한다. 서버 식별/인증은 사용자 실행 출력 근거이며 에이전트 직접 서버 조회가 아니다. 클라우드 proxy8088 연결 거부는 목적지 인증 전의 별도 관찰이다.
 
-## 현재 클라우드 직접 실행 — 2026-10-19 14:49 KST 이후
+## 배포 전 클라우드 직접 실행 — 2026-10-19 14:49 KST 이후
 
 사용자 승인에 따라 현재 환경에서 서버 연결·이미지 다운로드·공개 상태를 직접 확인했다. 작업 시작 때 조회한 기본 브랜치는 `2580332719254f6b0c7f0c8c0faf2598beee016a`이며 PR #3/#4/#5 통합 이력을 확인했다. 해당 조회 기준으로 검증 제품 소스7efb284 이후 변경은 Markdown뿐이다.
 
@@ -48,8 +65,8 @@ GhostManual은 업무 원본 자료를 사람이 검수한 매뉴얼로 남기�
 | 가이드 인계 기준 commit | d493c8cd9170b304486230d1e891916a70cd459c |
 | 키보드 수정·로컬 검증 소스 | 160a754f37f2c8fdc8314018bc602dcafe9c4fa4 |
 | 디자인 통합 commit | 067b59edace52938e8e95bdbd488d845aaf2d2f4 |
-| 새 검증 제품 소스·배포 대상 태그 | 7efb284ea0d4efbf428fbdebbd51f290fceb7ccd |
-| 이전 서버 실행 태그 (2026-10-17 인계, 현재 SSH 재확인 불가) | 58d9ebd1eac5f80f7fb66364ece4950e87a25ebf |
+| 현재 검증 제품 소스·실행 태그 | 7efb284ea0d4efbf428fbdebbd51f290fceb7ccd |
+| 이전 서버 실행 태그 (이번 사용자 사전 출력에서도 확인) | 58d9ebd1eac5f80f7fb66364ece4950e87a25ebf |
 | 공개 주소 | [ghostmanual.pigs0516.com](https://ghostmanual.pigs0516.com) |
 | 제품 기술 | Node24·Next.js/React·TypeScript·PostgreSQL, Vitest·Playwright |
 | AI | 비활성. 실제 연동·계정·예산·한국어 품질은 이번 완료 범위에서 제외 |
@@ -58,7 +75,7 @@ GhostManual은 업무 원본 자료를 사람이 검수한 매뉴얼로 남기�
 
 ## 완료 근거와 출처
 
-다음은 사용자 인계 및 저장소 QA 기록에 근거한다. 이번 문서 갱신에서 제품 검증을 반복하지 않았다.
+다음은 이전 공개 데모와 CI의 인계·저장소 QA 기록이다. 이번 디자인 배포의 직접 공개 검사는 위 현재 배포와 최종 보고서에서 구분한다. 전체 제품 QA는 반복하지 않았다.
 
 - 공개 HTTPS HTTP200, desktop5/mobile5 합계10개 사용자 흐름 통과. 필터·버전 비교·검수·Reader 공유/검색/근거·공유 취소·원본 수정/재검수·저장 유지 확인.
 - 검증용 합성 공간10개 삭제 후 접근 차단 확인. [공개 검증 기록](docs/qa/2026-10-17/public-https.md).
@@ -67,11 +84,11 @@ GhostManual은 업무 원본 자료를 사람이 검수한 매뉴얼로 남기�
 
 ## 배포 상태와 운영 경계
 
-2026-10-17 인계의 앱 이미지 ID는 `sha256:419ee46b31617999150b7841ce6e7ccb650b6065441b4531cf115dceb4e33ca8`, 원격 Next build ID는 `x6zb-rufDOdAIMgz8oWRv`다. 당시 인계 출력에서 앱·DB running, OOM=false, 재시작0, DB healthy를 확인했다. 이번에는 SSH 차단으로 재확인하지 못했다. 유지할 구성은 앱127.0.0.1:3200 바인딩과 DB 호스트 포트 비공개다.
+현재는 위7efb284 태그·manifest87e67…·config5a71…·build5y9Ux…를 확인했다. 앱127.0.0.1:3200 바인딩, DB 호스트 포트 비공개와 동일 DB 컨테이너를 유지했다. 이전58d9ebd 태그는 이번 사용자 사전 출력에서 확인했다. 그 이전 image ID419ee…와 build x6zb…는2026-10-17 인계 값이며 현재 새 앱 식별과 구분한다.
 
-Cloudflare 터널은 기존 로컬 관리 방식을 유지한다. 완료된 DNS/터널 설정·배포·재시작·공개 검증을 이유 없이 반복하지 않는다. 로컬/원격 build ID는 다르며 전체 소스 동일성·CI 이미지 digest 일치는 미검증이다. 정적 자산 해시 일치나 이미지 태그만으로 이를 보증하지 않는다.
+Cloudflare 터널은 기존 로컬 관리 방식을 유지한다. 완료된 DNS/터널 설정·배포·재시작·공개 검증을 이유 없이 반복하지 않는다. 이번 CI artifact ZIP·서버 전달 해시·OCI 식별과 실행 이미지는 대조했지만, 재현 빌드나 서명/attestation 검증으로 확대하지 않는다.
 
-## 후속 작업: 키보드 접근성
+## 2026-10-17 키보드 접근성 수정 (배포 전 이력)
 
 가이드 기반 계속 진행 요청에 따라 UX-KEYBOARD를 수행했다. ‘본문으로 이동’이 대상 main에 포커스를 옮기지 못하는 문제를 재현하고, tabIndex=-1과 화면 안쪽 포커스 표시를 적용했다. 로컬 배포 모드4경로×2뷰포트8개·단위41·타입·빌드·lint 검사를 통과했다. 전체 접근성 인증·실 기기/화면 낭독기 평가는 미검증이며, 원격 배포 상태는 바꾸지 않았다. [직접 실행 근거](docs/qa/2026-10-17/keyboard-accessibility.md).
 
@@ -84,7 +101,7 @@ Cloudflare 터널은 기존 로컬 관리 방식을 유지한다. 완료된 DNS/
 | 수정 소스 CI | [push 실행](https://github.com/P-GISE/GhostManual/actions/runs/38940775088)·[PR 실행](https://github.com/P-GISE/GhostManual/actions/runs/38940826573) 모두 in_progress. 완료 결과 미확인 |
 | 공개 배포 | 기존58d9ebd 태그의 인계 상태 유지. 160a754 적용 여부를 확인/배포하지 않음 |
 
-위 표는 2026-10-17 조회 이력이며 현재는 PR #3/#4/#5 통합을 기본 브랜치 Git 이력에서 확인했다. 남은 작업은 연결 복구 후 검증 이미지로 앱만 교체하고 새 이미지 식별과 공개 변경 동작을 확인하는 것이다. 기존 DNS/터널 재구성·전체 공개 QA 반복을 기본 단계로 넣지 않는다.
+위 표는2026-10-17 조회 이력이다. 현재는 PR #3/#4/#5 통합,7efb284 이미지의 앱 단독 교체와 공개 변경 확인을 완료했다. 추가 제품 작업은99의 남은 범위에서 정하며 DNS/터널 재구성·전체 공개 QA를 이유 없이 반복하지 않는다.
 
 독립 리뷰의 모바일 테두리 비가시성 P2는 실패 테스트 후 inset offset으로 수정했고 최종8개 검사가 통과했다. 전체 lint는 종료0이지만 기존 warning1/info66은 남아 있다. 가이드의 로컬 성공을 원격 CI 성공이나 공개 적용으로 표시하지 않는다.
 

@@ -1,0 +1,574 @@
+{
+  "checkedAt": "2026-10-19T07:19:40.131Z",
+  "origin": "https://ghostmanual.pigs0516.com",
+  "readOnly": true,
+  "tlsVerification": true,
+  "execution": "require_escalated Chromium; inherited proxy; ignoreHTTPSErrors=false",
+  "views": 8,
+  "http200": 8,
+  "pretendardLoaded": 8,
+  "mainFocused": 8,
+  "horizontalOverflow": 0,
+  "blockedNonGetRequests": 0,
+  "assets": [
+    {
+      "kind": "font",
+      "path": "/_next/static/media/PretendardVariable-s.p.0ztvx5mb7lxp4.woff2",
+      "bytes": 2057688,
+      "sha256": "9599f12fd42fc0bce1cd50b47a0c022e108d7aa64dd0d1bb0ed44f3282d900b4"
+    },
+    {
+      "kind": "stylesheet",
+      "path": "/_next/static/chunks/1r1cnh6vkqe5v.css",
+      "bytes": 10882,
+      "sha256": "87c1b32e32c46eefbb1493233243dd692efd29e718a5fbf73e3cce3ce2790ac0",
+      "hasFontFace": true,
+      "hasPretendard": true
+    },
+    {
+      "kind": "license",
+      "path": "/fonts/Pretendard-LICENSE.txt",
+      "bytes": 4816,
+      "sha256": "82e9c8a4b203261f10ddba1296422d64914ff3d4b7bd8a12896d03f0f088d70a",
+      "matchesRepository": true
+    }
+  ],
+  "measurements": [
+    {
+      "path": "/",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "status": 200,
+      "bodyFont": "pretendard, \"pretendard Fallback\", \"Apple SD Gothic Neo\", \"Malgun Gothic\", sans-serif",
+      "fontFaces": [
+        {
+          "family": "pretendard",
+          "status": "loaded",
+          "weight": "100 900"
+        },
+        {
+          "family": "pretendard Fallback",
+          "status": "error",
+          "weight": "normal"
+        }
+      ],
+      "fontResources": [
+        "https://ghostmanual.pigs0516.com/_next/static/media/PretendardVariable-s.p.0ztvx5mb7lxp4.woff2"
+      ],
+      "header": {
+        "x": 120,
+        "y": 0,
+        "width": 1200,
+        "height": 93.53125,
+        "right": 1320,
+        "bottom": 93.53125
+      },
+      "main": {
+        "x": 120,
+        "y": 93.53125,
+        "width": 1200,
+        "height": 709.46875,
+        "right": 1320,
+        "bottom": 803
+      },
+      "footer": {
+        "x": 120,
+        "y": 803,
+        "width": 1200,
+        "height": 97,
+        "right": 1320,
+        "bottom": 900
+      },
+      "mainTabIndex": "-1",
+      "horizontalOverflow": false,
+      "startVisible": true,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "MAIN",
+        "activeId": "main",
+        "mainFocused": true,
+        "outline": {
+          "style": "solid",
+          "width": "3px",
+          "offset": "-3px"
+        }
+      }
+    },
+    {
+      "path": "/sources/new",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "status": 200,
+      "bodyFont": "pretendard, \"pretendard Fallback\", \"Apple SD Gothic Neo\", \"Malgun Gothic\", sans-serif",
+      "fontFaces": [
+        {
+          "family": "pretendard",
+          "status": "loaded",
+          "weight": "100 900"
+        },
+        {
+          "family": "pretendard Fallback",
+          "status": "error",
+          "weight": "normal"
+        }
+      ],
+      "fontResources": [
+        "https://ghostmanual.pigs0516.com/_next/static/media/PretendardVariable-s.p.0ztvx5mb7lxp4.woff2"
+      ],
+      "header": {
+        "x": 120,
+        "y": 0,
+        "width": 1200,
+        "height": 93.53125,
+        "right": 1320,
+        "bottom": 93.53125
+      },
+      "main": {
+        "x": 120,
+        "y": 93.53125,
+        "width": 1200,
+        "height": 1162.640625,
+        "right": 1320,
+        "bottom": 1256.171875
+      },
+      "footer": {
+        "x": 120,
+        "y": 1256.171875,
+        "width": 1200,
+        "height": 97,
+        "right": 1320,
+        "bottom": 1353.171875
+      },
+      "mainTabIndex": "-1",
+      "horizontalOverflow": false,
+      "startVisible": null,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "MAIN",
+        "activeId": "main",
+        "mainFocused": true,
+        "outline": {
+          "style": "solid",
+          "width": "3px",
+          "offset": "-3px"
+        }
+      }
+    },
+    {
+      "path": "/ask",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "status": 200,
+      "bodyFont": "pretendard, \"pretendard Fallback\", \"Apple SD Gothic Neo\", \"Malgun Gothic\", sans-serif",
+      "fontFaces": [
+        {
+          "family": "pretendard",
+          "status": "loaded",
+          "weight": "100 900"
+        },
+        {
+          "family": "pretendard Fallback",
+          "status": "error",
+          "weight": "normal"
+        }
+      ],
+      "fontResources": [
+        "https://ghostmanual.pigs0516.com/_next/static/media/PretendardVariable-s.p.0ztvx5mb7lxp4.woff2"
+      ],
+      "header": {
+        "x": 120,
+        "y": 0,
+        "width": 1200,
+        "height": 93.53125,
+        "right": 1320,
+        "bottom": 93.53125
+      },
+      "main": {
+        "x": 120,
+        "y": 93.53125,
+        "width": 1200,
+        "height": 709.46875,
+        "right": 1320,
+        "bottom": 803
+      },
+      "footer": {
+        "x": 120,
+        "y": 803,
+        "width": 1200,
+        "height": 97,
+        "right": 1320,
+        "bottom": 900
+      },
+      "mainTabIndex": "-1",
+      "horizontalOverflow": false,
+      "startVisible": null,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "MAIN",
+        "activeId": "main",
+        "mainFocused": true,
+        "outline": {
+          "style": "solid",
+          "width": "3px",
+          "offset": "-3px"
+        }
+      }
+    },
+    {
+      "path": "/terms",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "status": 200,
+      "bodyFont": "pretendard, \"pretendard Fallback\", \"Apple SD Gothic Neo\", \"Malgun Gothic\", sans-serif",
+      "fontFaces": [
+        {
+          "family": "pretendard",
+          "status": "loaded",
+          "weight": "100 900"
+        },
+        {
+          "family": "pretendard Fallback",
+          "status": "error",
+          "weight": "normal"
+        }
+      ],
+      "fontResources": [
+        "https://ghostmanual.pigs0516.com/_next/static/media/PretendardVariable-s.p.0ztvx5mb7lxp4.woff2"
+      ],
+      "header": {
+        "x": 120,
+        "y": 0,
+        "width": 1200,
+        "height": 93.53125,
+        "right": 1320,
+        "bottom": 93.53125
+      },
+      "main": {
+        "x": 120,
+        "y": 93.53125,
+        "width": 1200,
+        "height": 1000.546875,
+        "right": 1320,
+        "bottom": 1094.078125
+      },
+      "footer": {
+        "x": 120,
+        "y": 1094.078125,
+        "width": 1200,
+        "height": 97,
+        "right": 1320,
+        "bottom": 1191.078125
+      },
+      "mainTabIndex": "-1",
+      "horizontalOverflow": false,
+      "startVisible": null,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "MAIN",
+        "activeId": "main",
+        "mainFocused": true,
+        "outline": {
+          "style": "solid",
+          "width": "3px",
+          "offset": "-3px"
+        }
+      }
+    },
+    {
+      "path": "/",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "status": 200,
+      "bodyFont": "pretendard, \"pretendard Fallback\", \"Apple SD Gothic Neo\", \"Malgun Gothic\", sans-serif",
+      "fontFaces": [
+        {
+          "family": "pretendard",
+          "status": "loaded",
+          "weight": "100 900"
+        },
+        {
+          "family": "pretendard Fallback",
+          "status": "error",
+          "weight": "normal"
+        }
+      ],
+      "fontResources": [
+        "https://ghostmanual.pigs0516.com/_next/static/media/PretendardVariable-s.p.0ztvx5mb7lxp4.woff2"
+      ],
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 142.1875,
+        "right": 390,
+        "bottom": 142.1875
+      },
+      "main": {
+        "x": 0,
+        "y": 142.1875,
+        "width": 390,
+        "height": 912.59375,
+        "right": 390,
+        "bottom": 1054.78125
+      },
+      "footer": {
+        "x": 0,
+        "y": 1054.78125,
+        "width": 390,
+        "height": 120,
+        "right": 390,
+        "bottom": 1174.78125
+      },
+      "mainTabIndex": "-1",
+      "horizontalOverflow": false,
+      "startVisible": true,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "MAIN",
+        "activeId": "main",
+        "mainFocused": true,
+        "outline": {
+          "style": "solid",
+          "width": "3px",
+          "offset": "-3px"
+        }
+      }
+    },
+    {
+      "path": "/sources/new",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "status": 200,
+      "bodyFont": "pretendard, \"pretendard Fallback\", \"Apple SD Gothic Neo\", \"Malgun Gothic\", sans-serif",
+      "fontFaces": [
+        {
+          "family": "pretendard",
+          "status": "loaded",
+          "weight": "100 900"
+        },
+        {
+          "family": "pretendard Fallback",
+          "status": "error",
+          "weight": "normal"
+        }
+      ],
+      "fontResources": [
+        "https://ghostmanual.pigs0516.com/_next/static/media/PretendardVariable-s.p.0ztvx5mb7lxp4.woff2"
+      ],
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 142.1875,
+        "right": 390,
+        "bottom": 142.1875
+      },
+      "main": {
+        "x": 0,
+        "y": 142.1875,
+        "width": 390,
+        "height": 1237.140625,
+        "right": 390,
+        "bottom": 1379.328125
+      },
+      "footer": {
+        "x": 0,
+        "y": 1379.328125,
+        "width": 390,
+        "height": 120,
+        "right": 390,
+        "bottom": 1499.328125
+      },
+      "mainTabIndex": "-1",
+      "horizontalOverflow": false,
+      "startVisible": null,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "MAIN",
+        "activeId": "main",
+        "mainFocused": true,
+        "outline": {
+          "style": "solid",
+          "width": "3px",
+          "offset": "-3px"
+        }
+      }
+    },
+    {
+      "path": "/ask",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "status": 200,
+      "bodyFont": "pretendard, \"pretendard Fallback\", \"Apple SD Gothic Neo\", \"Malgun Gothic\", sans-serif",
+      "fontFaces": [
+        {
+          "family": "pretendard",
+          "status": "loaded",
+          "weight": "100 900"
+        },
+        {
+          "family": "pretendard Fallback",
+          "status": "error",
+          "weight": "normal"
+        }
+      ],
+      "fontResources": [
+        "https://ghostmanual.pigs0516.com/_next/static/media/PretendardVariable-s.p.0ztvx5mb7lxp4.woff2"
+      ],
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 142.1875,
+        "right": 390,
+        "bottom": 142.1875
+      },
+      "main": {
+        "x": 0,
+        "y": 142.1875,
+        "width": 390,
+        "height": 581.8125,
+        "right": 390,
+        "bottom": 724
+      },
+      "footer": {
+        "x": 0,
+        "y": 724,
+        "width": 390,
+        "height": 120,
+        "right": 390,
+        "bottom": 844
+      },
+      "mainTabIndex": "-1",
+      "horizontalOverflow": false,
+      "startVisible": null,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "MAIN",
+        "activeId": "main",
+        "mainFocused": true,
+        "outline": {
+          "style": "solid",
+          "width": "3px",
+          "offset": "-3px"
+        }
+      }
+    },
+    {
+      "path": "/terms",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "status": 200,
+      "bodyFont": "pretendard, \"pretendard Fallback\", \"Apple SD Gothic Neo\", \"Malgun Gothic\", sans-serif",
+      "fontFaces": [
+        {
+          "family": "pretendard",
+          "status": "loaded",
+          "weight": "100 900"
+        },
+        {
+          "family": "pretendard Fallback",
+          "status": "error",
+          "weight": "normal"
+        }
+      ],
+      "fontResources": [
+        "https://ghostmanual.pigs0516.com/_next/static/media/PretendardVariable-s.p.0ztvx5mb7lxp4.woff2"
+      ],
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 142.1875,
+        "right": 390,
+        "bottom": 142.1875
+      },
+      "main": {
+        "x": 0,
+        "y": 142.1875,
+        "width": 390,
+        "height": 1080.265625,
+        "right": 390,
+        "bottom": 1222.453125
+      },
+      "footer": {
+        "x": 0,
+        "y": 1222.453125,
+        "width": 390,
+        "height": 120,
+        "right": 390,
+        "bottom": 1342.453125
+      },
+      "mainTabIndex": "-1",
+      "horizontalOverflow": false,
+      "startVisible": null,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "MAIN",
+        "activeId": "main",
+        "mainFocused": true,
+        "outline": {
+          "style": "solid",
+          "width": "3px",
+          "offset": "-3px"
+        }
+      }
+    }
+  ]
+}

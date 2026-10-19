@@ -1,5 +1,7 @@
 # 디자인 배포 접속·공개 상태 직접 확인 — 2026-10-19 KST
 
+**이 문서는 배포 전 실패 경로와 사전 공개 상태 이력이다.** 이후 사용자의 Windows Tailscale SSH에서 AWS100.97.248.52 접속·검증 이미지 확보·앱 단독 교체를 완료했다. 사용자 서버 사후 출력과 에이전트 공개8화면 검증은 [최종 배포 보고서](deployment-complete.md)를 따른다. 아래 미확인/미적용 문장을 현재 상태로 해석하지 않는다.
+
 ## 후속 정정: 인계 IP는 Windows 장비로 식별됨
 
 사용자가 Windows에서 `tailscale ssh ubuntu@100.108.2.6`를 실행한 출력은 대상 이름을 `lostark-party-windows`로 식별했으며 `dial tcp 100.108.2.6:22` timeout과502를 반환했다. 배포 대상은 `lostark-party-aws`이므로 해당 IP를 AWS 서버 주소로 전제한 이전 TCP 허용 권고를 정정한다. 이는 사용자 실행 출력 근거이며 에이전트 직접 서버 실행이 아니다. 실제 AWS Tailscale IP는 아직 미확인이다. Windows에서 `tailscale status`로 AWS 장비의 IP·상태를 확인하고 `tailscale ssh ubuntu@lostark-party-aws`로 대상을 먼저 검사한다. 허용 목록의 다른 IP를 AWS 주소라고 추정하지 않는다.
