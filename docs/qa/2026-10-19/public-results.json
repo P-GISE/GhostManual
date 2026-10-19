@@ -1,0 +1,476 @@
+{
+  "checkedAt": "2026-10-19T05:51:26.895Z",
+  "origin": "https://ghostmanual.pigs0516.com",
+  "readOnly": true,
+  "tlsVerification": true,
+  "routes": [
+    "/",
+    "/sources/new",
+    "/ask",
+    "/terms"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "views": 8,
+  "http200": 8,
+  "fontFamily": [
+    "Arial, \"Malgun Gothic\", sans-serif"
+  ],
+  "loadedFontFaces": 0,
+  "mainHasTabIndex": 0,
+  "skipMainFocused": 0,
+  "horizontalOverflow": 0,
+  "blockedNonGetRequests": 0,
+  "css": {
+    "url": "https://ghostmanual.pigs0516.com/_next/static/chunks/2hb3twf9u61xl.css",
+    "httpStatus": 200,
+    "bytes": 4465,
+    "sha256": "489d9755012c92af6bf0e21e383df3a88b738d44c199ca317842d2b40bbe932b",
+    "hasFontFace": false,
+    "hasPretendard": false
+  },
+  "designRefreshApplied": false,
+  "keyboardFixApplied": false,
+  "measurements": [
+    {
+      "path": "/",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "status": 200,
+      "bodyFont": "Arial, \"Malgun Gothic\", sans-serif",
+      "fontFaces": [],
+      "fontResources": [],
+      "header": {
+        "x": 96,
+        "y": 0,
+        "width": 1248,
+        "height": 114.78125,
+        "right": 1344,
+        "bottom": 114.78125
+      },
+      "main": {
+        "x": 96,
+        "y": 114.78125,
+        "width": 1248,
+        "height": 630,
+        "right": 1344,
+        "bottom": 744.78125
+      },
+      "footer": {
+        "x": 96,
+        "y": 744.78125,
+        "width": 1248,
+        "height": 105,
+        "right": 1344,
+        "bottom": 849.78125
+      },
+      "mainTabIndex": null,
+      "horizontalOverflow": false,
+      "startVisible": true,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "BODY",
+        "activeId": "",
+        "mainFocused": false,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "offset": "0px"
+        }
+      }
+    },
+    {
+      "path": "/sources/new",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "status": 200,
+      "bodyFont": "Arial, \"Malgun Gothic\", sans-serif",
+      "fontFaces": [],
+      "fontResources": [],
+      "header": {
+        "x": 96,
+        "y": 0,
+        "width": 1248,
+        "height": 114.78125,
+        "right": 1344,
+        "bottom": 114.78125
+      },
+      "main": {
+        "x": 96,
+        "y": 114.78125,
+        "width": 1248,
+        "height": 1216.875,
+        "right": 1344,
+        "bottom": 1331.65625
+      },
+      "footer": {
+        "x": 96,
+        "y": 1331.65625,
+        "width": 1248,
+        "height": 105,
+        "right": 1344,
+        "bottom": 1436.65625
+      },
+      "mainTabIndex": null,
+      "horizontalOverflow": false,
+      "startVisible": null,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "BODY",
+        "activeId": "",
+        "mainFocused": false,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "offset": "0px"
+        }
+      }
+    },
+    {
+      "path": "/ask",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "status": 200,
+      "bodyFont": "Arial, \"Malgun Gothic\", sans-serif",
+      "fontFaces": [],
+      "fontResources": [],
+      "header": {
+        "x": 96,
+        "y": 0,
+        "width": 1248,
+        "height": 114.78125,
+        "right": 1344,
+        "bottom": 114.78125
+      },
+      "main": {
+        "x": 96,
+        "y": 114.78125,
+        "width": 1248,
+        "height": 630,
+        "right": 1344,
+        "bottom": 744.78125
+      },
+      "footer": {
+        "x": 96,
+        "y": 744.78125,
+        "width": 1248,
+        "height": 105,
+        "right": 1344,
+        "bottom": 849.78125
+      },
+      "mainTabIndex": null,
+      "horizontalOverflow": false,
+      "startVisible": null,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "BODY",
+        "activeId": "",
+        "mainFocused": false,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "offset": "0px"
+        }
+      }
+    },
+    {
+      "path": "/terms",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "status": 200,
+      "bodyFont": "Arial, \"Malgun Gothic\", sans-serif",
+      "fontFaces": [],
+      "fontResources": [],
+      "header": {
+        "x": 96,
+        "y": 0,
+        "width": 1248,
+        "height": 114.78125,
+        "right": 1344,
+        "bottom": 114.78125
+      },
+      "main": {
+        "x": 96,
+        "y": 114.78125,
+        "width": 1248,
+        "height": 1021.875,
+        "right": 1344,
+        "bottom": 1136.65625
+      },
+      "footer": {
+        "x": 96,
+        "y": 1136.65625,
+        "width": 1248,
+        "height": 105,
+        "right": 1344,
+        "bottom": 1241.65625
+      },
+      "mainTabIndex": null,
+      "horizontalOverflow": false,
+      "startVisible": null,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "BODY",
+        "activeId": "",
+        "mainFocused": false,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "offset": "0px"
+        }
+      }
+    },
+    {
+      "path": "/",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "status": 200,
+      "bodyFont": "Arial, \"Malgun Gothic\", sans-serif",
+      "fontFaces": [],
+      "fontResources": [],
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 162.78125,
+        "right": 390,
+        "bottom": 162.78125
+      },
+      "main": {
+        "x": 0,
+        "y": 162.78125,
+        "width": 390,
+        "height": 840.3125,
+        "right": 390,
+        "bottom": 1003.09375
+      },
+      "footer": {
+        "x": 0,
+        "y": 1003.09375,
+        "width": 390,
+        "height": 139.09375,
+        "right": 390,
+        "bottom": 1142.1875
+      },
+      "mainTabIndex": null,
+      "horizontalOverflow": false,
+      "startVisible": true,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "BODY",
+        "activeId": "",
+        "mainFocused": false,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "offset": "0px"
+        }
+      }
+    },
+    {
+      "path": "/sources/new",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "status": 200,
+      "bodyFont": "Arial, \"Malgun Gothic\", sans-serif",
+      "fontFaces": [],
+      "fontResources": [],
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 162.78125,
+        "right": 390,
+        "bottom": 162.78125
+      },
+      "main": {
+        "x": 0,
+        "y": 162.78125,
+        "width": 390,
+        "height": 1290.546875,
+        "right": 390,
+        "bottom": 1453.328125
+      },
+      "footer": {
+        "x": 0,
+        "y": 1453.328125,
+        "width": 390,
+        "height": 139.09375,
+        "right": 390,
+        "bottom": 1592.421875
+      },
+      "mainTabIndex": null,
+      "horizontalOverflow": false,
+      "startVisible": null,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "BODY",
+        "activeId": "",
+        "mainFocused": false,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "offset": "0px"
+        }
+      }
+    },
+    {
+      "path": "/ask",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "status": 200,
+      "bodyFont": "Arial, \"Malgun Gothic\", sans-serif",
+      "fontFaces": [],
+      "fontResources": [],
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 162.78125,
+        "right": 390,
+        "bottom": 162.78125
+      },
+      "main": {
+        "x": 0,
+        "y": 162.78125,
+        "width": 390,
+        "height": 590.796875,
+        "right": 390,
+        "bottom": 753.578125
+      },
+      "footer": {
+        "x": 0,
+        "y": 753.578125,
+        "width": 390,
+        "height": 139.09375,
+        "right": 390,
+        "bottom": 892.671875
+      },
+      "mainTabIndex": null,
+      "horizontalOverflow": false,
+      "startVisible": null,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "BODY",
+        "activeId": "",
+        "mainFocused": false,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "offset": "0px"
+        }
+      }
+    },
+    {
+      "path": "/terms",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "status": 200,
+      "bodyFont": "Arial, \"Malgun Gothic\", sans-serif",
+      "fontFaces": [],
+      "fontResources": [],
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 162.78125,
+        "right": 390,
+        "bottom": 162.78125
+      },
+      "main": {
+        "x": 0,
+        "y": 162.78125,
+        "width": 390,
+        "height": 1160.09375,
+        "right": 390,
+        "bottom": 1322.875
+      },
+      "footer": {
+        "x": 0,
+        "y": 1322.875,
+        "width": 390,
+        "height": 139.09375,
+        "right": 390,
+        "bottom": 1461.96875
+      },
+      "mainTabIndex": null,
+      "horizontalOverflow": false,
+      "startVisible": null,
+      "firstFocus": {
+        "tag": "A",
+        "text": "본문으로 이동",
+        "href": "#main"
+      },
+      "skip": {
+        "firstFocusWasSkip": true,
+        "activeTag": "BODY",
+        "activeId": "",
+        "mainFocused": false,
+        "outline": {
+          "style": "none",
+          "width": "3px",
+          "offset": "0px"
+        }
+      }
+    }
+  ]
+}
