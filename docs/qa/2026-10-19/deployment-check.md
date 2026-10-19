@@ -1,5 +1,13 @@
 # 디자인 배포 접속·공개 상태 직접 확인 — 2026-10-19 KST
 
+## 후속 정정: 인계 IP는 Windows 장비로 식별됨
+
+사용자가 Windows에서 `tailscale ssh ubuntu@100.108.2.6`를 실행한 출력은 대상 이름을 `lostark-party-windows`로 식별했으며 `dial tcp 100.108.2.6:22` timeout과502를 반환했다. 배포 대상은 `lostark-party-aws`이므로 해당 IP를 AWS 서버 주소로 전제한 이전 TCP 허용 권고를 정정한다. 이는 사용자 실행 출력 근거이며 에이전트 직접 서버 실행이 아니다. 실제 AWS Tailscale IP는 아직 미확인이다. Windows에서 `tailscale status`로 AWS 장비의 IP·상태를 확인하고 `tailscale ssh ubuntu@lostark-party-aws`로 대상을 먼저 검사한다. 허용 목록의 다른 IP를 AWS 주소라고 추정하지 않는다.
+
+아래 명령/오류는 실제 실행 당시 기록으로 보존한다. cloud proxy8088 연결 거부는 목적지 연결 전의 실패여서 당시에도 IP와 AWS 장비의 일치를 증명하지 못했다. Windows에서의 목적지22번 timeout은 이 cloud proxy 거부와 별개의 경로 관찰이다. Tailscale 인증 정책 거부·SSH 키 부재·앱 장애의 증거로 확대하지 않는다.
+
+## 최초 직접 실행과 범위
+
 사용자가 기존 서버 접속과 공개 사이트 업데이트를 승인하여 현재 클라우드에서 직접 실행했다. **서버 인증 전 TCP 경로가 차단되어 이미지 전달·앱 교체는 실행하지 못했다.** 아래는 이전 데스크톱 관찰을 재사용한 결과가 아니다. 단위·DB통합·E2E·전체 디자인 CI는 반복하지 않았다.
 
 ## GitHub 기준과 이미지
@@ -71,7 +79,7 @@ DB·데이터·DNS·Cloudflare 로컬 관리 터널·3000/3100 서비스·AI 설
 확인된 설정 조치:
 
 - 현재 draft를 읽고 기존 HTTP custom hosts와 preset을 보존하여 `api.github.com`만 추가했다. 저장 응답 `status=saved`, `requires_publish=true`; 재조회에서도 revision2와 해당 호스트를 확인했다. 초안 저장은 실행 환경 적용이 아니다. 환경 설정에서 검토·저장한 뒤 게시해야 하며, 적용 후 API 요청과 인증을 다시 확인한다. 비밀 바인딩/설치 스크립트/저장소/시작 지침은 변경하지 않았다.
-- TCP 허용에는 서버 `100.108.2.6/32`가 필요하다. 현재 제공된 설정 도구의 스키마는 HTTP 도메인만 편집하며 TCP grant를 편집하는 기능은 없다. TCP grant를 반영한 환경과 실제 `proxy:8088` listener가 필요하다. 설정이 반영된 환경에서도 연결 거부가 계속되면 운영자가 sidecar listener/VPN readiness를 조사해야 한다. 환경 삭제나 전체 인터넷 허용은 요구하지 않는다.
+- TCP 허용 대상은 `lostark-party-aws`의 실제 IP를 확인한 뒤 결정한다. 기존 `100.108.2.6/32` 권고는 위 사용자 Windows 실행 출력에 따라 철회한다. 현재 제공된 설정 도구의 스키마는 HTTP 도메인만 편집하며 TCP grant를 편집하는 기능은 없다. 올바른 TCP grant를 반영한 환경과 실제 `proxy:8088` listener가 필요하다. 설정이 반영된 환경에서도 연결 거부가 계속되면 운영자가 sidecar listener/VPN readiness를 조사해야 한다. 환경 삭제나 전체 인터넷 허용은 요구하지 않는다.
 - Tailscale SSH 인증은 TCP가 열린 뒤 실제 응답으로 판단한다. Check mode 인증 URL이 나오면 그 URL과 절차를 안내한다. 새 SSH 키가 반드시 필요하다고 가정하지 않는다.
 
 연결과 이미지가 확보되면 모든 Compose 명령에 `docker compose -f compose.yaml -f compose.no-logs.yaml --env-file .env`를 사용한다. 서버 내부에 이전 image ID/태그·compose·0600 설정을 보존하고 새 이미지 식별을 검증한 뒤 `up -d --no-deps app`으로 앱만 교체한다. 이번 변경에 migration은 없으며, 서버 빌드·`down -v`·전체 prune·터널 재생성은 실행하지 않는다.
@@ -79,3 +87,5 @@ DB·데이터·DNS·Cloudflare 로컬 관리 터널·3000/3100 서비스·AI 설
 ## 기록 검증
 
 이번 변경12파일의 Markdown 내부 링크80개·code fence 경계, JSON8측정과 집계의 일치, PNG2개의 signature/해상도와 `git diff --check`를 확인했다. 독립 reviewer가 원본 측정과 정제 JSON·CSS 해시·캡처를 대조하고 중요 지적 없음으로 보고했다. 이는 배포 성공 인증이 아니다. 제품 소스·테스트·workflow를 바꾸지 않았으며 기존 CI 전체 검사는 재실행하지 않았다. 이번 문서·공개 증거 추가를 이미지 생성/배포 완료로 해석하지 않는다.
+
+위12파일 검증은 최초 기록commit5834d91의 범위다. 후속 IP 정정은PROJECT_GUIDE·99·이 기록에서 AWS 실제 주소를 먼저 확인하도록 반영하며, 제품이나 서버 설정을 변경하지 않는다.
