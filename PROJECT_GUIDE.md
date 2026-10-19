@@ -2,6 +2,21 @@
 
 갱신일: 2026-10-18 (KST). 현재 단계는 **AI 비활성 공개 데모 유지, 전체 디자인·한글 글꼴 개선 로컬 검증 완료**다.
 
+## 배포 연결 재점검 — 2026-10-19 14:25 KST
+
+사용자가 새 디자인의 서버 배포와 공개 확인을 요청해 현재 채팅의 클라우드 연결을 직접 재점검했다. **서버 앱 교체는 미실행이며 새 디자인 공개 적용은 미완료**다.
+
+- `git ls-remote origin refs/heads/feat/ghostmanual-mvp`에서 기본 브랜치 `067b59edace52938e8e95bdbd488d845aaf2d2f4`를 확인했다. 아래 과거 미병합 표와 구분한다.
+- 환경은 running/connected, observations_current=true다. 현재 상태 API의 network policy state는 unknown이므로 enforced로 단정하지 않는다. 실행 환경의 `/etc/codex/network-policy.json`은 version1, `vpn_configured=true`, TCP CONNECT proxy8088, `tcp_network_access.domains=[]`, `ip_ranges=[]`다. VPN 설정은 VPN 정상 동작/서버 접속 성공의 증거가 아니다.
+- SSH agent 변수는 없고 사용자 홈의 `.ssh` 디렉터리도 없다. 상태 API에 서버용 runtime variable/secret/outbound identity는 없으며 Cloudflare API token만 unknown으로 표시된다. Tailscale SSH 사용 가능 여부·추가 인증·서버 상태는 확인하지 못했다. TCP 허용이 없어 우회 접속을 시도하지 않았다.
+- GitHub 커넥터로 artifact12134456501의 `expired=false`, 만료2026-10-19 20:06:24 KST, source7efb284·ZIP digest46202fbd…를 직접 확인했다. 커넥터 다운로드는 성공해 파일 참조를 확보했지만191152491bytes로 실행 환경 전송 한도32MiB를 넘어 로컬 전송은 실패했다. 로컬 ZIP 해시·Docker image ID는 새로 검증하지 않았다. `gh api`는 `https://api.github.com` 요청에서 Forbidden으로 실패했다. 이미지 재빌드는 실행하지 않았다.
+- 공개 HTTPS는 curl로 HTTP200, private/no-store·CSP font-src self를 확인했다. HTML에 font preload가 없고 현재 CSS `/_next/static/chunks/2hb3twf9u61xl.css`에도 Pretendard/@font-face가 없다. 새 글꼴 공개 반영은 확인되지 않는다. 서버 실행 이미지 ID·build ID·데스크톱/모바일 정렬·키보드 동작은 이번에 검증하지 못했다.
+- 저장소 밖 `/workspace/ghostmanual-update-design.sh`는 현재 환경에 없다. DB·데이터·3000/3100 서비스·DNS·터널·AI 설정은 변경하지 않았다. 전체 QA는 반복하지 않았다.
+
+재개에 필요한 연결 설정: TCP 허용 범위에 `100.108.2.6/32`를 추가한 교체 환경과, 해당 환경에서 동작하는 서버 인증(Tailscale SSH 정책/필요한 사용자 인증 또는 안전하게 연결된 SSH 인증)이 필요하다. HTTP 허용 목록의 IP 등록만으로 raw TCP 접속은 허용되지 않는다. 이미지 로컬 확보에는 GitHub Actions 다운로드가 가능한 CLI 인증/HTTP 정책 또는 대용량 파일 전달 경로도 필요하다. 비밀 값을 채팅이나 Git에 기록하지 않는다. 현재 도구에는 환경 설정을 수정하는 기능이 없어 변경을 적용하지 못했다.
+
+연결 준비 후 [검증 이미지와 앱 단독 교체 절차](docs/qa/2026-10-18/release-update.md)를 따른다. 모든 Compose 명령은 `docker compose -f compose.yaml -f compose.no-logs.yaml --env-file .env`를 사용하고, 이전 이미지·설정을 서버 내부에 보존한 후 `up -d --no-deps app`으로 교체한다. 서버 빌드·migration·터널 재생성은 이번 디자인 배포에 필요하지 않다.
+
 ## 제품과 현재 범위
 
 GhostManual은 업무 원본 자료를 사람이 검수한 매뉴얼로 남기고 후임자가 게시 버전과 원문 근거를 확인하는 한국어 웹 서비스다. Source(원본)·Manual(검수 매뉴얼)·Answer(근거 답변), 작성자·Reader 권한, 게시 revision을 구분한다.
