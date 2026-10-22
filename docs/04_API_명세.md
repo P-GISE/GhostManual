@@ -16,6 +16,7 @@
 | GET /api/sources/:id/revisions/:revision | O 또는 해당 R | 200 변경 묶음·질문·답변·미리보기 |
 | GET /api/sources/:id/revisions/:revision/file | O 또는 해당 R | 200 원본 파일, attachment |
 | PATCH /api/sources/:id/revisions/:revision/answers | O, 질문별 답변·건너뜀 | 200 저장 결과 |
+GET·PUT /api/workspace/uploader(O)로 이름·팀을 조회·저장한다. 값이 없으면 업로드를 422로 거부한다. 버전 응답에는 업로더 이름·팀·시각을 포함한다.
 기존 PATCH /api/sources/:id는 텍스트 자료에만 허용한다.
 
 ## 현재 HTTP 계약
