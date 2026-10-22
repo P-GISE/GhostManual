@@ -10,8 +10,8 @@
 [파일 버전 설계 10절](superpowers/specs/2026-10-22-file-version-questions-design.md)의 제안이다. 아래 현재 계약에는 아직 없다.
 | Method / Endpoint | 인증·입력 | 응답 |
 |---|---|---|
-| POST /api/sources | O, multipart에 `.xlsx` 허용 | 201 버전1·기본 질문 |
-| POST /api/sources/:id/revisions | O, multipart `.xlsx`·expectedRevision | 201 새 revision·변경 묶음·질문, 불일치 409 |
+| POST /api/sources | O, multipart에 허용 형식 파일 | 201 버전1·기본 질문 |
+| POST /api/sources/:id/revisions | O, multipart 같은 형식 파일·expectedRevision | 201 새 revision·질문, xlsx는 변경 묶음 포함. 불일치 409, 다른 형식 422 |
 | GET /api/sources/:id/revisions | O 또는 해당 R | 200 버전 목록 |
 | GET /api/sources/:id/revisions/:revision | O 또는 해당 R | 200 변경 묶음·질문·답변·미리보기 |
 | GET /api/sources/:id/revisions/:revision/file | O 또는 해당 R | 200 원본 파일, attachment |
