@@ -80,7 +80,7 @@ def atomic_write(path, content):
 
 
 def inspect(name):
-    return json.loads(command(["docker", "inspect", name]))[0]
+    return json.loads(command(["docker", "inspect", name], timeout=20))[0]
 
 
 def other_containers():
@@ -105,7 +105,7 @@ def switch_app(image):
 
 
 def health(image):
-    for attempt in range(12):
+    for attempt in range(6):
         item = inspect(APP)
         good = item["Image"] == image and item["State"]["Running"] and not item["State"]["OOMKilled"]
         if good:
@@ -117,11 +117,11 @@ def health(image):
                         raise DeployError("http_health")
                 command(["docker", "exec", APP, "node", "--input-type=module", "-e",
                          "import pg from 'pg'; const c=new pg.Client({connectionString:process.env.DATABASE_URL});"
-                         "try {await c.connect(); await c.query('SELECT 1');} finally {await c.end();}"], timeout=15)
+                         "try {await c.connect(); await c.query('SELECT 1');} finally {await c.end();}"], timeout=5)
                 return
             except (DeployError, subprocess.TimeoutExpired):
                 print("ghostmanual_deploy status=health_retry attempt=" + str(attempt + 1), flush=True)
-        if attempt < 11:
+        if attempt < 5:
             time.sleep(2)
     raise DeployError("health_failed")
 

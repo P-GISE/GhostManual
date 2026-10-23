@@ -3,12 +3,7 @@
   "origin": "https://ghostmanual.pigs0516.com",
   "readOnly": true,
   "tlsVerification": true,
-  "routes": [
-    "/",
-    "/sources/new",
-    "/ask",
-    "/terms"
-  ],
+  "routes": ["/", "/sources/new", "/ask", "/terms"],
   "viewports": [
     {
       "width": 1440,
@@ -21,9 +16,7 @@
   ],
   "views": 8,
   "http200": 8,
-  "fontFamily": [
-    "Arial, \"Malgun Gothic\", sans-serif"
-  ],
+  "fontFamily": ["Arial, \"Malgun Gothic\", sans-serif"],
   "loadedFontFaces": 0,
   "mainHasTabIndex": 0,
   "skipMainFocused": 0,
