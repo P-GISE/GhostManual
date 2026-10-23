@@ -48,3 +48,7 @@ unavailable에서는 answer·procedure·evidence를 비우고 searchResults를 �
 Provider 오류 본문·키·stack trace를 클라이언트에 그대로 보내지 않는다. 요청 본문과 토큰은 로그에서 제외한다.
 응답 cache-control:no-store, 공유 진입 referrer-policy:no-referrer. 실제 적용은 테스트로 검증해야 한다.
 
+
+
+### 2026-10-24 시작 흐름의 기존 API 재사용
+POST /api/workspaces 201 다음 GET /api/session으로 Owner 세션과 같은 expiresAt을 확인한다. 새 API·응답 필드는 추가하지 않는다. GET은 업무 본문을 반환하지 않으며 no-store 응답 정책을 유지한다. 확인 실패 재시도는 GET만 수행한다. 쿠키 정책·DB 스키마는 변경하지 않았다.
