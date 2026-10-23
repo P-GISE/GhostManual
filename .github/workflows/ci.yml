@@ -36,18 +36,22 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - name: Verify app-only deployment guards
+        run: python3 scripts/test_deploy_poll.py
       - run: npm run db:migrate
       - run: npm run test:integration
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - name: Verify workspace session handoff without database writes
+        run: npx playwright test --config playwright.session.config.ts --reporter=line
       - run: npm run test:accessibility
       - name: Build deployment image without credentials
-        run: docker build -t ghostmanual:${{ github.sha }} .
+        run: docker build --label org.opencontainers.image.revision=${{ github.sha }} -t ghostmanual:${{ github.sha }} .
       - name: Export verified deployment image
         run: docker save ghostmanual:${{ github.sha }} | gzip > ghostmanual-image.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: ghostmanual-image-${{ github.sha }}
           path: ghostmanual-image.tar.gz
-          retention-days: 1
+          retention-days: 7

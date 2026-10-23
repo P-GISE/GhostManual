@@ -1,0 +1,16 @@
+[Unit]
+Description=Deploy the verified GhostManual production image
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/libexec/ghostmanual-deploy-poll
+TimeoutStartSec=20min
+TimeoutStopSec=10min
+KillMode=mixed
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+StandardOutput=journal
+StandardError=journal
