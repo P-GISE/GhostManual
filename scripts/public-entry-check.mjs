@@ -146,7 +146,7 @@ async function fixtureResponse(route, fault, mode) {
   const path = new URL(route.request().url()).pathname;
   const expiry = "2030-01-01T00:00:00.000Z";
   if (path === "/") {
-    const html = `<button ${fault === "no-handler" ? "" : 'onclick="start()"'}>${MODES[mode]}</button><script>
+    const html = `<button ${fault === "no-handler" ? "" : 'onclick="start()"'} ${fault === "slow-action" ? "disabled" : ""}>${MODES[mode]}</button><script>
       async function start() {
         globalThis.__gmFixtureProbe.startCalled = true;
         const r = await fetch('/api/workspaces', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'${mode}'})});
@@ -160,6 +160,7 @@ async function fixtureResponse(route, fault, mode) {
       }
       globalThis.__gmFixtureProbe ??= {};
       globalThis.__gmFixtureProbe.ready = true;
+      if (${fault === "slow-action"}) setTimeout(() => { document.querySelector('button').disabled = false; }, 2500);
     </script>`;
     return route.fulfill({
       status: 200,
@@ -205,6 +206,8 @@ async function fixtureResponse(route, fault, mode) {
 async function runCase(browser, profile, engine, mode, options = {}) {
   const emit = options.emit ?? ((line) => process.stdout.write(`${line}\n`));
   const timeout = options.timeout ?? 20000;
+  const clickTimeout = options.clickTimeout ?? timeout;
+  const pendingResponses = [];
   const context = await browser.newContext({
     ...profile,
     serviceWorkers: "block",
@@ -219,6 +222,22 @@ async function runCase(browser, profile, engine, mode, options = {}) {
   let click = "pending";
   let jsError = "none";
   let actionError = "none";
+  let locatorCount = "unknown";
+  let visible = "unknown";
+  let enabled = "unknown";
+  const observed = async (pending) => {
+    let timer;
+    try {
+      return await Promise.race([
+        pending,
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve(null), timeout);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
   const errorCategory = (error) =>
     new Map([
       ["SyntaxError", "syntax"],
@@ -252,8 +271,8 @@ async function runCase(browser, profile, engine, mode, options = {}) {
     const home = await page.goto(`${ORIGIN}/`, { waitUntil: "domcontentloaded" });
     status = home?.status() ?? 0;
     require(status === 200 && new URL(page.url()).origin === ORIGIN);
-    const response = (path, method) =>
-      page
+    const response = (path, method) => {
+      const pending = page
         .waitForResponse(
           (item) => {
             const url = new URL(item.url());
@@ -261,18 +280,30 @@ async function runCase(browser, profile, engine, mode, options = {}) {
               url.origin === ORIGIN && url.pathname === path && item.request().method() === method
             );
           },
-          { timeout },
+          { timeout: 0 },
         )
         .catch(() => null);
+      pendingResponses.push(pending);
+      return pending;
+    };
     const created = response("/api/workspaces", "POST");
     const session = response("/api/session", "GET");
     const manuals = response("/api/manuals", "GET");
     const sources = response("/api/sources", "GET");
     stage = "create";
     status = 0;
-    await page.getByRole("button", { name: MODES[mode], exact: true }).click();
+    const button = page.getByRole("button", { name: MODES[mode], exact: true });
+    if (options.fixture) {
+      const count = await button.count();
+      locatorCount = count === 0 ? "zero" : count === 1 ? "one" : "many";
+      if (count === 1) {
+        visible = (await button.isVisible()) ? "yes" : "no";
+        enabled = (await button.isEnabled({ timeout })) ? "yes" : "no";
+      }
+    }
+    await button.click({ timeout: clickTimeout });
     click = "completed";
-    const creation = await created;
+    const creation = await observed(created);
     status = creation?.status() ?? 0;
     require(status === 201);
     stage = "create_json";
@@ -293,7 +324,7 @@ async function runCase(browser, profile, engine, mode, options = {}) {
         owner[0].path === "/",
     );
     stage = "session";
-    const current = await session;
+    const current = await observed(session);
     status = current?.status() ?? 0;
     require(status === 200);
     stage = "session_json";
@@ -308,7 +339,7 @@ async function runCase(browser, profile, engine, mode, options = {}) {
       ["sources", sources],
     ]) {
       stage = name;
-      const list = await pending;
+      const list = await observed(pending);
       status = list?.status() ?? 0;
       require(status === 200);
       const values = await list.json();
@@ -341,7 +372,7 @@ async function runCase(browser, profile, engine, mode, options = {}) {
         .catch(() => null);
       const flag = (value) => (probe ? (value ? "yes" : "no") : "unknown");
       emit(
-        `fixture_probe engine=${engine} mode=${mode} ready=${flag(probe?.ready)} callable=${flag(probe?.callable)} called=${flag(probe?.called)} wrapped=${flag(probe?.wrapped)} click=${click} js_error=${jsError} action_error=${actionError}`,
+        `fixture_probe engine=${engine} mode=${mode} ready=${flag(probe?.ready)} callable=${flag(probe?.callable)} called=${flag(probe?.called)} wrapped=${flag(probe?.wrapped)} click=${click} js_error=${jsError} action_error=${actionError} count=${locatorCount} visible=${visible} enabled=${enabled}`,
       );
     }
     stage = "request_budget";
@@ -354,6 +385,14 @@ async function runCase(browser, profile, engine, mode, options = {}) {
     stage = "cleanup";
     try {
       await context.close();
+      await Promise.all(pendingResponses);
+      if (options.fixture) {
+        const listeners = page?.listenerCount("response") ?? 0;
+        emit(
+          `fixture_cleanup engine=${engine} mode=${mode} response_listeners=${listeners} result=${listeners === 0 ? "pass" : "fail"}`,
+        );
+        if (listeners !== 0) passed = false;
+      }
     } catch {
       record(false);
     }
@@ -573,6 +612,7 @@ async function selfTest(engine) {
     for (const [fault, mode] of [
       ["none", "blank"],
       ["none", "example"],
+      ["slow-action", "blank"],
       ["cookie", "blank"],
       ["session", "blank"],
       ["manuals", "blank"],
@@ -584,11 +624,13 @@ async function selfTest(engine) {
         fixture: fault,
         emit: (line) => lines.push(line),
         timeout: 2000,
+        clickTimeout: 20000,
       });
-      if (result !== (fault === "none")) {
+      const success = fault === "none" || fault === "slow-action";
+      if (result !== success) {
         for (const line of lines) process.stdout.write(`${line}\n`);
       }
-      assert.equal(result, fault === "none");
+      assert.equal(result, success);
       assert.ok(lines.some((line) => line.startsWith("public_guard ")));
       assert.ok(
         lines.some((line) =>
@@ -623,7 +665,10 @@ async function selfTest(engine) {
             /^public_entry engine=(chromium|webkit) mode=(blank|example) stage=[a-z_]+ status=\d{1,3} result=(pass|fail)$/.test(
               line,
             ) ||
-            /^fixture_probe engine=(chromium|webkit) mode=(blank|example) ready=(yes|no|unknown) callable=(yes|no|unknown) called=(yes|no|unknown) wrapped=(yes|no|unknown) click=(pending|completed|failed) js_error=(none|syntax|reference|type|range|security|timeout|generic|other) action_error=(none|syntax|reference|type|range|security|timeout|generic|other)$/.test(
+            /^fixture_probe engine=(chromium|webkit) mode=(blank|example) ready=(yes|no|unknown) callable=(yes|no|unknown) called=(yes|no|unknown) wrapped=(yes|no|unknown) click=(pending|completed|failed) js_error=(none|syntax|reference|type|range|security|timeout|generic|other) action_error=(none|syntax|reference|type|range|security|timeout|generic|other) count=(zero|one|many|unknown) visible=(yes|no|unknown) enabled=(yes|no|unknown)$/.test(
+              line,
+            ) ||
+            /^fixture_cleanup engine=(chromium|webkit) mode=(blank|example) response_listeners=\d+ result=(pass|fail)$/.test(
               line,
             ) ||
             /^public_guard engine=(chromium|webkit) mode=(blank|example) phase=(synthetic|public) reason=(none|method|payload|duplicate|api_path|api_resource|api_navigation|api_frame|read_redirect|read_cookie|read_error|unknown) resource=(none|fetch|xhr|document|other|unknown) attempts=\d+ approved_sent=\d+ fixture_allowed=\d+$/.test(
@@ -632,6 +677,12 @@ async function selfTest(engine) {
         ),
       );
       assert.ok(lines.every((line) => !line.includes("synthetic-private-cookie")));
+      assert.ok(lines.some((line) => line.endsWith("response_listeners=0 result=pass")));
+      assert.ok(
+        lines.some((line) =>
+          line.endsWith(`count=one visible=yes enabled=${fault === "slow-action" ? "no" : "yes"}`),
+        ),
+      );
     }
     for (const fault of ["script-syntax", "no-handler"]) {
       const lines = [];
@@ -640,6 +691,7 @@ async function selfTest(engine) {
           fixture: fault,
           emit: (line) => lines.push(line),
           timeout: 2000,
+          clickTimeout: 20000,
         }),
         false,
       );
@@ -651,8 +703,9 @@ async function selfTest(engine) {
       assert.ok(
         lines.some((line) => line.endsWith("attempts=0 approved_sent=0 fixture_allowed=0")),
       );
+      assert.ok(lines.some((line) => line.endsWith("response_listeners=0 result=pass")));
     }
-    process.stdout.write("public_entry_self_test scenarios=9 result=pass\n");
+    process.stdout.write("public_entry_self_test scenarios=10 result=pass\n");
     await redirectTests(browser, profile);
   } finally {
     await browser.close();
