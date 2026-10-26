@@ -2,19 +2,28 @@
 
 ## 범위와 현재 상태
 
-**제안/준비 완료, 공개 검사 미실행.** 기준 소스는 `4dc281b8767169a5510f1b3681062fa72486d4f8`. 제품/API/운영 설정은 변경하지 않고 일회성 검사만 추가한다. 사용자 컴퓨터의 성공을 지인의 성공으로 확대하지 않는다. 2026-10-26 13:58 iPhone Safari 오류는 최신 진단 배포 전의 관측이며 실제 기기의 iOS/Safari 버전은 미확인이다.
+**현재 변경은 offline-only 진단 준비이며 아직 push하지 않았다.** 최초 기준 소스는 `4dc281b8767169a5510f1b3681062fa72486d4f8`. 이전 검사 소스 `f92b811eafbf02e0003ed7770cb21a71d37b29d0`의 [일회성 실행](https://github.com/P-GISE/GhostManual/actions/runs/40300671950)은 부분 실패했다. Chromium 합성 예제는 생성201·쿠키·세션200·목록200·UI가 통과했지만 빈 공간은 생성 응답 미확인(status0)이며 POST는 0~1회로 불확실하다. WebKit은 공개 접속 전 합성 fixture에서 실패하여 공개 단계가 생략됐다. WebKit의 웹사이트/Safari 실패로 해석하지 않는다.
+
+제품/API/운영 설정은 변경하지 않는다. 사용자 컴퓨터나 외부 Chromium의 성공을 지인의 성공으로 확대하지 않는다. 2026-10-26 13:58 iPhone Safari 오류는 최신 진단 배포 전의 관측이며 실제 기기의 iOS/Safari 버전은 미확인이다.
 
 GitHub 표준 `ubuntu-24.04` 호스팅 runner에서 Chromium 기본 데스크톱 프로필·고유 User-Agent와 WebKit의 iPhone 13 화면·터치 프로필을 각각 실행한다. Chromium을 Google Chrome 전체 제품과 동일하다고 부르지 않으며 WebKit도 **실제 iPhone Safari 또는 지인의 기기 재현은 아니다.** GitHub 호스팅 토폴로지를 근거로 사용자 PC와 다른 실행 네트워크를 사용한다. 외부 IP 확인 서비스를 호출하거나 IP·메일·전화번호를 수집하지 않는다. 우회 프록시·stealth·User-Agent 임의 변경은 사용하지 않는다.
 
-## 승인 후 실행 한도
+## 현재 실행 차단과 후속 검토
 
-- 정확한 `codex/ghost-public-entry-check-20261026` 브랜치의 push 및 그 브랜치의 수동 실행만 허용한다. PR·정기 실행은 없다. 재실행 attempt는 차단한다. 다음 push나 새로운 수동 실행은 별도 실행이므로 결과 확인 후 이 브랜치에서 반복 실행하지 않는다.
-- 엔진 2개 × 빈 공간/합성 예제 2개 = **실행당 새 합성 공간 최대 4개**. 각 경우 독립된 빈 브라우저 context이며 생성 버튼은 한 번만 누른다. route에서 해당 mode의 정확한 POST 한 번만 통과시키고 중복 POST·다른 쓰기 요청을 차단한다. 실패 시 생성 재시도나 DB 삭제는 하지 않는다.
+- 다음 push 또는 수동 `phase=offline` 실행은 **preflight 두 엔진만** 실행한다. 공개 작업은 `needs: [preflight]`와 명시적 `if: false`로 비활성화했다. 해당 작업에는 공개 검사 실행 명령도 없다.
+- CLI live 경로도 `workflow_dispatch`, `PUBLIC_ENTRY_PHASE=live-reviewed`, 기존 정확한 repo/branch/attempt/승인 값이 모두 필요하다. 현재 workflow는 live phase 또는 승인 값을 주입하지 않는다. 이후 공개 실행에는 두 offline 엔진 성공과 별도 예산 검토·소스 변경·검토가 필요하다.
+- 최초 실행의 공개 공간 생성201 확인은 1회, 추가 미확인 POST는 최대1회다. 이전 최대4 승인값을 다음 실행에 자동 재사용하지 않는다. 새 공개 검사 대상과 잔여 예산은 담당자가 결과를 검토해 결정한다.
+
+## 최초 검사의 요청 경계와 유지되는 안전 조건
+
+- 정확한 `codex/ghost-public-entry-check-20261026` 브랜치만 사용하며 PR·정기 실행은 없다. 최초에는 push가 공개 검사를 시작했으나 현재는 그 경로를 제거했다. 재실행 attempt는 차단한다.
+- 최초 실행은 엔진 2개 × 빈 공간/합성 예제 2개 = 최대4개 합성 공간 계획이었다. 각 경우 독립된 빈 브라우저 context이며 생성 버튼은 한 번만 누른다. route에서 해당 mode의 정확한 POST 한 번만 통과시키고 중복 POST·다른 쓰기 요청을 차단한다. 실패 시 생성 재시도나 DB 삭제는 하지 않는다.
 - 고정 대상은 `https://ghostmanual.pigs0516.com`뿐이다. 다른 Origin 요청은 차단한다. Tailscale·로그인·사용자 인증 정보·업무 자료·메일 발송·AI 기능을 사용하지 않는다.
 - API 요청은 문서의 native fetch에 `redirect: error`만 강제한다. 정확한 4개 API 경로의 fetch만 허용하고 POST navigation·XHR·worker 요청은 거절한다. API 응답·Set-Cookie는 APIRequestContext로 중계하지 않으므로 브라우저의 실제 쿠키 저장·전송 경로를 유지한다.
 - 페이지·정적 자원 GET/HEAD는 요청마다 새로 만든 **브라우저와 별개인** APIRequestContext에서 `maxRedirects: 0`, `maxRetries: 0`로 읽는다. 3xx 또는 gm_owner/gm_reader Set-Cookie가 있으면 브라우저에 전달하지 않고 중단한다. 응답과 별도 cookie jar는 즉시 폐기한다. 이 경로는 브라우저의 페이지/자산 TLS 전송까지 그대로 재현하는 검사가 아니며 API 쿠키 흐름과 구분한다.
 - 공간 생성 201→JSON 해석→gm_owner 쿠키 Secure/HttpOnly/SameSite=Lax/Path=/→session 200 및 owner/만료시각 일치→`/manuals` 이동→manuals/sources 200 및 배열→정상 UI를 별도로 확인한다. blank는 빈 목록, example은 합성 목록을 확인한다.
 - 오류 메시지·응답 본문·URL 식별자·쿠키 값·session ID·문서 내용은 출력하지 않는다. 고정 engine/mode/stage/status/pass-fail만 로그로 남긴다. screenshot·trace·video·HAR·storageState·다운로드·artifact 업로드는 없다. 런타임 메모리의 응답/쿠키는 context 종료로 폐기한다.
+- 추가 진단은 allowlist의 guard reason·resource type 및 attempts/approved_sent/fixture_allowed 정수뿐이다. attempts는 생성 POST가 route에 들어온 횟수, approved_sent는 native API 전송을 허용한 횟수로 **서버 수신/DB 생성 확정 수가 아니다.** fixture_allowed는 합성 응답 허용 횟수이며 공개 요청 수가 아니다. 생성 시도0과 guard 차단을 구분한다. 현재 fetch 이외 API resource는 계속 차단하며, WebKit의 실제 분류는 offline CI 증거를 확인하기 전 추정으로 남긴다.
 
 ## 실행 환경 고정 근거
 
@@ -31,6 +40,6 @@ lock의 `playwright`, `@playwright/test`는 1.63.0이다. 공식 [Playwright Doc
 
 `node scripts/public-entry-check.mjs --self-test chromium`은 실제 로컬 Chrome에서 두 종류의 검사를 한다. 첫 7개는 route 합성 응답으로 빈 공간·합성 예제 성공, 쿠키 없음, session401, manuals401, 생성 JSON 오류, 중복 POST 차단을 확인한다. 이어 실제 loopback HTTP 서버 두 개로 307/308×동일/다른 Origin의 POST 4개와 정적 자원/페이지 이동 8개에서 후속 요청 0을 확인한다. 비API 응답의 쿠키 주입 차단, 실제 native POST201→HttpOnly 쿠키→session200, 중복 POST 및 XHR POST 차단도 확인한다. 후자의 테스트는 실제 HTTP이며 HTTPS Secure 쿠키 검증으로 확대하지 않는다.
 
-CI에서는 `--self-test chromium`과 `--self-test webkit`을 각 matrix 엔진에서 먼저 실행하고 통과한 엔진만 공개 검사를 실행한다. 로컬 WebKit은 미실행이다. 이 준비 과정의 사이트 요청은 0회이며 실제 앱 UI/DB/TLS를 검증한 것으로 표시하지 않는다. 초기 RED, 리디렉션 결함의 실제 HTTP RED 및 수정 후 전체 GREEN은 작업 폴더 `.omo/evidence/public-entry/`에 보존한다.
+CI에서는 `--self-test chromium`과 `--self-test webkit`만 각 preflight matrix 엔진에서 실행한다. 양쪽 성공 이후에도 현재 공개 job은 비활성화되어 있다. 로컬 WebKit은 미실행이다. 이번 offline-only 수정 과정의 사이트 요청은 0회이며 실제 앱 UI/DB/TLS를 검증한 것으로 표시하지 않는다. 초기 RED, 리디렉션 결함의 실제 HTTP RED 및 수정 후 전체 GREEN, 추가 진단의 RED/GREEN은 작업 폴더 `.omo/evidence/public-entry/`에 보존한다.
 
 공개 실행은 독립 검토 후 담당자가 수행한다. 로컬 proof의 성공과 외부 public 성공은 별개다. 공개 결과가 모두 성공하더라도 실제 지인의 Safari에서 해결됐다고 판정하지 않는다. 실패한 stage/status만 이용해 다음 조사를 결정한다.

@@ -10,6 +10,27 @@ const MODES = { blank: "빈 공간 시작", example: "합성 예제 열기" };
 function budget(mode, origin = ORIGIN) {
   let creates = 0;
   let violated = false;
+  let approvedSent = 0;
+  let fixtureAllowed = 0;
+  let reason = "none";
+  let resource = "none";
+  const reject = (value) => {
+    violated = true;
+    reason = [
+      "method",
+      "payload",
+      "duplicate",
+      "api_path",
+      "api_resource",
+      "api_navigation",
+      "api_frame",
+      "read_redirect",
+      "read_cookie",
+      "read_error",
+    ].includes(value)
+      ? value
+      : "unknown";
+  };
   return {
     allow(request) {
       const url = new URL(request.url());
@@ -17,20 +38,28 @@ function budget(mode, origin = ORIGIN) {
       if (["GET", "HEAD"].includes(request.method())) return true;
       if (request.method() === "POST" && url.pathname === "/api/workspaces" && !url.search) {
         creates++;
+        resource = ["fetch", "xhr", "document", "other"].includes(request.resourceType())
+          ? request.resourceType()
+          : "unknown";
         try {
           const body = request.postDataJSON();
           if (creates === 1 && body?.mode === mode && Object.keys(body).length === 1) return true;
+          reject(creates > 1 ? "duplicate" : "payload");
         } catch {
-          violated = true;
+          reject("payload");
         }
+        return false;
       }
-      violated = true;
+      reject("method");
       return false;
     },
     valid: () => creates === 1 && !violated,
-    reject: () => {
-      violated = true;
+    reject,
+    approved: (fixture) => {
+      if (fixture) fixtureAllowed++;
+      else approvedSent++;
     },
+    snapshot: () => ({ reason, resource, attempts: creates, approvedSent, fixtureAllowed }),
   };
 }
 
@@ -60,16 +89,21 @@ async function installTransport(context, mode, options = {}) {
         current.method() === "POST"
           ? ["/api/workspaces"]
           : ["/api/session", "/api/manuals", "/api/sources"];
-      if (
-        url.search ||
-        !expected.includes(url.pathname) ||
-        current.resourceType() !== "fetch" ||
-        current.isNavigationRequest() ||
-        !fromDocument
-      ) {
-        limits.reject();
+      const reason =
+        url.search || !expected.includes(url.pathname)
+          ? "api_path"
+          : current.resourceType() !== "fetch"
+            ? "api_resource"
+            : current.isNavigationRequest()
+              ? "api_navigation"
+              : !fromDocument
+                ? "api_frame"
+                : null;
+      if (reason) {
+        limits.reject(reason);
         return route.abort();
       }
+      if (current.method() === "POST") limits.approved(Boolean(options.fixture));
       if (options.fixture) return fixtureResponse(route, options.fixture, mode);
       return route.continue();
     }
@@ -87,12 +121,12 @@ async function installTransport(context, mode, options = {}) {
             /^\s*gm_(owner|reader)=/i.test(header.value),
         );
       if ((response.status() >= 300 && response.status() < 400) || sessionCookie) {
-        limits.reject();
+        limits.reject(sessionCookie ? "read_cookie" : "read_redirect");
         return await route.abort();
       }
       return await route.fulfill({ response });
     } catch {
-      limits.reject();
+      limits.reject("read_error");
       return route.abort();
     } finally {
       await response?.dispose();
@@ -263,6 +297,10 @@ async function runCase(browser, profile, engine, mode, options = {}) {
     stage = "request_budget";
     status = 0;
     record(limits.valid());
+    const guard = limits.snapshot();
+    emit(
+      `public_guard engine=${engine} mode=${mode} phase=${options.fixture ? "synthetic" : "public"} reason=${guard.reason} resource=${guard.resource} attempts=${guard.attempts} approved_sent=${guard.approvedSent} fixture_allowed=${guard.fixtureAllowed}`,
+    );
     stage = "cleanup";
     try {
       await context.close();
@@ -501,6 +539,14 @@ async function selfTest(engine) {
         for (const line of lines) process.stdout.write(`${line}\n`);
       }
       assert.equal(result, fault === "none");
+      assert.ok(lines.some((line) => line.startsWith("public_guard ")));
+      assert.ok(
+        lines.some((line) =>
+          line.endsWith(
+            `attempts=${fault === "duplicate" ? 2 : 1} approved_sent=0 fixture_allowed=1`,
+          ),
+        ),
+      );
       const expectedFailure = {
         cookie: "cookie",
         session: "session",
@@ -515,10 +561,14 @@ async function selfTest(engine) {
           ),
         );
       assert.ok(
-        lines.every((line) =>
-          /^public_entry engine=(chromium|webkit) mode=(blank|example) stage=[a-z_]+ status=\d{1,3} result=(pass|fail)$/.test(
-            line,
-          ),
+        lines.every(
+          (line) =>
+            /^public_entry engine=(chromium|webkit) mode=(blank|example) stage=[a-z_]+ status=\d{1,3} result=(pass|fail)$/.test(
+              line,
+            ) ||
+            /^public_guard engine=(chromium|webkit) mode=(blank|example) phase=(synthetic|public) reason=(none|method|payload|duplicate|api_path|api_resource|api_navigation|api_frame|read_redirect|read_cookie|read_error|unknown) resource=(none|fetch|xhr|document|other|unknown) attempts=\d+ approved_sent=\d+ fixture_allowed=\d+$/.test(
+              line,
+            ),
         ),
       );
       assert.ok(lines.every((line) => !line.includes("synthetic-private-cookie")));
@@ -538,7 +588,8 @@ async function main() {
     process.env.CI !== "true" ||
     process.env.GITHUB_REPOSITORY !== "P-GISE/GhostManual" ||
     process.env.GITHUB_REF !== BRANCH ||
-    !["push", "workflow_dispatch"].includes(process.env.GITHUB_EVENT_NAME) ||
+    process.env.GITHUB_EVENT_NAME !== "workflow_dispatch" ||
+    process.env.PUBLIC_ENTRY_PHASE !== "live-reviewed" ||
     process.env.GITHUB_RUN_ATTEMPT !== "1" ||
     process.env.PUBLIC_ENTRY_APPROVED !== "four-synthetic-spaces"
   ) {
