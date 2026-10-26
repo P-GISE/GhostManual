@@ -25,6 +25,10 @@ class DeployError(Exception):
     pass
 
 
+class Interrupted(DeployError):
+    pass
+
+
 def command(args, *, output=None, timeout=120):
     result = subprocess.run(args, stdout=output or subprocess.PIPE, stderr=subprocess.DEVNULL,
                             timeout=timeout, check=False, env={**os.environ, "LC_ALL": "C.UTF-8"})
@@ -119,6 +123,8 @@ def health(image):
                          "import pg from 'pg'; const c=new pg.Client({connectionString:process.env.DATABASE_URL});"
                          "try {await c.connect(); await c.query('SELECT 1');} finally {await c.end();}"], timeout=5)
                 return
+            except Interrupted:
+                raise
             except (DeployError, subprocess.TimeoutExpired):
                 print("ghostmanual_deploy status=health_retry attempt=" + str(attempt + 1), flush=True)
         if attempt < 5:
@@ -245,7 +251,7 @@ def main():
 
 
 def interrupted(signum, frame):
-    raise DeployError("deployment_interrupted")
+    raise Interrupted("deployment_interrupted")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import importlib.util
 import pathlib
 import json
+import signal
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -84,6 +85,62 @@ class DeploymentTests(unittest.TestCase):
         with self.assertRaisesRegex(deploy.DeployError, "interrupted"):
             deploy.replace_app("old", "new", lambda image: None, switched.append, health, lambda: None)
         self.assertEqual(switched, ["new", "old"])
+
+    def test_real_health_interrupt_rolls_back_before_any_retry(self) -> None:
+        for number in (signal.SIGTERM, signal.SIGINT):
+            for boundary in range(3):
+                with self.subTest(signal=number, command=boundary), tempfile.TemporaryDirectory() as directory:
+                    environment = pathlib.Path(directory) / ".env"
+                    environment.write_text("GHOSTMANUAL_IMAGE=old\nSYNTHETIC=retained\n")
+                    original_environment = environment.read_text()
+                    before = environment.read_bytes()
+                    switched = []
+                    current = "old"
+                    calls = 0
+                    fired = False
+
+                    def switch(image: str) -> None:
+                        nonlocal current
+                        current = image
+                        switched.append(image)
+
+                    def command(args, **_kwargs) -> str:
+                        nonlocal calls, fired
+                        if current == "new":
+                            index = calls
+                            calls += 1
+                            if index == boundary and not fired:
+                                fired = True
+                                deploy.interrupted(number, None)
+                        return "200" if args[0] == "curl" else ""
+
+                    def inspect(_name: str):
+                        return {"Image": current, "State": {"Running": True, "OOMKilled": False}}
+
+                    def write_image(image: str) -> None:
+                        deploy.atomic_write(environment, original_environment.replace("IMAGE=old", "IMAGE=" + image))
+
+                    with patch.object(deploy, "inspect", side_effect=inspect), \
+                         patch.object(deploy, "command", side_effect=command), \
+                         patch.object(deploy.time, "sleep") as sleep, \
+                         patch.object(deploy, "other_containers") as finish:
+                        with self.assertRaisesRegex(deploy.DeployError, "^deployment_interrupted$"):
+                            deploy.replace_app("old", "new", write_image, switch, deploy.health, finish)
+                    self.assertTrue(fired)
+                    self.assertEqual(switched, ["new", "old"])
+                    self.assertEqual(current, "old")
+                    self.assertEqual(environment.read_bytes(), before)
+                    finish.assert_not_called()
+                    sleep.assert_not_called()
+
+    def test_real_health_transient_error_still_retries(self) -> None:
+        item = {"Image": "new", "State": {"Running": True, "OOMKilled": False}}
+        with patch.object(deploy, "inspect", return_value=item), \
+             patch.object(deploy, "command", side_effect=[deploy.DeployError("temporary"), "200", "200", ""]) as command, \
+             patch.object(deploy.time, "sleep") as sleep:
+            deploy.health("new")
+        self.assertEqual(command.call_count, 4)
+        sleep.assert_called_once_with(2)
 
     def test_app_compose_cannot_recreate_database(self):
         with patch.object(deploy, "command", return_value="") as command:
