@@ -146,7 +146,7 @@ async function fixtureResponse(route, fault, mode) {
   const path = new URL(route.request().url()).pathname;
   const expiry = "2030-01-01T00:00:00.000Z";
   if (path === "/") {
-    const html = `<button ${fault === "no-handler" ? "" : 'onclick="start()"'} ${fault === "slow-action" ? "disabled" : ""}>${MODES[mode]}</button><script>
+    const html = `<meta charset="utf-8"><button ${fault === "no-handler" ? "" : 'onclick="start()"'} ${fault === "slow-action" ? "disabled" : ""}>${MODES[mode]}</button><script>
       async function start() {
         globalThis.__gmFixtureProbe.startCalled = true;
         const r = await fetch('/api/workspaces', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'${mode}'})});
