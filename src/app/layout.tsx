@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import "./responsive.css";
 import { Navigation } from "../components/Navigation";
+import { DiagnosticProvider } from "../components/RequestDiagnostics";
 
 const pretendard = localFont({
   src: "../../public/fonts/PretendardVariable.woff2",
@@ -25,7 +26,7 @@ export default function Layout({ children }: { readonly children: ReactNode }) {
         </a>
         <Navigation />
         <main id="main" tabIndex={-1}>
-          {children}
+          <DiagnosticProvider>{children}</DiagnosticProvider>
         </main>
         <footer>
           <span>원본 → 검수 매뉴얼 → 근거 답변</span>

@@ -1,9 +1,19 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { http, message } from "../lib/client";
+import { requestDiagnostic } from "../lib/request-diagnostic";
+import { RequestDiagnostics, useRequestDiagnostics } from "./RequestDiagnostics";
 export function Start() {
+  const { record, reset } = useRequestDiagnostics();
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -11,26 +21,38 @@ export function Start() {
   async function verifySession(expiresAt: string) {
     setBusy(true);
     setError("");
+    let status: number | undefined;
     try {
+      const response = await http.get("/api/session", { cache: "no-store", timeout: 10000 });
+      status = response.status;
       z.object({ role: z.literal("owner"), expiresAt: z.literal(expiresAt) }).parse(
-        await http.get("/api/session", { cache: "no-store", timeout: 10000 }).json(),
+        await response.json(),
       );
-      router.push("/manuals");
-    } catch {
+      if (mounted.current) {
+        record(requestDiagnostic("session", undefined, status));
+        router.push("/manuals");
+      }
+    } catch (failure) {
+      if (mounted.current) record(requestDiagnostic("session", failure, status));
       setError("작업 공간은 생성됐지만 이 브라우저에서 세션을 확인하지 못했습니다.");
       setBusy(false);
     }
   }
   async function start(mode: "blank" | "example") {
+    reset();
     setBusy(true);
     setError("");
+    let status: number | undefined;
     try {
-      const workspace = z
-        .object({ expiresAt: z.iso.datetime() })
-        .parse(await http.post("/api/workspaces", { json: { mode } }).json());
+      const response = await http.post("/api/workspaces", { json: { mode } });
+      status = response.status;
+      const workspace = z.object({ expiresAt: z.iso.datetime() }).parse(await response.json());
+      if (!mounted.current) return;
+      record(requestDiagnostic("create", undefined, status));
       setCreated(workspace.expiresAt);
       await verifySession(workspace.expiresAt);
     } catch (e) {
+      if (mounted.current) record(requestDiagnostic("create", e, status));
       setError(await message(e));
       setBusy(false);
     }
@@ -88,6 +110,7 @@ export function Start() {
             </button>
           </div>
         )}
+        {error && <RequestDiagnostics />}
       </section>
       <ol className="workflow" aria-label="매뉴얼 작성 과정">
         {[
