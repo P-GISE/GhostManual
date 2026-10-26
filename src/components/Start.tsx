@@ -8,8 +8,10 @@ import { RequestDiagnostics, useRequestDiagnostics } from "./RequestDiagnostics"
 export function Start() {
   const { record, reset } = useRequestDiagnostics();
   const mounted = useRef(false);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     mounted.current = true;
+    setReady(true);
     return () => {
       mounted.current = false;
     };
@@ -77,13 +79,17 @@ export function Start() {
         <h2>어떤 업무를 남길까요?</h2>
         <p>방문자별 임시 공간에서 업무 문서를 정리합니다.</p>
         <div className="start-actions">
-          <button type="button" disabled={busy || created !== null} onClick={() => start("blank")}>
+          <button
+            type="button"
+            disabled={!ready || busy || created !== null}
+            onClick={() => start("blank")}
+          >
             빈 공간 시작
           </button>
           <button
             type="button"
             className="secondary"
-            disabled={busy || created !== null}
+            disabled={!ready || busy || created !== null}
             onClick={() => start("example")}
           >
             합성 예제 열기
