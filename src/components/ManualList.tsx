@@ -1,18 +1,14 @@
 "use client";
 import { HTTPError } from "ky";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import {
-  http,
-  type Manual,
-  manualSchema,
-  message,
-  read,
-  type Source,
-  sourceSchema,
-} from "../lib/client";
+import { http, type Manual, manualSchema, message, type Source, sourceSchema } from "../lib/client";
+import { type RequestStage, requestDiagnostic } from "../lib/request-diagnostic";
+import { RequestDiagnostics, useRequestDiagnostics } from "./RequestDiagnostics";
 export function ManualList() {
+  const { record } = useRequestDiagnostics();
+  const mounted = useRef(false);
   const [manuals, setManuals] = useState<Manual[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [busy, setBusy] = useState(true);
@@ -39,10 +35,23 @@ export function ManualList() {
   const load = useCallback(async () => {
     setBusy(true);
     setLoadError(null);
+    async function diagnosedRead<T>(stage: RequestStage, path: string, schema: z.ZodType<T>) {
+      let status: number | undefined;
+      try {
+        const response = await http.get(path);
+        status = response.status;
+        const value = schema.parse(await response.json());
+        if (mounted.current) record(requestDiagnostic(stage, undefined, status));
+        return value;
+      } catch (failure) {
+        if (mounted.current) record(requestDiagnostic(stage, failure, status));
+        throw failure;
+      }
+    }
     try {
       const [m, s] = await Promise.all([
-        read("/api/manuals", z.array(manualSchema)),
-        read("/api/sources", z.array(sourceSchema)),
+        diagnosedRead("manuals", "/api/manuals", z.array(manualSchema)),
+        diagnosedRead("sources", "/api/sources", z.array(sourceSchema)),
       ]);
       setManuals(m);
       setSources(s);
@@ -54,9 +63,13 @@ export function ManualList() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [record]);
   useEffect(() => {
+    mounted.current = true;
     void load();
+    return () => {
+      mounted.current = false;
+    };
   }, [load]);
   async function remove() {
     setDeleting(true);
@@ -75,6 +88,7 @@ export function ManualList() {
         <p className="error" role="alert">
           {loadError.message}
         </p>
+        <RequestDiagnostics />
         {loadError.unauthorized ? (
           <p className="help">
             이 브라우저에서 작업 공간을 확인할 수 없습니다. 앱 안에서 연 경우 메뉴에서 Safari 또는

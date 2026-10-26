@@ -46,10 +46,13 @@ jobs:
       - run: npm run db:migrate
       - run: npm run test:integration
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
+      # shortcut: use ubuntu-24.04 Chromium libraries; install explicit dependencies if the runner changes.
+      - run: npx playwright install chromium
       - run: npm run test:e2e
       - name: Verify workspace session handoff without database writes
         run: npx playwright test --config playwright.session.config.ts --reporter=line
+      - name: Verify HTTPS cookie transport and cached Next navigation
+        run: npx playwright test --config playwright.transport.config.ts --reporter=line
       - run: npm run test:accessibility
       - name: Build deployment image without credentials
         run: docker build --label org.opencontainers.image.revision=${{ github.sha }} -t ghostmanual:${{ github.sha }} .
