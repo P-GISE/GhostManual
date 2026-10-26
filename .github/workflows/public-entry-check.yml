@@ -1,0 +1,49 @@
+name: One-off public entry check
+on:
+  push:
+    branches: [codex/ghost-public-entry-check-20261026]
+    paths:
+      - scripts/public-entry-check.mjs
+      - .github/workflows/public-entry-check.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ghostmanual-one-off-public-entry-20261026
+  cancel-in-progress: false
+jobs:
+  public-entry:
+    if: >-
+      github.repository == 'P-GISE/GhostManual' &&
+      github.ref == 'refs/heads/codex/ghost-public-entry-check-20261026' &&
+      github.run_attempt == 1 &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, webkit]
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --ipc=host
+    env:
+      CI: "true"
+      DEBUG: ""
+      PWDEBUG: "0"
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      PUBLIC_ENTRY_APPROVED: four-synthetic-spaces
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.20.0
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check syntax and local synthetic harness
+        run: |
+          node --check scripts/public-entry-check.mjs
+          node scripts/public-entry-check.mjs --self-test '${{ matrix.engine }}'
+      - name: Check two anonymous public entry paths without retries
+        run: node scripts/public-entry-check.mjs '${{ matrix.engine }}'
