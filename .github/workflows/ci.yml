@@ -46,7 +46,8 @@ jobs:
       - run: npm run db:migrate
       - run: npm run test:integration
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
+      # shortcut: use ubuntu-24.04 Chromium libraries; install explicit dependencies if the runner changes.
+      - run: npx playwright install chromium
       - run: npm run test:e2e
       - name: Verify workspace session handoff without database writes
         run: npx playwright test --config playwright.session.config.ts --reporter=line
