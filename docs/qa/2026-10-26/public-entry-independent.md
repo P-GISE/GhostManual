@@ -6,6 +6,8 @@
 
 제품/API/운영 설정은 변경하지 않는다. 사용자 컴퓨터나 외부 Chromium의 성공을 지인의 성공으로 확대하지 않는다. 2026-10-26 13:58 iPhone Safari 오류는 최신 진단 배포 전의 관측이며 실제 기기의 iOS/Safari 버전은 미확인이다.
 
+후속 offline 실행 `40303176102`(소스 `96265b8`)에서 Chromium은 통과했고 WebKit은 `reason=none resource=none attempts=0 approved_sent=0 fixture_allowed=0`이었다. 생성 POST가 route까지 도달하지 않아 이번 실패를 XHR resource 분류 차단으로 설명할 수 없다. 공개 job은 skipped였다. 이제 합성 fixture에만 ready/callable/called/wrapped, click 완료 여부, allowlist JS/action 오류 종류를 추가했다. 오류 원문을 읽거나 출력하지 않고 추측으로 fetch 제한을 완화하지 않는다.
+
 GitHub 표준 `ubuntu-24.04` 호스팅 runner에서 Chromium 기본 데스크톱 프로필·고유 User-Agent와 WebKit의 iPhone 13 화면·터치 프로필을 각각 실행한다. Chromium을 Google Chrome 전체 제품과 동일하다고 부르지 않으며 WebKit도 **실제 iPhone Safari 또는 지인의 기기 재현은 아니다.** GitHub 호스팅 토폴로지를 근거로 사용자 PC와 다른 실행 네트워크를 사용한다. 외부 IP 확인 서비스를 호출하거나 IP·메일·전화번호를 수집하지 않는다. 우회 프록시·stealth·User-Agent 임의 변경은 사용하지 않는다.
 
 ## 현재 실행 차단과 후속 검토
@@ -39,6 +41,8 @@ lock의 `playwright`, `@playwright/test`는 1.63.0이다. 공식 [Playwright Doc
 ## 로컬 검증과 한계
 
 `node scripts/public-entry-check.mjs --self-test chromium`은 실제 로컬 Chrome에서 두 종류의 검사를 한다. 첫 7개는 route 합성 응답으로 빈 공간·합성 예제 성공, 쿠키 없음, session401, manuals401, 생성 JSON 오류, 중복 POST 차단을 확인한다. 이어 실제 loopback HTTP 서버 두 개로 307/308×동일/다른 Origin의 POST 4개와 정적 자원/페이지 이동 8개에서 후속 요청 0을 확인한다. 비API 응답의 쿠키 주입 차단, 실제 native POST201→HttpOnly 쿠키→session200, 중복 POST 및 XHR POST 차단도 확인한다. 후자의 테스트는 실제 HTTP이며 HTTPS Secure 쿠키 검증으로 확대하지 않는다.
+
+합성 fixture 진단 회귀 2개를 더해 총9개가 됐다. 의도적 script 구문 오류는 ready/callable/called=no·wrapped=yes·js_error=syntax, click handler 누락은 ready/callable=yes·called=no·wrapped=yes·js_error=none으로 구분하고 둘 다 attempts0을 확인한다. 진단은 click을 재시도하거나 준비될 때까지 추가 대기하지 않으므로 원래 시점을 숨기지 않는다. 정상 공개 페이지에는 fixture flag를 주입하거나 읽지 않는다.
 
 CI에서는 `--self-test chromium`과 `--self-test webkit`만 각 preflight matrix 엔진에서 실행한다. 양쪽 성공 이후에도 현재 공개 job은 비활성화되어 있다. 로컬 WebKit은 미실행이다. 이번 offline-only 수정 과정의 사이트 요청은 0회이며 실제 앱 UI/DB/TLS를 검증한 것으로 표시하지 않는다. 초기 RED, 리디렉션 결함의 실제 HTTP RED 및 수정 후 전체 GREEN, 추가 진단의 RED/GREEN은 작업 폴더 `.omo/evidence/public-entry/`에 보존한다.
 

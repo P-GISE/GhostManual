@@ -66,14 +66,19 @@ function budget(mode, origin = ORIGIN) {
 async function installTransport(context, mode, options = {}) {
   const limits = budget(mode, options.origin ?? ORIGIN);
   const { request } = await import("playwright");
-  await context.addInitScript(() => {
-    const nativeFetch = globalThis.fetch.bind(globalThis);
-    Object.defineProperty(globalThis, "fetch", {
-      value: (input, init) => nativeFetch(input, { ...init, redirect: "error" }),
-      writable: false,
-      configurable: false,
-    });
-  });
+  await context.addInitScript(
+    ({ probe }) => {
+      if (probe) globalThis.__gmFixtureProbe = { fetchWrapped: false };
+      const nativeFetch = globalThis.fetch.bind(globalThis);
+      Object.defineProperty(globalThis, "fetch", {
+        value: (input, init) => nativeFetch(input, { ...init, redirect: "error" }),
+        writable: false,
+        configurable: false,
+      });
+      if (probe) globalThis.__gmFixtureProbe.fetchWrapped = true;
+    },
+    { probe: Boolean(options.fixture) },
+  );
   await context.route("**/*", async (route) => {
     const current = route.request();
     if (!limits.allow(current)) return route.abort();
@@ -141,8 +146,9 @@ async function fixtureResponse(route, fault, mode) {
   const path = new URL(route.request().url()).pathname;
   const expiry = "2030-01-01T00:00:00.000Z";
   if (path === "/") {
-    const html = `<button onclick="start()">${MODES[mode]}</button><script>
+    const html = `<button ${fault === "no-handler" ? "" : 'onclick="start()"'}>${MODES[mode]}</button><script>
       async function start() {
+        globalThis.__gmFixtureProbe.startCalled = true;
         const r = await fetch('/api/workspaces', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'${mode}'})});
         if (${fault === "duplicate"}) await fetch('/api/workspaces', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'blank'})}).catch(()=>{});
         await r.json();
@@ -152,8 +158,17 @@ async function fixtureResponse(route, fault, mode) {
         const lists = await Promise.all([fetch('/api/manuals'),fetch('/api/sources')]);
         if(lists.every(r=>r.status===200)) document.body.innerHTML='<h1>업무 문서함</h1>${mode === "blank" ? "<h3>아직 매뉴얼이 없습니다.</h3>" : '<label for="search">매뉴얼 제목 검색</label><input type="search" id="search">'}';
       }
+      globalThis.__gmFixtureProbe ??= {};
+      globalThis.__gmFixtureProbe.ready = true;
     </script>`;
-    return route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: html });
+    return route.fulfill({
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      body:
+        fault === "script-syntax"
+          ? html.replace("async function start()", "async function ()")
+          : html,
+    });
   }
   if (path === "/api/workspaces") {
     const headers =
@@ -200,6 +215,20 @@ async function runCase(browser, profile, engine, mode, options = {}) {
   let stage = "anonymous";
   let status = 0;
   let passed = true;
+  let page;
+  let click = "pending";
+  let jsError = "none";
+  let actionError = "none";
+  const errorCategory = (error) =>
+    new Map([
+      ["SyntaxError", "syntax"],
+      ["ReferenceError", "reference"],
+      ["TypeError", "type"],
+      ["RangeError", "range"],
+      ["SecurityError", "security"],
+      ["TimeoutError", "timeout"],
+      ["Error", "generic"],
+    ]).get(error?.name) ?? "other";
   const record = (ok) => {
     passed &&= ok;
     emit(
@@ -212,7 +241,11 @@ async function runCase(browser, profile, engine, mode, options = {}) {
   };
   try {
     require((await context.cookies()).length === 0);
-    const page = await context.newPage();
+    page = await context.newPage();
+    if (options.fixture)
+      page.on("pageerror", (error) => {
+        if (jsError === "none") jsError = errorCategory(error);
+      });
     page.setDefaultTimeout(timeout);
     page.setDefaultNavigationTimeout(timeout);
     stage = "home";
@@ -238,6 +271,7 @@ async function runCase(browser, profile, engine, mode, options = {}) {
     stage = "create";
     status = 0;
     await page.getByRole("button", { name: MODES[mode], exact: true }).click();
+    click = "completed";
     const creation = await created;
     status = creation?.status() ?? 0;
     require(status === 201);
@@ -291,9 +325,25 @@ async function runCase(browser, profile, engine, mode, options = {}) {
       await page.getByRole("searchbox", { name: "매뉴얼 제목 검색", exact: true }).waitFor();
     }
     require((await page.locator("[role=alert].error").count()) === 0);
-  } catch {
+  } catch (error) {
+    if (options.fixture) actionError = errorCategory(error);
+    if (click === "pending" && stage === "create") click = "failed";
     record(false);
   } finally {
+    if (options.fixture) {
+      const probe = await page
+        ?.evaluate(() => ({
+          ready: globalThis.__gmFixtureProbe?.ready === true,
+          callable: typeof globalThis.start === "function",
+          called: globalThis.__gmFixtureProbe?.startCalled === true,
+          wrapped: globalThis.__gmFixtureProbe?.fetchWrapped === true,
+        }))
+        .catch(() => null);
+      const flag = (value) => (probe ? (value ? "yes" : "no") : "unknown");
+      emit(
+        `fixture_probe engine=${engine} mode=${mode} ready=${flag(probe?.ready)} callable=${flag(probe?.callable)} called=${flag(probe?.called)} wrapped=${flag(probe?.wrapped)} click=${click} js_error=${jsError} action_error=${actionError}`,
+      );
+    }
     stage = "request_budget";
     status = 0;
     record(limits.valid());
@@ -542,6 +592,13 @@ async function selfTest(engine) {
       assert.ok(lines.some((line) => line.startsWith("public_guard ")));
       assert.ok(
         lines.some((line) =>
+          line.startsWith(
+            `fixture_probe engine=${engine} mode=${mode} ready=yes callable=yes called=yes wrapped=yes click=completed `,
+          ),
+        ),
+      );
+      assert.ok(
+        lines.some((line) =>
           line.endsWith(
             `attempts=${fault === "duplicate" ? 2 : 1} approved_sent=0 fixture_allowed=1`,
           ),
@@ -566,6 +623,9 @@ async function selfTest(engine) {
             /^public_entry engine=(chromium|webkit) mode=(blank|example) stage=[a-z_]+ status=\d{1,3} result=(pass|fail)$/.test(
               line,
             ) ||
+            /^fixture_probe engine=(chromium|webkit) mode=(blank|example) ready=(yes|no|unknown) callable=(yes|no|unknown) called=(yes|no|unknown) wrapped=(yes|no|unknown) click=(pending|completed|failed) js_error=(none|syntax|reference|type|range|security|timeout|generic|other) action_error=(none|syntax|reference|type|range|security|timeout|generic|other)$/.test(
+              line,
+            ) ||
             /^public_guard engine=(chromium|webkit) mode=(blank|example) phase=(synthetic|public) reason=(none|method|payload|duplicate|api_path|api_resource|api_navigation|api_frame|read_redirect|read_cookie|read_error|unknown) resource=(none|fetch|xhr|document|other|unknown) attempts=\d+ approved_sent=\d+ fixture_allowed=\d+$/.test(
               line,
             ),
@@ -573,7 +633,26 @@ async function selfTest(engine) {
       );
       assert.ok(lines.every((line) => !line.includes("synthetic-private-cookie")));
     }
-    process.stdout.write("public_entry_self_test scenarios=7 result=pass\n");
+    for (const fault of ["script-syntax", "no-handler"]) {
+      const lines = [];
+      assert.equal(
+        await runCase(browser, profile, engine, "blank", {
+          fixture: fault,
+          emit: (line) => lines.push(line),
+          timeout: 2000,
+        }),
+        false,
+      );
+      const expected =
+        fault === "script-syntax"
+          ? "ready=no callable=no called=no wrapped=yes click=completed js_error=syntax"
+          : "ready=yes callable=yes called=no wrapped=yes click=completed js_error=none";
+      assert.ok(lines.some((line) => line.includes(expected)));
+      assert.ok(
+        lines.some((line) => line.endsWith("attempts=0 approved_sent=0 fixture_allowed=0")),
+      );
+    }
+    process.stdout.write("public_entry_self_test scenarios=9 result=pass\n");
     await redirectTests(browser, profile);
   } finally {
     await browser.close();
