@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for a verified GhostManual production update
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=2min
+RandomizedDelaySec=15s
+Unit=ghostmanual-deploy.service
+
+[Install]
+WantedBy=timers.target

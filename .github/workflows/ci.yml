@@ -5,7 +5,10 @@ on:
 permissions:
   contents: read
 jobs:
+  security:
+    uses: ./.github/workflows/security-gate.yml
   verify:
+    needs: ["security"]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
@@ -27,8 +30,10 @@ jobs:
       AI_ENABLED: "false"
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24.20.0
           cache: npm
@@ -36,18 +41,25 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - name: Verify app-only deployment guards
+        run: python3 scripts/test_deploy_poll.py
       - run: npm run db:migrate
       - run: npm run test:integration
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
+      # shortcut: use ubuntu-24.04 Chromium libraries; install explicit dependencies if the runner changes.
+      - run: npx playwright install chromium
       - run: npm run test:e2e
+      - name: Verify workspace session handoff without database writes
+        run: npx playwright test --config playwright.session.config.ts --reporter=line
+      - name: Verify HTTPS cookie transport and cached Next navigation
+        run: npx playwright test --config playwright.transport.config.ts --reporter=line
       - run: npm run test:accessibility
       - name: Build deployment image without credentials
-        run: docker build -t ghostmanual:${{ github.sha }} .
+        run: docker build --label org.opencontainers.image.revision=${{ github.sha }} -t ghostmanual:${{ github.sha }} .
       - name: Export verified deployment image
         run: docker save ghostmanual:${{ github.sha }} | gzip > ghostmanual-image.tar.gz
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ghostmanual-image-${{ github.sha }}
           path: ghostmanual-image.tar.gz
-          retention-days: 1
+          retention-days: 7

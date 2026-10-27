@@ -14,6 +14,42 @@ const SourceViewSchema = z.object({
   createdAt: z.date(),
 });
 export type SourceView = z.infer<typeof SourceViewSchema>;
+async function assertSourceWrite(
+  db: DbClient,
+  ctx: SessionContext,
+  input: SourceInput,
+  creating: boolean,
+) {
+  // assertSession already locks this workspace row until the write commits.
+  const usage = await db.query<Record<string, unknown>>(
+    `SELECT (SELECT count(*) FROM sources WHERE workspace_id=$1) AS sources,
+      count(*) AS revisions, COALESCE(sum(octet_length(title)+octet_length(text)),0) AS bytes,
+      count(*) FILTER (WHERE created_at>now()-interval '1 minute') AS recent
+      FROM source_revisions WHERE workspace_id=$1`,
+    [ctx.workspaceId],
+  );
+  const count = z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+  const totals = z
+    .object({ sources: count, revisions: count, bytes: count, recent: count })
+    .parse(usage.rows[0]);
+  const incoming = Buffer.byteLength(input.title, "utf8") + Buffer.byteLength(input.text, "utf8");
+  if (
+    (creating && totals.sources >= 50) ||
+    totals.revisions >= 200 ||
+    totals.bytes + incoming > 2 * 1024 * 1024
+  )
+    throw new AppError(
+      "storage_quota",
+      429,
+      "작업 공간의 자료 보관 한도에 도달했습니다. 새 작업 공간을 이용하세요.",
+    );
+  if (totals.recent >= 20)
+    throw new AppError(
+      "source_write_limit",
+      429,
+      "자료 저장이 너무 빠릅니다. 잠시 후 다시 시도하세요.",
+    );
+}
 export function paragraphs(text: string) {
   return text
     .split(/\n\s*\n/)
@@ -37,6 +73,7 @@ export async function createSource(ctx: SessionContext, input: SourceInput): Pro
   const parsed = SourceInputSchema.parse(input);
   return transaction(async (db) => {
     await assertSession(db, ctx, true);
+    await assertSourceWrite(db, ctx, parsed, true);
     const id = newId();
     await db.query("INSERT INTO sources(id,workspace_id,revision) VALUES($1,$2,1)", [
       id,
@@ -67,6 +104,7 @@ export async function updateSource(
     const old = await sourceInTransaction(db, ctx, id);
     if (old.revision !== expectedRevision)
       throw new AppError("conflict", 409, "자료가 변경됐습니다. 새 버전을 확인하세요.");
+    await assertSourceWrite(db, ctx, parsed, false);
     await db.query("UPDATE sources SET revision=revision+1 WHERE id=$1", [id]);
     await db.query(
       "INSERT INTO source_revisions(id,workspace_id,source_id,revision,title,text) VALUES($1,$2,$3,$4,$5,$6)",
