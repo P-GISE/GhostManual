@@ -1,8 +1,11 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { signup, verifyEmail } from "../../src/lib/accounts.ts";
+import { deleteAccount, login, logout, signup, verifyEmail } from "../../src/lib/accounts.ts";
 import { pool } from "../../src/lib/db.ts";
+import { listManuals } from "../../src/lib/manuals.ts";
 import { limitRequest } from "../../src/lib/rate-limit.ts";
 import { requireSession, tokenHash } from "../../src/lib/session.ts";
+import { createSource, getSource } from "../../src/lib/sources.ts";
+import { exampleSource } from "../fixtures/manual-example.ts";
 import { mailsTo, uniqueEmail, useFileMail, verificationToken } from "./mail-helper.ts";
 
 let mail = "";
@@ -90,4 +93,46 @@ it("limits verification resends per IP and hour", async () => {
   const same = request();
   for (let i = 0; i < 5; i++) await limitRequest(same, "resend");
   await expect(limitRequest(same, "resend")).rejects.toMatchObject({ httpStatus: 429 });
+});
+async function verifiedUser(name = "사용자") {
+  const email = uniqueEmail();
+  await signup({ email, name, password });
+  await verifyEmail(verificationToken(mail, email));
+  return email;
+}
+it("login requires verified email and correct password", async () => {
+  const email = uniqueEmail();
+  await signup({ email, name: "로그인", password });
+  await expect(login(email, password)).rejects.toMatchObject({ httpStatus: 403 });
+  await verifyEmail(verificationToken(mail, email));
+  const wrong = await login(email, "wrong password 1").catch((e: unknown) => e);
+  const missing = await login(uniqueEmail(), password).catch((e: unknown) => e);
+  expect(wrong).toMatchObject({ httpStatus: 401 });
+  expect(missing).toMatchObject({ httpStatus: 401, message: (wrong as Error).message });
+  const session = await login(` ${email.toUpperCase()} `, password);
+  expect((await requireSession(session.token)).role).toBe("owner");
+});
+it("users cannot read each other's documents", async () => {
+  const a = await requireSession((await login(await verifiedUser("A"), password)).token);
+  const b = await requireSession((await login(await verifiedUser("B"), password)).token);
+  expect(a.workspaceId).not.toBe(b.workspaceId);
+  const source = await createSource(a, exampleSource);
+  await expect(getSource(b, source.id)).rejects.toMatchObject({ httpStatus: 404 });
+  expect(await listManuals(b)).toEqual([]);
+});
+it("logout invalidates the session", async () => {
+  const session = await login(await verifiedUser(), password);
+  await logout(await requireSession(session.token));
+  await expect(requireSession(session.token)).rejects.toMatchObject({ httpStatus: 401 });
+});
+it("deleting the account removes workspace and sessions", async () => {
+  const email = await verifiedUser();
+  const ctx = await requireSession((await login(email, password)).token);
+  await createSource(ctx, exampleSource);
+  await deleteAccount(ctx);
+  const left = await pool.query<{ users: number; workspaces: number; sessions: number }>(
+    "SELECT (SELECT count(*)::int FROM users WHERE email=$1) AS users,(SELECT count(*)::int FROM workspaces WHERE id=$2) AS workspaces,(SELECT count(*)::int FROM sessions WHERE workspace_id=$2) AS sessions",
+    [email, ctx.workspaceId],
+  );
+  expect(left.rows[0]).toEqual({ users: 0, workspaces: 0, sessions: 0 });
 });

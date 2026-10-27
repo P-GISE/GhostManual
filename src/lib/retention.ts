@@ -4,7 +4,7 @@ import { AppError } from "./errors.ts";
 import { assertSession } from "./session.ts";
 import type { SessionContext } from "./types.ts";
 
-async function removeWorkspace(db: DbClient, id: string) {
+export async function removeWorkspace(db: DbClient, id: string) {
   await db.query("DELETE FROM operation_requests WHERE workspace_id=$1", [id]);
   await db.query("DELETE FROM question_runs WHERE workspace_id=$1", [id]);
   await db.query("UPDATE manuals SET published_version=NULL WHERE workspace_id=$1", [id]);

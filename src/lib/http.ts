@@ -61,6 +61,11 @@ export async function requestSession(request: Request) {
 export function sessionCookie(token: string, expiresAt: Date, reader = false) {
   return `${reader ? "gm_reader" : "gm_owner"}=${token}; Path=/; HttpOnly; SameSite=Lax; Expires=${expiresAt.toUTCString()}${process.env["APP_ORIGIN"]?.startsWith("https:") ? "; Secure" : ""}`;
 }
+export function clearSessionCookies(response: Response) {
+  response.headers.append("Set-Cookie", "gm_owner=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+  response.headers.append("Set-Cookie", "gm_reader=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+  return response;
+}
 export async function endpoint(request: Request, work: () => Promise<Response>) {
   try {
     if (!["GET", "HEAD"].includes(request.method)) checkOrigin(request);

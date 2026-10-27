@@ -2,9 +2,10 @@ import { z } from "zod";
 import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
 import { sendMail } from "./mailer.ts";
-import { hashPassword } from "./passwords.ts";
-import { freshToken, tokenHash } from "./session.ts";
-import { newId } from "./types.ts";
+import { hashPassword, verifyPassword } from "./passwords.ts";
+import { removeWorkspace } from "./retention.ts";
+import { assertSession, freshToken, tokenHash } from "./session.ts";
+import { newId, type SessionContext } from "./types.ts";
 
 export const EmailSchema = z.string().trim().toLowerCase().pipe(z.email().max(254));
 export const PasswordSchema = z.string().min(8).max(128);
@@ -97,5 +98,57 @@ export async function verifyEmail(token: string) {
       [row.user_id],
     );
     return openUserSession(db, row.user_id);
+  });
+}
+const badCredentials = () =>
+  new AppError("invalid_credentials", 401, "이메일 또는 비밀번호가 올바르지 않습니다.");
+// Spend the same hashing time when the account does not exist.
+const decoyHash = hashPassword("decoy password for timing");
+export async function login(rawEmail: string, password: string) {
+  const email = EmailSchema.safeParse(rawEmail);
+  return transaction(async (db) => {
+    const found = email.success
+      ? await db.query<{
+          id: string;
+          password_hash: string | null;
+          email_verified_at: Date | null;
+        }>("SELECT id,password_hash,email_verified_at FROM users WHERE email=$1", [email.data])
+      : null;
+    const user = found?.rows[0];
+    const valid = await verifyPassword(password, user?.password_hash ?? (await decoyHash));
+    if (!user?.password_hash || !valid) throw badCredentials();
+    if (!user.email_verified_at)
+      throw new AppError("unverified", 403, "이메일 인증을 먼저 완료하세요.");
+    return openUserSession(db, user.id);
+  });
+}
+export async function logout(ctx: SessionContext): Promise<void> {
+  await transaction(async (db) => {
+    await db.query("DELETE FROM sessions WHERE id=$1", [ctx.sessionId]);
+  });
+}
+export async function currentUser(ctx: SessionContext) {
+  return transaction(async (db) => {
+    await assertSession(db, ctx, true);
+    const result = await db.query<{ name: string; email: string }>(
+      "SELECT u.name,u.email FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1",
+      [ctx.sessionId],
+    );
+    const user = result.rows[0];
+    if (!user) throw new AppError("unauthorized", 401, "로그인이 필요합니다.");
+    return user;
+  });
+}
+export async function deleteAccount(ctx: SessionContext): Promise<void> {
+  await transaction(async (db) => {
+    await assertSession(db, ctx, true);
+    const result = await db.query<{ user_id: string | null }>(
+      "SELECT user_id FROM sessions WHERE id=$1",
+      [ctx.sessionId],
+    );
+    const userId = result.rows[0]?.user_id;
+    if (!userId) throw new AppError("unauthorized", 401, "로그인이 필요합니다.");
+    await removeWorkspace(db, ctx.workspaceId);
+    await db.query("DELETE FROM users WHERE id=$1", [userId]);
   });
 }
