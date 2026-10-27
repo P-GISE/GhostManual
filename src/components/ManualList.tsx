@@ -1,21 +1,21 @@
 "use client";
+import { HTTPError } from "ky";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import {
-  http,
-  type Manual,
-  manualSchema,
-  message,
-  read,
-  type Source,
-  sourceSchema,
-} from "../lib/client";
+import { http, type Manual, manualSchema, message, type Source, sourceSchema } from "../lib/client";
+import { type RequestStage, requestDiagnostic } from "../lib/request-diagnostic";
+import { RequestDiagnostics, useRequestDiagnostics } from "./RequestDiagnostics";
 export function ManualList() {
+  const { record } = useRequestDiagnostics();
+  const mounted = useRef(false);
   const [manuals, setManuals] = useState<Manual[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState<{ message: string; unauthorized: boolean } | null>(
+    null,
+  );
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const visibleManuals = manuals.filter(
@@ -32,18 +32,45 @@ export function ManualList() {
             : !m.publishedVersion && !m.needsReview)),
   );
   const [deleting, setDeleting] = useState(false);
+  const load = useCallback(async () => {
+    setBusy(true);
+    setLoadError(null);
+    async function diagnosedRead<T>(stage: RequestStage, path: string, schema: z.ZodType<T>) {
+      let status: number | undefined;
+      try {
+        const response = await http.get(path);
+        status = response.status;
+        const value = schema.parse(await response.json());
+        if (mounted.current) record(requestDiagnostic(stage, undefined, status));
+        return value;
+      } catch (failure) {
+        if (mounted.current) record(requestDiagnostic(stage, failure, status));
+        throw failure;
+      }
+    }
+    try {
+      const [m, s] = await Promise.all([
+        diagnosedRead("manuals", "/api/manuals", z.array(manualSchema)),
+        diagnosedRead("sources", "/api/sources", z.array(sourceSchema)),
+      ]);
+      setManuals(m);
+      setSources(s);
+    } catch (e) {
+      setLoadError({
+        message: await message(e),
+        unauthorized: e instanceof HTTPError && e.response.status === 401,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }, [record]);
   useEffect(() => {
-    Promise.all([
-      read("/api/manuals", z.array(manualSchema)),
-      read("/api/sources", z.array(sourceSchema)),
-    ])
-      .then(([m, s]) => {
-        setManuals(m);
-        setSources(s);
-      })
-      .catch(async (e) => setError(await message(e)))
-      .finally(() => setBusy(false));
-  }, []);
+    mounted.current = true;
+    void load();
+    return () => {
+      mounted.current = false;
+    };
+  }, [load]);
   async function remove() {
     setDeleting(true);
     try {
@@ -53,6 +80,30 @@ export function ManualList() {
       setError(await message(e));
       setDeleting(false);
     }
+  }
+  if (loadError) {
+    return (
+      <section className="panel">
+        <h1>업무 문서함</h1>
+        <p className="error" role="alert">
+          {loadError.message}
+        </p>
+        <RequestDiagnostics />
+        {loadError.unauthorized ? (
+          <p className="help">
+            이 브라우저에서 작업 공간을 확인할 수 없습니다. 앱 안에서 연 경우 메뉴에서 Safari 또는
+            Chrome으로 이 주소를 열고 시작해 주세요. 브라우저마다 작업 공간이 다를 수 있습니다.
+          </p>
+        ) : (
+          <button type="button" disabled={busy} onClick={load}>
+            문서함 다시 불러오기
+          </button>
+        )}
+        <p>
+          <Link href="/">시작 화면으로</Link>
+        </p>
+      </section>
+    );
   }
   return (
     <>

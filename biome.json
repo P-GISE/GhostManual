@@ -12,7 +12,8 @@
       "!!.codegraph",
       "!!docs/requirements",
       "!!next-env.d.ts",
-      "!!.superpowers"
+      "!!.superpowers",
+      "!!.omo"
     ]
   },
   "formatter": {
