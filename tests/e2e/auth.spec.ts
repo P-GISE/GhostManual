@@ -34,7 +34,9 @@ test("wrong password and unverified accounts get plain guidance", async ({ page 
   await page.getByLabel("이메일").fill(email);
   await page.getByLabel("비밀번호").fill("wrong password 1");
   await page.getByRole("button", { name: "로그인", exact: true }).click();
-  await expect(page.locator("[role=alert].error")).toContainText("이메일 또는 비밀번호가 올바르지 않습니다.");
+  await expect(page.locator("[role=alert].error")).toContainText(
+    "이메일 또는 비밀번호가 올바르지 않습니다.",
+  );
 });
 
 test("used verification link sends the visitor to login with guidance", async ({ page }) => {
