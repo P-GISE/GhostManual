@@ -6,6 +6,19 @@
 기준: [상세 설계](superpowers/specs/2026-10-03-ghostmanual-mvp-design.md).
 공통 성공 응답은 JSON, 오류는 {error:{code,message,retryable}}다. HTTP 200의 insufficient는 정상적인 근거 부족이며 장애와 다르다.
 
+## 2026-10-22 파일 버전 제안 계약 (미구현)
+[파일 버전 설계 10절](superpowers/specs/2026-10-22-file-version-questions-design.md)의 제안이다. 아래 현재 계약에는 아직 없다.
+| Method / Endpoint | 인증·입력 | 응답 |
+|---|---|---|
+| POST /api/sources | O, multipart에 허용 형식 파일 | 201 버전1·기본 질문 |
+| POST /api/sources/:id/revisions | O, multipart 같은 형식 파일·expectedRevision | 201 새 revision·질문, xlsx는 변경 묶음 포함. 불일치 409, 다른 형식 422 |
+| GET /api/sources/:id/revisions | O 또는 해당 R | 200 버전 목록 |
+| GET /api/sources/:id/revisions/:revision | O 또는 해당 R | 200 변경 묶음·질문·답변·미리보기 |
+| GET /api/sources/:id/revisions/:revision/file | O 또는 해당 R | 200 원본 파일, attachment |
+| PATCH /api/sources/:id/revisions/:revision/answers | O, 질문별 답변·건너뜀 | 200 저장 결과 |
+GET·PUT /api/workspace/uploader(O)로 이름·팀을 조회·저장한다. 값이 없으면 업로드를 422로 거부한다. 버전 응답에는 업로더 이름·팀·시각을 포함한다.
+기존 PATCH /api/sources/:id는 텍스트 자료에만 허용한다.
+
 ## 현재 HTTP 계약
 O=소유자 쿠키, R=공유 독자 쿠키. 모든 ID는 서버의 workspace 범위에서 검증한다.
 | Method / Endpoint | 인증·입력 | 응답 | 사용 화면·제안 파일 |
