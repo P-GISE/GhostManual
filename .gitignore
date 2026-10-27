@@ -5,6 +5,8 @@ node_modules/
 !.env.example
 .codegraph/
 .superpowers/
+.omo/
+__pycache__/
 coverage/
 playwright-report/
 test-results/
