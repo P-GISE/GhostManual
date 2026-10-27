@@ -2,7 +2,9 @@ import { createHmac } from "node:crypto";
 import { z } from "zod";
 import { transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
-export async function limitRequest(request: Request, kind: "workspace" | "ai") {
+
+const limits = { workspace: 10, ai: 30, login: 20, signup: 10, resend: 5 } as const;
+export async function limitRequest(request: Request, kind: keyof typeof limits) {
   const secret = process.env["IP_HASH_SECRET"];
   if (!secret || secret.length < 32)
     throw new AppError("configuration", 503, "서비스 설정을 확인하고 있습니다.");
@@ -20,7 +22,7 @@ export async function limitRequest(request: Request, kind: "workspace" | "ai") {
       "INSERT INTO rate_counters(key,attempts,expires_at) VALUES($1,1,now()+interval '24 hours') ON CONFLICT(key) DO UPDATE SET attempts=rate_counters.attempts+1 RETURNING attempts",
       [key],
     );
-    if (z.number().parse(result.rows[0]?.["attempts"]) > (kind === "workspace" ? 10 : 30))
+    if (z.number().parse(result.rows[0]?.["attempts"]) > limits[kind])
       throw new AppError("rate_limit", 429, "요청이 너무 많습니다. 잠시 후 다시 시도하세요.");
   });
 }

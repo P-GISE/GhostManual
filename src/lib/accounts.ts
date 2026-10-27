@@ -1,0 +1,101 @@
+import { z } from "zod";
+import { type DbClient, transaction } from "./db.ts";
+import { AppError } from "./errors.ts";
+import { sendMail } from "./mailer.ts";
+import { hashPassword } from "./passwords.ts";
+import { freshToken, tokenHash } from "./session.ts";
+import { newId } from "./types.ts";
+
+export const EmailSchema = z.string().trim().toLowerCase().pipe(z.email().max(254));
+export const PasswordSchema = z.string().min(8).max(128);
+export const SignupSchema = z.strictObject({
+  email: EmailSchema,
+  name: z.string().trim().min(1).max(40),
+  password: PasswordSchema,
+});
+const SESSION_DAYS = 30;
+const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
+const invalidLink = () =>
+  new AppError("invalid_link", 400, "인증 링크가 만료됐거나 이미 사용됐습니다.");
+
+export async function openUserSession(db: DbClient, userId: string) {
+  const existing = await db.query<{ id: string }>("SELECT id FROM workspaces WHERE user_id=$1", [
+    userId,
+  ]);
+  let workspaceId = existing.rows[0]?.id;
+  if (!workspaceId) {
+    workspaceId = newId();
+    await db.query(
+      "INSERT INTO workspaces(id,mode,user_id,expires_at) VALUES($1,'blank',$2,'infinity')",
+      [workspaceId, userId],
+    );
+  }
+  const token = freshToken();
+  const result = await db.query<Record<string, unknown>>(
+    `INSERT INTO sessions(id,workspace_id,token_hash,role,user_id,expires_at) VALUES($1,$2,$3,'owner',$4,now()+interval '${SESSION_DAYS} days') RETURNING expires_at`,
+    [newId(), workspaceId, tokenHash(token), userId],
+  );
+  return { token, expiresAt: z.date().parse(result.rows[0]?.["expires_at"]) };
+}
+async function issueVerification(db: DbClient, userId: string) {
+  await db.query(
+    "UPDATE email_verifications SET used_at=now() WHERE user_id=$1 AND used_at IS NULL",
+    [userId],
+  );
+  const token = freshToken();
+  await db.query(
+    "INSERT INTO email_verifications(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,now()+interval '24 hours')",
+    [newId(), userId, tokenHash(token)],
+  );
+  return token;
+}
+async function mailVerification(email: string, token: string) {
+  const link = `${process.env["APP_ORIGIN"]}/api/auth/verify?token=${token}`;
+  await sendMail(
+    email,
+    "GhostManual 이메일 인증",
+    `GhostManual 가입을 완료하려면 24시간 안에 아래 링크를 여세요.\n\n${link}\n\n가입하지 않았다면 이 메일을 무시하세요.`,
+  );
+}
+export async function signup(input: z.input<typeof SignupSchema>): Promise<void> {
+  const { email, name, password } = SignupSchema.parse(input);
+  const passwordHash = await hashPassword(password);
+  const token = await transaction(async (db) => {
+    const result = await db.query<{ id: string }>(
+      "INSERT INTO users(id,email,name,password_hash) VALUES($1,$2,$3,$4) ON CONFLICT(email) DO UPDATE SET name=EXCLUDED.name,password_hash=EXCLUDED.password_hash WHERE users.email_verified_at IS NULL RETURNING id",
+      [newId(), email, name, passwordHash],
+    );
+    const userId = result.rows[0]?.id;
+    return userId ? issueVerification(db, userId) : null;
+  });
+  if (token) await mailVerification(email, token);
+}
+export async function resendVerification(input: string): Promise<void> {
+  const email = EmailSchema.parse(input);
+  const token = await transaction(async (db) => {
+    const user = await db.query<{ id: string }>(
+      "SELECT id FROM users WHERE email=$1 AND email_verified_at IS NULL FOR UPDATE",
+      [email],
+    );
+    const userId = user.rows[0]?.id;
+    return userId ? issueVerification(db, userId) : null;
+  });
+  if (token) await mailVerification(email, token);
+}
+export async function verifyEmail(token: string) {
+  if (!tokenPattern.test(token)) throw invalidLink();
+  return transaction(async (db) => {
+    const found = await db.query<{ id: string; user_id: string }>(
+      "SELECT id,user_id FROM email_verifications WHERE token_hash=$1 AND used_at IS NULL AND expires_at>now() FOR UPDATE",
+      [tokenHash(token)],
+    );
+    const row = found.rows[0];
+    if (!row) throw invalidLink();
+    await db.query("UPDATE email_verifications SET used_at=now() WHERE id=$1", [row.id]);
+    await db.query(
+      "UPDATE users SET email_verified_at=COALESCE(email_verified_at,now()) WHERE id=$1",
+      [row.user_id],
+    );
+    return openUserSession(db, row.user_id);
+  });
+}
