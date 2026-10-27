@@ -50,10 +50,11 @@ const next = spawn(
 );
 async function api(request, scenario) {
   const pathname = new URL(request.url).pathname;
-  if (pathname === "/api/workspaces")
+  if (pathname === "/api/auth/login")
     return endpoint(request, async () => {
       const input = await request.json();
-      if (!["blank", "example"].includes(input.mode)) return json({}, 422);
+      if (typeof input.email !== "string" || typeof input.password !== "string")
+        return json({}, 422);
       const token = freshToken(),
         expires = new Date(Date.now() + 86400000);
       sessions.set(tokenHash(token), {
@@ -64,7 +65,7 @@ async function api(request, scenario) {
         share_id: null,
         manual_id: null,
       });
-      const result = json({ expiresAt: expires }, 201);
+      const result = json({ expiresAt: expires });
       if (scenario !== "missing-cookie")
         result.headers.set("Set-Cookie", sessionCookie(token, expires));
       return result;

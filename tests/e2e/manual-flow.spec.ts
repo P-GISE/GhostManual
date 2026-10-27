@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { loadExample, signUpAndVerify } from "./helpers";
 
 test("prewritten example can be reviewed shared and searched without pretending live AI", async ({
   page,
@@ -6,8 +7,8 @@ test("prewritten example can be reviewed shared and searched without pretending 
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/");
-  await page.getByRole("button", { name: "합성 예제 열기" }).click();
+  await signUpAndVerify(page);
+  await loadExample(page);
   await expect(page.getByRole("heading", { name: "업무 문서함" })).toBeVisible();
   await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
   await expect(page.getByText("미리 작성된 합성 예제", { exact: true })).toBeVisible();
@@ -45,8 +46,7 @@ test("prewritten example can be reviewed shared and searched without pretending 
   );
 });
 test("source input remains available when AI is disabled", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "빈 공간 시작" }).click();
+  await signUpAndVerify(page);
   await page.getByRole("link", { name: "새 자료 등록" }).click();
   await page.getByLabel("자료 제목").fill("HTML 원문 안전 표시");
   const text =
@@ -64,8 +64,8 @@ test("source input remains available when AI is disabled", async ({ page }) => {
 });
 
 test("owner can revise a source then re-review the same manual", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "합성 예제 열기" }).click();
+  await signUpAndVerify(page);
+  await loadExample(page);
   await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
   await expect(
     page.getByRole("heading", { name: "신입 구성원 업무 계정 발급", level: 1 }),

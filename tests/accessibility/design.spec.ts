@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-for (const path of ["/sources/new", "/ask", "/terms", "/privacy"]) {
+for (const path of ["/login", "/signup", "/sources/new", "/ask", "/terms", "/privacy"]) {
   test(`reading and form columns have equal outer margins: ${path}`, async ({ page }) => {
     await page.goto(path);
     const column = page.locator("main > .prose");
@@ -61,6 +61,7 @@ test("workspace and document surfaces remain aligned with synthetic API data", a
       [`/api/sources/${source.id}`]: source,
       [`/api/manuals/${manual.id}/versions`]: [manual.published],
       "/api/shares": [],
+      "/api/me": { name: "합성 사용자", email: "synthetic@example.com" },
       "/api/session":
         request.headers()["x-ghost-role"] === "reader"
           ? { role: "reader", manualId: manual.id, expiresAt: "2026-10-25T00:00:00Z" }
@@ -106,6 +107,8 @@ test("workspace and document surfaces remain aligned with synthetic API data", a
 test("public entry and form screens are visually captured", async ({ page }, testInfo) => {
   for (const [name, path] of [
     ["home", "/"],
+    ["login", "/login"],
+    ["signup", "/signup"],
     ["register", "/sources/new"],
     ["ask", "/ask"],
     ["terms", "/terms"],
@@ -122,10 +125,10 @@ test("public entry and form screens are visually captured", async ({ page }, tes
   }
 });
 
-test("starting a workspace is visible without scrolling", async ({ page }) => {
+test("starting is visible without scrolling", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => document.fonts.ready);
-  await expect(page.getByRole("button", { name: "빈 공간 시작", exact: true })).toBeInViewport({
+  await expect(page.getByRole("link", { name: "시작하기", exact: true })).toBeInViewport({
     ratio: 1,
   });
 });

@@ -1,12 +1,13 @@
 import { expect, test } from "@playwright/test";
+import { loadExample, signUpAndVerify } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await page.setExtraHTTPHeaders({ "CF-Connecting-IP": "198.51.100.30" });
 });
 
 test("title and review filters combine without hiding original sources", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "합성 예제 열기" }).click();
+  await signUpAndVerify(page);
+  await loadExample(page);
   await page.getByLabel("매뉴얼 제목 검색").fill("없는문서");
   await expect(page.getByText("검색·상태 조건에 맞는 매뉴얼이 없습니다.")).toBeVisible();
   await expect(page.getByRole("heading", { name: /원본 자료/ })).toBeVisible();
@@ -27,8 +28,8 @@ test("publication comparison shows changed fields while a later draft remains pr
   page,
   browser,
 }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "합성 예제 열기" }).click();
+  await signUpAndVerify(page);
+  await loadExample(page);
   await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
   async function publish(version: number) {
     await page.getByLabel("원본과 업무 내용을 확인했습니다.").check();

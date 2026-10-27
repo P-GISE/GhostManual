@@ -43,7 +43,7 @@ export function SourceForm() {
       <h1>업무 자료 등록</h1>
       <p className="muted">업무 경험을 자유롭게 적어 주세요. 원본은 매뉴얼의 근거로 보존됩니다.</p>
       <div className="notice">
-        임시 작업 공간의 자료는 만료 후 접근할 수 없습니다. AI 기능이 활성화되면 필요한 원문이 외부
+        자료는 내 문서함에 계정을 삭제할 때까지 보관됩니다. AI 기능이 활성화되면 필요한 원문이 외부
         AI 제공자에게 전송될 수 있습니다.
       </div>
       <form onSubmit={submit}>

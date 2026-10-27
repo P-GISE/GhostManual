@@ -1,7 +1,7 @@
 import { HTTPError, NetworkError, TimeoutError } from "ky";
 import { ZodError } from "zod";
 
-export type RequestStage = "create" | "session" | "manuals" | "sources";
+export type RequestStage = "create" | "login" | "session" | "manuals" | "sources";
 export type RequestDiagnostic = {
   stage: RequestStage;
   status: number | null;

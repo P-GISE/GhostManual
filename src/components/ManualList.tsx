@@ -74,11 +74,22 @@ export function ManualList() {
   async function remove() {
     setDeleting(true);
     try {
-      await http.delete("/api/workspace");
+      await http.delete("/api/me");
       window.location.assign("/");
     } catch (e) {
       setError(await message(e));
       setDeleting(false);
+    }
+  }
+  async function loadExample() {
+    setBusy(true);
+    setError("");
+    try {
+      await http.post("/api/workspace/example");
+      await load();
+    } catch (e) {
+      setError(await message(e));
+      setBusy(false);
     }
   }
   if (loadError) {
@@ -91,8 +102,8 @@ export function ManualList() {
         <RequestDiagnostics />
         {loadError.unauthorized ? (
           <p className="help">
-            이 브라우저에서 작업 공간을 확인할 수 없습니다. 앱 안에서 연 경우 메뉴에서 Safari 또는
-            Chrome으로 이 주소를 열고 시작해 주세요. 브라우저마다 작업 공간이 다를 수 있습니다.
+            이 브라우저에서 로그인 상태를 확인할 수 없습니다. 앱 안에서 연 경우 메뉴에서 Safari 또는
+            Chrome으로 이 주소를 열고 다시 로그인해 주세요.
           </p>
         ) : (
           <button type="button" disabled={busy} onClick={load}>
@@ -100,7 +111,11 @@ export function ManualList() {
           </button>
         )}
         <p>
-          <Link href="/">시작 화면으로</Link>
+          {loadError.unauthorized ? (
+            <Link href="/login?next=%2Fmanuals">로그인 화면으로</Link>
+          ) : (
+            <Link href="/">시작 화면으로</Link>
+          )}
         </p>
       </section>
     );
@@ -109,7 +124,7 @@ export function ManualList() {
     <>
       <div className="section-heading">
         <div>
-          <span className="eyebrow">작업 공간</span>
+          <span className="eyebrow">내 문서함</span>
           <h1>업무 문서함</h1>
           <p className="muted">원본과 검수한 매뉴얼을 따로 관리합니다.</p>
         </div>
@@ -134,7 +149,12 @@ export function ManualList() {
         <div className="panel">
           <h3>아직 매뉴얼이 없습니다.</h3>
           <p className="muted">업무 자료를 등록한 다음 매뉴얼을 작성하고 검수하세요.</p>
-          <Link href="/sources/new">첫 자료 등록하기</Link>
+          <div className="actions">
+            <Link href="/sources/new">첫 자료 등록하기</Link>
+            <button type="button" className="secondary" disabled={busy} onClick={loadExample}>
+              예제 불러오기
+            </button>
+          </div>
         </div>
       )}
       {!busy && manuals.length > 0 && (
@@ -197,14 +217,14 @@ export function ManualList() {
         </div>
       ))}
       <details>
-        <summary>작업 공간 삭제</summary>
-        <p>원본, 매뉴얼, 답변과 공유 권한을 모두 삭제합니다. 복구할 수 없습니다.</p>
+        <summary>계정 삭제</summary>
+        <p>계정과 원본, 매뉴얼, 답변, 공유 권한을 모두 삭제합니다. 복구할 수 없습니다.</p>
         <label className="check">
           <input type="checkbox" onChange={(e) => setDeleting(e.target.checked)} />
           삭제할 내용을 확인했습니다.
         </label>
         <button type="button" className="secondary" disabled={!deleting} onClick={remove}>
-          작업 공간 영구 삭제
+          계정과 문서 영구 삭제
         </button>
       </details>
     </>

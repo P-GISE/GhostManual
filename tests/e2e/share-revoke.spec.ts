@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { loadExample, signUpAndVerify } from "./helpers";
 
 test("owner can revoke an existing share after reloading the manual", async ({ page, browser }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "합성 예제 열기" }).click();
+  await signUpAndVerify(page);
+  await loadExample(page);
   await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
   await page.getByLabel("원본과 업무 내용을 확인했습니다.").check();
   await page.getByLabel("미확인 항목이 남아 있음을 확인했습니다.").check();
@@ -26,8 +27,8 @@ test("owner can revoke an existing share after reloading the manual", async ({ p
 test("owner sees edited draft separately from the published immutable version", async ({
   page,
 }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "합성 예제 열기" }).click();
+  await signUpAndVerify(page);
+  await loadExample(page);
   await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
   await page.getByLabel("원본과 업무 내용을 확인했습니다.").check();
   await page.getByLabel("미확인 항목이 남아 있음을 확인했습니다.").check();

@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { e2eMailDir } from "./tests/e2e/mail-dir";
 export default defineConfig({
   testDir: "./tests/e2e",
   globalSetup: "./tests/reset-db.ts",
@@ -39,6 +40,8 @@ export default defineConfig({
     env: {
       APP_ORIGIN: "http://localhost:3200",
       AI_ENABLED: "false",
+      MAIL_DRIVER: "file",
+      MAIL_DIR: e2eMailDir,
       TRUST_CLOUDFLARE: "true",
       IP_HASH_SECRET: "test-only-rate-secret-00000000000000000000",
       DATABASE_URL:
