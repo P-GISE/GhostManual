@@ -386,6 +386,85 @@ li {
   font-size: 12px;
   margin: 2px 0 0;
 }
+.landing {
+  display: grid;
+  gap: 40px;
+  margin-top: 48px;
+  padding-top: 40px;
+  border-top: 1px solid var(--border);
+}
+.landing h2 {
+  margin: 0 0 18px;
+}
+.feature-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.feature-list > li {
+  margin: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.feature-list h3 {
+  margin: 10px 0 4px;
+  font-size: 15px;
+}
+.feature-list p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.badge.upcoming {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--muted);
+}
+.change-example {
+  max-width: 760px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.change-example-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.change-line {
+  margin: 14px 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.change-line del {
+  color: var(--muted);
+}
+.change-line ins {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+.change-example dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 14px;
+}
+.change-example dt {
+  color: var(--muted);
+}
+.change-example dd {
+  margin: 0;
+}
 
 .panel > h2:first-child,
 .panel > h3:first-child {
