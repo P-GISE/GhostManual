@@ -7,7 +7,7 @@ import { createWorkspace, requireSession } from "../../src/lib/session.ts";
 import { exchangeShare, getSharing, setSharing } from "../../src/lib/shares.ts";
 import { createSource, getSource, updateSource } from "../../src/lib/sources.ts";
 import { exampleDraft, exampleSource } from "../fixtures/manual-example.ts";
-import { signedInUser, setupFileMail } from "./mail-helper.ts";
+import { setupFileMail, signedInUser } from "./mail-helper.ts";
 
 let mail = "";
 beforeAll(() => {
