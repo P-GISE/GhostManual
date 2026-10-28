@@ -56,12 +56,24 @@ function ResendVerification({ email }: { readonly email: string }) {
   );
 }
 
+function GoogleButton({ next }: { readonly next: string }) {
+  return (
+    <p>
+      <a className="button secondary" href={`/api/auth/google?next=${encodeURIComponent(next)}`}>
+        구글로 계속하기
+      </a>
+    </p>
+  );
+}
+
 export function LoginForm({
   next,
   notice,
+  google,
 }: {
   readonly next: string;
   readonly notice: string | null;
+  readonly google: boolean;
 }) {
   const { record, reset } = useRequestDiagnostics();
   const { mounted, ready } = useReady();
@@ -157,6 +169,7 @@ export function LoginForm({
         </p>
       )}
       {unverified && <ResendVerification email={email} />}
+      {google && <GoogleButton next={next} />}
       {loggedIn && error && (
         <div>
           <p className="help">
@@ -176,7 +189,7 @@ export function LoginForm({
   );
 }
 
-export function SignupForm() {
+export function SignupForm({ google }: { readonly google: boolean }) {
   const { ready } = useReady();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -261,6 +274,7 @@ export function SignupForm() {
           {error}
         </p>
       )}
+      {google && <GoogleButton next="/manuals" />}
       <p className="help">
         이미 계정이 있나요? <Link href="/login">로그인</Link>
       </p>
