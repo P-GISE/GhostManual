@@ -2,6 +2,7 @@ import { z } from "zod";
 import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
 import { sendMail } from "./mailer.ts";
+import { safeNextPath } from "./next-path.ts";
 import { hashPassword, verifyPassword } from "./passwords.ts";
 import { removeWorkspace } from "./retention.ts";
 import { assertSession, freshToken, tokenHash } from "./session.ts";
@@ -13,6 +14,7 @@ export const SignupSchema = z.strictObject({
   email: EmailSchema,
   name: z.string().trim().min(1).max(40),
   password: PasswordSchema,
+  next: z.string().max(2048).optional(),
 });
 const SESSION_DAYS = 30;
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
@@ -50,8 +52,10 @@ async function issueVerification(db: DbClient, userId: string) {
   );
   return token;
 }
-async function mailVerification(email: string, token: string) {
-  const link = `${process.env["APP_ORIGIN"]}/api/auth/verify?token=${token}`;
+// A same-site destination (such as a shared manual) survives signup and verification.
+async function mailVerification(email: string, token: string, next: string | undefined) {
+  const destination = safeNextPath(next);
+  const link = `${process.env["APP_ORIGIN"]}/api/auth/verify?token=${token}${destination === "/manuals" ? "" : `&next=${encodeURIComponent(destination)}`}`;
   await sendMail(
     email,
     "GhostManual 이메일 인증",
@@ -59,7 +63,7 @@ async function mailVerification(email: string, token: string) {
   );
 }
 export async function signup(input: z.input<typeof SignupSchema>): Promise<void> {
-  const { email, name, password } = SignupSchema.parse(input);
+  const { email, name, password, next } = SignupSchema.parse(input);
   const passwordHash = await hashPassword(password);
   const token = await transaction(async (db) => {
     const result = await db.query<{ id: string }>(
@@ -69,7 +73,7 @@ export async function signup(input: z.input<typeof SignupSchema>): Promise<void>
     const userId = result.rows[0]?.id;
     return userId ? issueVerification(db, userId) : null;
   });
-  if (token) await mailVerification(email, token);
+  if (token) await mailVerification(email, token, next);
   // Same screen either way; only the mailbox owner learns the account already exists.
   else
     await sendMail(
@@ -82,7 +86,7 @@ ${process.env["APP_ORIGIN"]}/login
 Google 계정으로 가입했다면 로그인 화면의 "Google 계정으로 계속하기"를 사용하세요. 가입을 시도하지 않았다면 이 메일을 무시하세요.`,
     );
 }
-export async function resendVerification(input: string): Promise<void> {
+export async function resendVerification(input: string, next?: string): Promise<void> {
   const email = EmailSchema.parse(input);
   const token = await transaction(async (db) => {
     const user = await db.query<{ id: string }>(
@@ -92,7 +96,7 @@ export async function resendVerification(input: string): Promise<void> {
     const userId = user.rows[0]?.id;
     return userId ? issueVerification(db, userId) : null;
   });
-  if (token) await mailVerification(email, token);
+  if (token) await mailVerification(email, token, next);
 }
 export async function verifyEmail(token: string) {
   if (!tokenPattern.test(token)) throw invalidLink();

@@ -22,14 +22,19 @@ function useReady() {
   return { mounted, ready };
 }
 
-function ResendVerification({ email }: { readonly email: string }) {
+// Keeps a destination (such as a shared manual) when moving between login and signup.
+function withNext(path: string, next: string) {
+  return next === "/manuals" ? path : `${path}?next=${encodeURIComponent(next)}`;
+}
+
+function ResendVerification({ email, next }: { readonly email: string; readonly next: string }) {
   const [state, setState] = useState<"idle" | "busy" | "sent">("idle");
   const [error, setError] = useState("");
   async function resend() {
     setState("busy");
     setError("");
     try {
-      await http.post("/api/auth/verify/resend", { json: { email } });
+      await http.post("/api/auth/verify/resend", { json: { email, next } });
       setState("sent");
     } catch (e) {
       setError(await message(e));
@@ -240,7 +245,7 @@ export function LoginForm({
           {error}
         </p>
       )}
-      {unverified && <ResendVerification email={email} />}
+      {unverified && <ResendVerification email={email} next={next} />}
       {loggedIn && error && (
         <div>
           <p className="help">
@@ -254,13 +259,13 @@ export function LoginForm({
       )}
       {error && <RequestDiagnostics />}
       <p className="help">
-        계정이 없나요? <Link href="/signup">가입하기</Link>
+        계정이 없나요? <Link href={withNext("/signup", next)}>가입하기</Link>
       </p>
     </section>
   );
 }
 
-export function SignupForm({ google }: { readonly google: boolean }) {
+export function SignupForm({ google, next }: { readonly google: boolean; readonly next: string }) {
   const { ready } = useReady();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -278,7 +283,7 @@ export function SignupForm({ google }: { readonly google: boolean }) {
     setBusy(true);
     setError("");
     try {
-      await http.post("/api/auth/signup", { json: { name, email, password } });
+      await http.post("/api/auth/signup", { json: { name, email, password, next } });
       setSentTo(email);
     } catch (e) {
       setError(await message(e));
@@ -296,7 +301,7 @@ export function SignupForm({ google }: { readonly google: boolean }) {
           {sentTo}의 받은편지함에서 링크를 열면 가입이 끝납니다. 링크는 24시간 동안 유효합니다.
           메일이 보이지 않으면 스팸함도 확인하세요.
         </p>
-        <ResendVerification email={sentTo} />
+        <ResendVerification email={sentTo} next={next} />
       </section>
     );
   return (
@@ -308,7 +313,7 @@ export function SignupForm({ google }: { readonly google: boolean }) {
           ? "Google 계정으로 바로 시작하거나, 이메일로 가입하세요. 이메일 가입은 인증 메일을 거칩니다."
           : "이메일 인증을 마치면 나만의 문서함이 만들어집니다."}
       </p>
-      {google && <GoogleButton next="/manuals" divider="이메일로 가입" />}
+      {google && <GoogleButton next={next} divider="이메일로 가입" />}
       <form method="post" onSubmit={submit}>
         <label htmlFor="signup-name">이름</label>
         <input
@@ -361,7 +366,7 @@ export function SignupForm({ google }: { readonly google: boolean }) {
         </p>
       )}
       <p className="help">
-        이미 계정이 있나요? <Link href="/login">로그인</Link>
+        이미 계정이 있나요? <Link href={withNext("/login", next)}>로그인</Link>
       </p>
     </section>
   );

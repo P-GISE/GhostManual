@@ -140,3 +140,11 @@ it("deleting the account removes workspace and sessions", async () => {
   );
   expect(left.rows[0]).toEqual({ users: 0, workspaces: 0, sessions: 0 });
 });
+it("verification mail keeps a same-site destination and drops others", async () => {
+  const email = uniqueEmail();
+  await signup({ email, name: "목적지", password, next: "/share#abc" });
+  expect(mailsTo(mail, email).at(-1)).toContain("&next=%2Fshare%23abc");
+  const other = uniqueEmail();
+  await signup({ email: other, name: "외부", password, next: "//evil.example" });
+  expect(mailsTo(mail, other).at(-1)).not.toContain("next=");
+});

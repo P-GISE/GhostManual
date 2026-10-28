@@ -1,4 +1,10 @@
 import { SignupForm } from "../../components/AuthForm";
-export default function Page() {
-  return <SignupForm google={Boolean(process.env["GOOGLE_CLIENT_ID"])} />;
+import { safeNextPath } from "../../lib/next-path";
+export default async function Page({
+  searchParams,
+}: {
+  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const { next } = await searchParams;
+  return <SignupForm google={Boolean(process.env["GOOGLE_CLIENT_ID"])} next={safeNextPath(next)} />;
 }
