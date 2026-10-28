@@ -86,3 +86,16 @@ it("only keeps same-site next paths", async () => {
   const result = await finishGoogle(await stateFrom("//evil.example"), "code", as(profile()));
   expect(result.nextPath).toBe("/manuals");
 });
+it("callback refuses a state that this browser did not start", async () => {
+  const { GET: start } = await import("../../src/app/api/auth/google/route.ts");
+  const { GET: callback } = await import("../../src/app/api/auth/google/callback/route.ts");
+  process.env["IP_HASH_SECRET"] = "test-only-rate-secret-00000000000000000000";
+  const started = await start(new Request("http://localhost:3200/api/auth/google?next=/ask"));
+  const cookie = started.headers.get("set-cookie") ?? "";
+  expect(cookie).toMatch(/^gm_oauth=[\w-]{43};.*HttpOnly/);
+  const state = new URL(started.headers.get("location") ?? "").searchParams.get("state") ?? "";
+  const url = `http://localhost:3200/api/auth/google/callback?state=${state}&code=attacker`;
+  const foreign = await callback(new Request(url));
+  expect(foreign.headers.get("location")).toBe("http://localhost:3200/login?error=google_failed");
+  expect(foreign.headers.get("set-cookie") ?? "").not.toContain("gm_owner=");
+});
