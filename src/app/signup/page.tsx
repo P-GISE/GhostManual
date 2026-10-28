@@ -9,7 +9,5 @@ export default async function Page({
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { next } = await searchParams;
-  return (
-    <SignupForm google={Boolean(process.env["GOOGLE_CLIENT_ID"])} next={safeNextPath(next)} />
-  );
+  return <SignupForm google={Boolean(process.env["GOOGLE_CLIENT_ID"])} next={safeNextPath(next)} />;
 }

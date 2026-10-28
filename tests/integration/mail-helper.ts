@@ -29,7 +29,7 @@ export async function signedInUser(dir: string) {
   const { signup, verifyEmail } = await import("../../src/lib/accounts.ts");
   const { requireSession } = await import("../../src/lib/session.ts");
   const email = uniqueEmail();
-  await signup({ email, name: "사용자", password: "correct horse 9" });
+  await signup({ email, name: "사용자", password: "correct horse 9", agreed: true });
   const session = await verifyEmail(verificationToken(dir, email));
   return { ctx: await requireSession(session.token), token: session.token };
 }

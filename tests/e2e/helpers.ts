@@ -52,10 +52,13 @@ export async function verificationLink(email: string): Promise<string> {
 export async function signUp(page: Page, email = uniqueEmail(), name = "테스트 사용자") {
   await asNewVisitor(page);
   await page.goto("/signup");
+  // Typing before hydration is reset by React, so wait until the form is live.
+  await expect(page.getByRole("button", { name: "가입하기" })).toBeEnabled();
   await page.getByLabel("이름").fill(name);
   await page.getByLabel("이메일").fill(email);
   await page.getByLabel("비밀번호", { exact: true }).fill(password);
   await page.getByLabel("비밀번호 확인", { exact: true }).fill(password);
+  await page.getByLabel("이용약관과 개인정보 안내에 동의합니다.").check();
   await page.getByRole("button", { name: "가입하기" }).click();
   await expect(page.getByText("인증 메일을 보냈습니다.")).toBeVisible();
   return email;
@@ -74,6 +77,7 @@ export async function loadExample(page: Page) {
   ).toBeVisible();
 }
 export async function logIn(page: Page, email: string) {
+  await expect(page.getByRole("button", { name: "로그인", exact: true })).toBeEnabled();
   await page.getByLabel("이메일").fill(email);
   await page.getByLabel("비밀번호", { exact: true }).fill(password);
   await page.getByRole("button", { name: "로그인", exact: true }).click();

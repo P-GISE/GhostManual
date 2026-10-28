@@ -15,6 +15,7 @@ export const SignupSchema = z.strictObject({
   name: z.string().trim().min(1).max(40),
   password: PasswordSchema,
   next: z.string().max(2048).optional(),
+  agreed: z.literal(true),
 });
 const SESSION_DAYS = 30;
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
@@ -67,7 +68,7 @@ export async function signup(input: z.input<typeof SignupSchema>): Promise<void>
   const passwordHash = await hashPassword(password);
   const token = await transaction(async (db) => {
     const result = await db.query<{ id: string }>(
-      "INSERT INTO users(id,email,name,password_hash) VALUES($1,$2,$3,$4) ON CONFLICT(email) DO UPDATE SET name=EXCLUDED.name,password_hash=EXCLUDED.password_hash WHERE users.email_verified_at IS NULL RETURNING id",
+      "INSERT INTO users(id,email,name,password_hash,terms_agreed_at) VALUES($1,$2,$3,$4,now()) ON CONFLICT(email) DO UPDATE SET name=EXCLUDED.name,password_hash=EXCLUDED.password_hash,terms_agreed_at=now() WHERE users.email_verified_at IS NULL RETURNING id",
       [newId(), email, name, passwordHash],
     );
     const userId = result.rows[0]?.id;
@@ -134,7 +135,10 @@ export async function login(rawEmail: string, password: string) {
     if (!user?.password_hash || !valid) throw badCredentials();
     if (!user.email_verified_at)
       throw new AppError("unverified", 403, "이메일 인증을 먼저 완료하세요.");
-    return openUserSession(db, user.id);
+    return {
+      ...(await openUserSession(db, user.id)),
+      termsRequired: await termsPending(db, user.id),
+    };
   });
 }
 export async function logout(ctx: SessionContext): Promise<void> {
@@ -224,4 +228,20 @@ export async function confirmPasswordReset(token: string, password: string): Pro
     );
     await db.query("DELETE FROM sessions WHERE user_id=$1", [row.user_id]);
   });
+}
+export async function agreeTerms(ctx: SessionContext): Promise<void> {
+  await transaction(async (db) => {
+    await assertSession(db, ctx, true);
+    await db.query(
+      "UPDATE users SET terms_agreed_at=COALESCE(terms_agreed_at,now()) WHERE id=(SELECT user_id FROM sessions WHERE id=$1)",
+      [ctx.sessionId],
+    );
+  });
+}
+export async function termsPending(db: DbClient, userId: string): Promise<boolean> {
+  const result = await db.query<{ pending: boolean }>(
+    "SELECT terms_agreed_at IS NULL AS pending FROM users WHERE id=$1",
+    [userId],
+  );
+  return result.rows[0]?.pending ?? true;
 }

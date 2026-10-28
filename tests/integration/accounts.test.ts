@@ -32,7 +32,7 @@ it("schema has account tables", async () => {
 });
 it("signup creates unverified user and mails a link", async () => {
   const email = uniqueEmail();
-  await signup({ email, name: "박효민", password });
+  await signup({ email, name: "박효민", password, agreed: true });
   const user = await pool.query<Record<string, unknown>>(
     "SELECT id,password_hash,email_verified_at FROM users WHERE email=$1",
     [email],
@@ -49,7 +49,7 @@ it("signup creates unverified user and mails a link", async () => {
 });
 it("verify opens an owner session once", async () => {
   const email = uniqueEmail();
-  await signup({ email, name: "인증", password });
+  await signup({ email, name: "인증", password, agreed: true });
   const token = verificationToken(mail, email);
   const session = await verifyEmail(token);
   const ctx = await requireSession(session.token);
@@ -63,7 +63,7 @@ it("verify opens an owner session once", async () => {
 });
 it("expired verification is rejected", async () => {
   const email = uniqueEmail();
-  await signup({ email, name: "만료", password });
+  await signup({ email, name: "만료", password, agreed: true });
   const token = verificationToken(mail, email);
   await pool.query(
     "UPDATE email_verifications SET expires_at=now()-interval '1 second' WHERE token_hash=$1",
@@ -73,11 +73,16 @@ it("expired verification is rejected", async () => {
 });
 it("signup does not reveal verified accounts but tells the owner by mail", async () => {
   const email = uniqueEmail();
-  await signup({ email, name: "원래", password });
+  await signup({ email, name: "원래", password, agreed: true });
   await verifyEmail(verificationToken(mail, email));
   const before = await pool.query("SELECT password_hash FROM users WHERE email=$1", [email]);
   await expect(
-    signup({ email: email.toUpperCase(), name: "다른", password: "other password 1" }),
+    signup({
+      email: email.toUpperCase(),
+      name: "다른",
+      password: "other password 1",
+      agreed: true,
+    }),
   ).resolves.toBeUndefined();
   const mails = mailsTo(mail, email);
   expect(mails).toHaveLength(2);
@@ -100,13 +105,13 @@ it("limits verification resends per IP and hour", async () => {
 });
 async function verifiedUser(name = "사용자") {
   const email = uniqueEmail();
-  await signup({ email, name, password });
+  await signup({ email, name, password, agreed: true });
   await verifyEmail(verificationToken(mail, email));
   return email;
 }
 it("login requires verified email and correct password", async () => {
   const email = uniqueEmail();
-  await signup({ email, name: "로그인", password });
+  await signup({ email, name: "로그인", password, agreed: true });
   await expect(login(email, password)).rejects.toMatchObject({ httpStatus: 403 });
   await verifyEmail(verificationToken(mail, email));
   const wrong = await login(email, "wrong password 1").catch((e: unknown) => e);
@@ -142,9 +147,9 @@ it("deleting the account removes workspace and sessions", async () => {
 });
 it("verification mail keeps a same-site destination and drops others", async () => {
   const email = uniqueEmail();
-  await signup({ email, name: "목적지", password, next: "/share#abc" });
+  await signup({ email, name: "목적지", password, next: "/share#abc", agreed: true });
   expect(mailsTo(mail, email).at(-1)).toContain("&next=%2Fshare%23abc");
   const other = uniqueEmail();
-  await signup({ email: other, name: "외부", password, next: "//evil.example" });
+  await signup({ email: other, name: "외부", password, next: "//evil.example", agreed: true });
   expect(mailsTo(mail, other).at(-1)).not.toContain("next=");
 });

@@ -9,7 +9,7 @@ export async function POST(request: Request) {
       .strictObject({ email: z.string().max(320), password: z.string().max(128) })
       .parse(await readJson(request));
     const session = await login(input.email, input.password);
-    const response = json({ expiresAt: session.expiresAt });
+    const response = json({ expiresAt: session.expiresAt, termsRequired: session.termsRequired });
     response.headers.set("Set-Cookie", sessionCookie(session.token, session.expiresAt));
     return response;
   });

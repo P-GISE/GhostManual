@@ -29,7 +29,7 @@ function resetToken(email: string) {
 }
 async function verifiedUser() {
   const email = uniqueEmail();
-  await signup({ email, name: "재설정", password });
+  await signup({ email, name: "재설정", password, agreed: true });
   const session = await verifyEmail(verificationToken(mail, email));
   return { email, session };
 }
@@ -81,7 +81,7 @@ it("rejects expired links, replaced links and short passwords", async () => {
 });
 it("verifies an unverified account through the reset link", async () => {
   const email = uniqueEmail();
-  await signup({ email, name: "미인증", password });
+  await signup({ email, name: "미인증", password, agreed: true });
   await requestPasswordReset(email);
   await confirmPasswordReset(resetToken(email), fresh);
   expect((await login(email, fresh)).token).toBeTruthy();

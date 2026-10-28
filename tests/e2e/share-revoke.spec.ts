@@ -120,6 +120,7 @@ test("a visitor without an account signs up from a shared link and lands on that
   await visitorPage.getByLabel("이메일").fill(email);
   await visitorPage.getByLabel("비밀번호", { exact: true }).fill(password);
   await visitorPage.getByLabel("비밀번호 확인", { exact: true }).fill(password);
+  await visitorPage.getByLabel("이용약관과 개인정보 안내에 동의합니다.").check();
   await visitorPage.getByRole("button", { name: "가입하기" }).click();
   await expect(visitorPage.getByText("인증 메일을 보냈습니다.")).toBeVisible();
   await visitorPage.goto(await verificationLink(email));

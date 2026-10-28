@@ -63,6 +63,7 @@ test("signup checks the repeated password and both pages can reveal it", async (
   await page.getByLabel("이메일").fill("mismatch@example.com");
   await page.getByLabel("비밀번호", { exact: true }).fill("correct horse 9");
   await page.getByLabel("비밀번호 확인", { exact: true }).fill("correct horse 8");
+  await page.getByLabel("이용약관과 개인정보 안내에 동의합니다.").check();
   await page.getByRole("button", { name: "가입하기" }).click();
   await expect(page.locator("[role=alert].error")).toContainText("비밀번호가 서로 다릅니다.");
   expect(signups).toBe(0);
@@ -109,4 +110,23 @@ test("a forgotten password is reset by mail and the new one works", async ({ pag
   await page.getByLabel("비밀번호", { exact: true }).fill(fresh);
   await page.getByRole("button", { name: "로그인", exact: true }).click();
   await expect(page).toHaveURL(/\/manuals$/);
+});
+
+test("signup cannot be sent without agreeing to the terms", async ({ page }) => {
+  let signups = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/auth/signup") signups++;
+  });
+  await page.goto("/signup");
+  await page.getByLabel("이름").fill("미동의");
+  await page.getByLabel("이메일").fill("no-consent@example.com");
+  await page.getByLabel("비밀번호", { exact: true }).fill(password);
+  await page.getByLabel("비밀번호 확인", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "가입하기" }).click();
+  await expect(page.getByLabel("이용약관과 개인정보 안내에 동의합니다.")).toBeFocused();
+  expect(signups).toBe(0);
+  await expect(page.getByRole("link", { name: "이용약관" }).first()).toHaveAttribute(
+    "href",
+    "/terms",
+  );
 });

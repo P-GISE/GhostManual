@@ -49,14 +49,17 @@ export async function readJson(request: Request): Promise<unknown> {
     throw new AppError("invalid_json", 422, "입력을 확인하세요.");
   }
 }
-export async function requestSession(request: Request) {
+export async function requestSession(
+  request: Request,
+  options: { allowPendingTerms?: boolean } = {},
+) {
   const name = request.headers.get("x-ghost-role") === "reader" ? "gm_reader" : "gm_owner";
   const cookie = request.headers
     .get("cookie")
     ?.split(";")
     .map((c) => c.trim())
     .find((c) => c.startsWith(name + "="));
-  return requireSession(cookie?.slice(name.length + 1) ?? "");
+  return requireSession(cookie?.slice(name.length + 1) ?? "", options);
 }
 export function sessionCookie(token: string, expiresAt: Date, reader = false) {
   return `${reader ? "gm_reader" : "gm_owner"}=${token}; Path=/; HttpOnly; SameSite=Lax; Expires=${expiresAt.toUTCString()}${process.env["APP_ORIGIN"]?.startsWith("https:") ? "; Secure" : ""}`;

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { openUserSession } from "./accounts.ts";
+import { openUserSession, termsPending } from "./accounts.ts";
 import { transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
 import { safeNextPath } from "./next-path.ts";
@@ -120,7 +120,7 @@ export async function finishGoogle(
           await db.query("UPDATE users SET google_sub=$2 WHERE id=$1", [userId, profile.sub]);
         else {
           await db.query(
-            "UPDATE users SET google_sub=$2,password_hash=NULL,email_verified_at=now() WHERE id=$1",
+            "UPDATE users SET google_sub=$2,password_hash=NULL,email_verified_at=now(),terms_agreed_at=NULL WHERE id=$1",
             [userId, profile.sub],
           );
           await db.query(
@@ -136,7 +136,10 @@ export async function finishGoogle(
         );
       }
     }
-    return openUserSession(db, userId);
+    return {
+      ...(await openUserSession(db, userId)),
+      termsRequired: await termsPending(db, userId),
+    };
   });
   return { ...session, nextPath: saved.next_path };
 }

@@ -200,3 +200,29 @@ for (const path of ["/login", "/signup"]) {
     await expect(page.getByText(/^또는 이메일로 (로그인|가입)$/)).toBeVisible();
   });
 }
+
+test("a first Google sign-in sees the new account and must agree before starting", async ({
+  page,
+}) => {
+  const calls = { agreed: 0, deleted: 0 };
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/me" && route.request().method() === "GET")
+      await route.fulfill({ json: { name: "구글 사용자", email: "new@example.com" } });
+    else if (path === "/api/auth/terms") {
+      calls.agreed++;
+      await route.fulfill({ json: { agreed: true } });
+    } else if (path === "/api/manuals" || path === "/api/sources")
+      await route.fulfill({ json: [] });
+    else await route.fulfill({ json: {} });
+  });
+  await page.goto("/welcome?next=%2Fmanuals");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("새 계정을 만들었습니다");
+  await expect(page.getByText("new@example.com")).toBeVisible();
+  const start = page.getByRole("button", { name: "동의하고 시작하기" });
+  await expect(start).toBeDisabled();
+  await page.getByLabel("이용약관과 개인정보 안내에 동의합니다.").check();
+  await start.click();
+  await expect(page).toHaveURL(/\/manuals$/);
+  expect(calls.agreed).toBe(1);
+});

@@ -170,12 +170,16 @@ export function LoginForm({
     try {
       const response = await http.get("/api/session", { cache: "no-store", timeout: 10000 });
       status = response.status;
-      z.object({ role: z.literal("owner"), expiresAt: z.literal(expiresAt) }).parse(
-        await response.json(),
-      );
+      const session = z
+        .object({
+          role: z.literal("owner"),
+          expiresAt: z.literal(expiresAt),
+          termsRequired: z.boolean().optional(),
+        })
+        .parse(await response.json());
       if (mounted.current) {
         record(requestDiagnostic("session", undefined, status));
-        router.push(next);
+        router.push(session.termsRequired ? withNext("/welcome", next) : next);
       }
     } catch (failure) {
       if (mounted.current) record(requestDiagnostic("session", failure, status));
@@ -274,6 +278,7 @@ export function SignupForm({ google, next }: { readonly google: boolean; readonl
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -286,7 +291,7 @@ export function SignupForm({ google, next }: { readonly google: boolean; readonl
     setBusy(true);
     setError("");
     try {
-      await http.post("/api/auth/signup", { json: { name, email, password, next } });
+      await http.post("/api/auth/signup", { json: { name, email, password, next, agreed } });
       setSentTo(email);
     } catch (e) {
       setError(await message(e));
@@ -357,6 +362,7 @@ export function SignupForm({ google, next }: { readonly google: boolean; readonl
           value={confirm}
           onChange={setConfirm}
         />
+        <TermsConsent checked={agreed} onChange={setAgreed} />
         <div className="actions">
           <button type="submit" disabled={!ready || busy}>
             가입하기
@@ -508,6 +514,108 @@ export function ResetPasswordForm() {
       <p className="help">
         <Link href="/forgot-password">재설정 메일 다시 받기</Link>
       </p>
+    </section>
+  );
+}
+
+function TermsConsent({
+  checked,
+  onChange,
+}: {
+  readonly checked: boolean;
+  readonly onChange: (value: boolean) => void;
+}) {
+  return (
+    <>
+      <label className="check">
+        <input
+          type="checkbox"
+          required
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        이용약관과 개인정보 안내에 동의합니다.
+      </label>
+      <p className="help">
+        <Link href="/terms" target="_blank">
+          이용약관
+        </Link>{" "}
+        ·{" "}
+        <Link href="/privacy" target="_blank">
+          개인정보 안내
+        </Link>{" "}
+        (새 탭)
+      </p>
+    </>
+  );
+}
+
+// First Google sign-in lands here: the account exists but cannot be used until the terms are agreed.
+export function WelcomeForm({ next }: { readonly next: string }) {
+  const { ready } = useReady();
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [agreed, setAgreed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    http
+      .get("/api/me", { cache: "no-store" })
+      .json()
+      .then((body) => setUser(z.object({ name: z.string(), email: z.string() }).parse(body)))
+      .catch(async (e) => setError(await message(e)));
+  }, []);
+  async function start(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await http.post("/api/auth/terms");
+      window.location.assign(next);
+    } catch (e) {
+      setError(await message(e));
+      setBusy(false);
+    }
+  }
+  async function leave() {
+    setBusy(true);
+    await http.delete("/api/me").catch(() => {});
+    window.location.assign("/");
+  }
+  return (
+    <section className="prose">
+      <span className="eyebrow">가입</span>
+      <h1>새 계정을 만들었습니다</h1>
+      <p>
+        {user ? (
+          <>
+            <strong>{user.name}</strong> ({user.email}) Google 계정으로 GhostManual 계정이
+            만들어졌습니다.
+          </>
+        ) : (
+          "Google 계정으로 GhostManual 계정이 만들어졌습니다."
+        )}{" "}
+        이용약관과 개인정보 안내에 동의하면 바로 시작합니다.
+      </p>
+      <form method="post" onSubmit={start}>
+        <TermsConsent checked={agreed} onChange={setAgreed} />
+        <div className="actions">
+          <button type="submit" disabled={!ready || busy || !agreed}>
+            동의하고 시작하기
+          </button>
+          <button type="button" className="secondary" disabled={!ready || busy} onClick={leave}>
+            동의하지 않고 나가기
+          </button>
+        </div>
+      </form>
+      <p className="help">
+        다른 Google 계정으로 들어오려던 거라면 "동의하지 않고 나가기"를 누르세요. 방금 만든 계정은
+        삭제됩니다.
+      </p>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
     </section>
   );
 }

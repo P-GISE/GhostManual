@@ -21,7 +21,9 @@ export async function GET(request: Request) {
       status: 303,
       headers: {
         ...responseHeaders,
-        Location: `${origin}${session.nextPath}`,
+        Location: session.termsRequired
+          ? `${origin}/welcome?next=${encodeURIComponent(session.nextPath)}`
+          : `${origin}${session.nextPath}`,
         "Set-Cookie": sessionCookie(session.token, session.expiresAt),
       },
     });

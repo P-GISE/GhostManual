@@ -34,7 +34,31 @@ export const manualSchema = z.object({
 });
 export type Source = z.infer<typeof sourceSchema>;
 export type Manual = z.infer<typeof manualSchema>;
-export const http = ky.create({ retry: 0, timeout: false, credentials: "same-origin" });
+// A signed-in account that still owes the terms agreement is sent to the consent page.
+export const http = ky.create({
+  retry: 0,
+  timeout: false,
+  credentials: "same-origin",
+  hooks: {
+    afterResponse: [
+      async ({ response }) => {
+        if (response.status !== 403 || typeof window === "undefined") return;
+        const body = await response
+          .clone()
+          .json()
+          .catch(() => null);
+        if (
+          z.object({ error: z.object({ code: z.literal("terms_required") }) }).safeParse(body)
+            .success &&
+          window.location.pathname !== "/welcome"
+        )
+          window.location.assign(
+            `/welcome?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
+          );
+      },
+    ],
+  },
+});
 export async function read<T>(path: string, schema: z.ZodType<T>, reader = false): Promise<T> {
   return schema.parse(
     await http.get(path, { headers: reader ? { "x-ghost-role": "reader" } : {} }).json(),

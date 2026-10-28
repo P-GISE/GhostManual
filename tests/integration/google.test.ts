@@ -50,7 +50,8 @@ it("creates a verified account and returns to the next path", async () => {
   const p = profile();
   const result = await finishGoogle(await stateFrom("/ask"), "code", as(p));
   expect(result.nextPath).toBe("/ask");
-  expect((await requireSession(result.token)).role).toBe("owner");
+  expect(result.termsRequired).toBe(true);
+  expect((await requireSession(result.token, { allowPendingTerms: true })).role).toBe("owner");
   const user = await pool.query(
     "SELECT google_sub,password_hash,email_verified_at IS NOT NULL AS verified FROM users WHERE email=$1",
     [p.email],
@@ -59,7 +60,7 @@ it("creates a verified account and returns to the next path", async () => {
 });
 it("links to a verified email account", async () => {
   const email = uniqueEmail();
-  await signup({ email, name: "이메일", password });
+  await signup({ email, name: "이메일", password, agreed: true });
   const first = await requireSession((await verifyEmail(verificationToken(mail, email))).token);
   const result = await finishGoogle(await stateFrom(), "code", as(profile({ email })));
   expect((await requireSession(result.token)).workspaceId).toBe(first.workspaceId);
@@ -67,7 +68,7 @@ it("links to a verified email account", async () => {
 });
 it("takes over an unverified email account and clears its password", async () => {
   const email = uniqueEmail();
-  await signup({ email, name: "선점", password });
+  await signup({ email, name: "선점", password, agreed: true });
   const p = profile({ email });
   await finishGoogle(await stateFrom(), "code", as(p));
   const user = await pool.query(
