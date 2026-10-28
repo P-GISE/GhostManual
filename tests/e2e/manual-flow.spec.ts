@@ -38,6 +38,7 @@ test("prewritten example can be reviewed shared and searched without pretending 
   await evidence.locator("summary").click();
   await expect(evidence).toContainText("신입");
   await page.getByLabel("비공개", { exact: true }).check();
+  await expect(page.getByLabel("읽기 전용 링크")).toHaveCount(0);
   await readerPage.reload();
   await expect(readerPage.getByRole("main").getByRole("alert")).toBeVisible();
   expect(errors).toEqual([]);

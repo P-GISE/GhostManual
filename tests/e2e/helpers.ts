@@ -13,6 +13,24 @@ export async function asNewVisitor(page: Page) {
   const octet = () => Math.floor(Math.random() * 250) + 1;
   await page.setExtraHTTPHeaders({ "CF-Connecting-IP": `10.${octet()}.${octet()}.${octet()}` });
 }
+export async function resetLink(email: string): Promise<string> {
+  let link: string | undefined;
+  await expect
+    .poll(() => {
+      const name = readdirSync(e2eMailDir)
+        .filter((file) => file.endsWith(`-${email}.txt`))
+        .sort()
+        .at(-1);
+      link = name
+        ? readFileSync(join(e2eMailDir, name), "utf8").match(
+            /https?:\/\/\S+\/reset-password#\S+/,
+          )?.[0]
+        : undefined;
+      return Boolean(link);
+    })
+    .toBe(true);
+  return link ?? "";
+}
 export async function verificationLink(email: string): Promise<string> {
   let link: string | undefined;
   await expect

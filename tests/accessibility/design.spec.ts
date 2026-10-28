@@ -1,6 +1,15 @@
 import { expect, test } from "@playwright/test";
 
-for (const path of ["/login", "/signup", "/sources/new", "/ask", "/terms", "/privacy"]) {
+for (const path of [
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/sources/new",
+  "/ask",
+  "/terms",
+  "/privacy",
+]) {
   test(`reading and form columns have equal outer margins: ${path}`, async ({ page }) => {
     await page.goto(path);
     const column = page.locator("main > .prose");

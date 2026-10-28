@@ -3,7 +3,7 @@ import { z } from "zod";
 import { transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
 
-const limits = { workspace: 10, ai: 30, login: 20, signup: 10, resend: 5 } as const;
+const limits = { workspace: 10, ai: 30, login: 20, signup: 10, resend: 5, reset: 5 } as const;
 export async function limitRequest(request: Request, kind: keyof typeof limits) {
   const secret = process.env["IP_HASH_SECRET"];
   if (!secret || secret.length < 32)

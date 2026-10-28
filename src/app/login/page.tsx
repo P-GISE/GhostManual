@@ -8,17 +8,19 @@ const notices: Record<string, string> = {
   google_failed: "구글 로그인을 완료하지 못했습니다. 다시 시도하세요.",
   google_unavailable: "구글 로그인이 아직 설정되지 않았습니다. 이메일로 로그인하세요.",
   rate_limit: "요청이 너무 많습니다. 잠시 후 다시 시도하세요.",
+  password_reset: "비밀번호를 바꿨습니다. 새 비밀번호로 로그인하세요.",
 };
 export default async function Page({
   searchParams,
 }: {
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { error, next } = await searchParams;
+  const { error, next, notice } = await searchParams;
+  const key = typeof notice === "string" ? notice : error;
   return (
     <LoginForm
       next={safeNextPath(next)}
-      notice={(typeof error === "string" && notices[error]) || null}
+      notice={(typeof key === "string" && notices[key]) || null}
       google={Boolean(process.env["GOOGLE_CLIENT_ID"])}
     />
   );

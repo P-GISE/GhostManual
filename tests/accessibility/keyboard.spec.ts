@@ -1,6 +1,14 @@
 import { expect, test } from "@playwright/test";
 
-for (const path of ["/", "/login", "/signup", "/sources/new", "/terms", "/privacy"]) {
+for (const path of [
+  "/",
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/sources/new",
+  "/terms",
+  "/privacy",
+]) {
   test(`skip link moves keyboard focus into content: ${path}`, async ({ page }) => {
     await page.goto(path);
     await expect(page.locator("html")).toHaveAttribute("lang", "ko");

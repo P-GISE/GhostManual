@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { logIn, signUp, signUpAndVerify, verificationLink } from "./helpers";
+import { logIn, password, resetLink, signUp, signUpAndVerify, verificationLink } from "./helpers";
 
 test("sign up, verify by mail, log out and log back in", async ({ page }) => {
   await page.goto("/");
@@ -82,4 +82,31 @@ test("signup checks the repeated password and both pages can reveal it", async (
   await page.goto("/login");
   await page.getByRole("button", { name: "비밀번호 보기", exact: true }).click();
   await expect(page.getByLabel("비밀번호", { exact: true })).toHaveAttribute("type", "text");
+});
+
+test("a forgotten password is reset by mail and the new one works", async ({ page }) => {
+  const email = await signUpAndVerify(page);
+  await page.getByRole("button", { name: "로그아웃" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/login");
+  await page.getByRole("link", { name: "비밀번호를 잊으셨나요?" }).click();
+  await expect(page).toHaveURL(/\/forgot-password$/);
+  await page.getByLabel("이메일").fill(email);
+  await page.getByRole("button", { name: "재설정 메일 받기" }).click();
+  await expect(page.getByText("재설정 메일을 보냈습니다.", { exact: false })).toBeVisible();
+  await page.goto(await resetLink(email));
+  await expect(page).toHaveURL(/\/reset-password$/);
+  const fresh = "brand new pass 7";
+  await page.getByLabel("새 비밀번호", { exact: true }).fill(fresh);
+  await page.getByLabel("새 비밀번호 확인", { exact: true }).fill(fresh);
+  await page.getByRole("button", { name: "비밀번호 바꾸기" }).click();
+  await expect(page).toHaveURL(/\/login\?notice=password_reset$/);
+  await expect(page.getByText("비밀번호를 바꿨습니다.", { exact: false })).toBeVisible();
+  await page.getByLabel("이메일").fill(email);
+  await page.getByLabel("비밀번호", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(page.locator("[role=alert].error")).toContainText("올바르지 않습니다");
+  await page.getByLabel("비밀번호", { exact: true }).fill(fresh);
+  await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(page).toHaveURL(/\/manuals$/);
 });

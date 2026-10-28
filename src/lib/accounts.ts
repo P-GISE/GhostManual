@@ -167,3 +167,61 @@ export async function deleteAccount(ctx: SessionContext): Promise<void> {
     await db.query("DELETE FROM users WHERE id=$1", [userId]);
   });
 }
+const invalidReset = () =>
+  new AppError("invalid_link", 400, "재설정 링크가 만료됐거나 이미 사용됐습니다.");
+export async function requestPasswordReset(input: string): Promise<void> {
+  const email = EmailSchema.safeParse(input);
+  if (!email.success) return;
+  const token = await transaction(async (db) => {
+    const user = await db.query<{ id: string }>("SELECT id FROM users WHERE email=$1 FOR UPDATE", [
+      email.data,
+    ]);
+    const userId = user.rows[0]?.id;
+    if (!userId) return null;
+    await db.query(
+      "UPDATE password_resets SET used_at=now() WHERE user_id=$1 AND used_at IS NULL",
+      [userId],
+    );
+    const fresh = freshToken();
+    await db.query(
+      "INSERT INTO password_resets(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,now()+interval '1 hour')",
+      [newId(), userId, tokenHash(fresh)],
+    );
+    return fresh;
+  });
+  // Unknown addresses get no mail, and the screen says the same thing either way.
+  if (token)
+    await sendMail(
+      email.data,
+      "GhostManual 비밀번호 재설정",
+      `비밀번호를 다시 정하려면 1시간 안에 아래 링크를 여세요.\n\n${process.env["APP_ORIGIN"]}/reset-password#${token}\n\n요청하지 않았다면 이 메일을 무시하세요. 비밀번호는 바뀌지 않습니다.`,
+    );
+}
+export async function confirmPasswordReset(token: string, password: string): Promise<void> {
+  if (!PasswordSchema.safeParse(password).success)
+    throw new AppError("invalid_input", 422, "비밀번호는 8자 이상 128자 이하로 입력하세요.");
+  if (!tokenPattern.test(token)) throw invalidReset();
+  const passwordHash = await hashPassword(password);
+  await transaction(async (db) => {
+    const found = await db.query<{ id: string; user_id: string }>(
+      "SELECT id,user_id FROM password_resets WHERE token_hash=$1 AND used_at IS NULL AND expires_at>now() FOR UPDATE",
+      [tokenHash(token)],
+    );
+    const row = found.rows[0];
+    if (!row) throw invalidReset();
+    await db.query(
+      "UPDATE password_resets SET used_at=now() WHERE user_id=$1 AND used_at IS NULL",
+      [row.user_id],
+    );
+    // The link proves mailbox ownership, so it also completes email verification.
+    await db.query(
+      "UPDATE users SET password_hash=$2,email_verified_at=COALESCE(email_verified_at,now()) WHERE id=$1",
+      [row.user_id, passwordHash],
+    );
+    await db.query(
+      "UPDATE email_verifications SET used_at=now() WHERE user_id=$1 AND used_at IS NULL",
+      [row.user_id],
+    );
+    await db.query("DELETE FROM sessions WHERE user_id=$1", [row.user_id]);
+  });
+}

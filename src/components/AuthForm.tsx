@@ -259,6 +259,9 @@ export function LoginForm({
       )}
       {error && <RequestDiagnostics />}
       <p className="help">
+        <Link href="/forgot-password">비밀번호를 잊으셨나요?</Link>
+      </p>
+      <p className="help">
         계정이 없나요? <Link href={withNext("/signup", next)}>가입하기</Link>
       </p>
     </section>
@@ -344,7 +347,7 @@ export function SignupForm({ google, next }: { readonly google: boolean; readonl
           onChange={setPassword}
         />
         <p id="signup-password-help" className="help">
-          8자 이상. 비밀번호 찾기는 아직 없으니 잊지 않게 보관하세요.
+          8자 이상으로 입력하세요.
         </p>
         <PasswordField
           id="signup-password-confirm"
@@ -367,6 +370,143 @@ export function SignupForm({ google, next }: { readonly google: boolean; readonl
       )}
       <p className="help">
         이미 계정이 있나요? <Link href={withNext("/login", next)}>로그인</Link>
+      </p>
+    </section>
+  );
+}
+
+export function ForgotPasswordForm() {
+  const { ready } = useReady();
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [sent, setSent] = useState(false);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await http.post("/api/auth/password-reset", { json: { email } });
+      setSent(true);
+    } catch (e) {
+      setError(await message(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="prose">
+      <span className="eyebrow">비밀번호 찾기</span>
+      <h1>비밀번호 재설정</h1>
+      {sent ? (
+        <p role="status">
+          재설정 메일을 보냈습니다. 가입한 이메일이라면 1시간 동안 쓸 수 있는 링크가 도착합니다.
+          메일이 보이지 않으면 스팸함도 확인하세요.
+        </p>
+      ) : (
+        <>
+          <p className="muted">
+            가입한 이메일을 입력하면 비밀번호를 다시 정하는 링크를 보내 드립니다.
+          </p>
+          <form method="post" onSubmit={submit}>
+            <label htmlFor="forgot-email">이메일</label>
+            <input
+              id="forgot-email"
+              type="email"
+              autoComplete="email"
+              required
+              maxLength={254}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <div className="actions">
+              <button type="submit" disabled={!ready || busy}>
+                재설정 메일 받기
+              </button>
+            </div>
+          </form>
+        </>
+      )}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      <p className="help">
+        <Link href="/login">로그인 화면으로</Link>
+      </p>
+    </section>
+  );
+}
+
+export function ResetPasswordForm() {
+  const { ready } = useReady();
+  const [token, setToken] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  // The token travels in the fragment so it never reaches server logs or Referer headers.
+  useEffect(() => {
+    setToken(window.location.hash.slice(1));
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (password !== confirm) {
+      setError("비밀번호가 서로 다릅니다. 두 칸에 같은 비밀번호를 입력하세요.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await http.post("/api/auth/password-reset/confirm", { json: { token, password } });
+      window.location.assign("/login?notice=password_reset");
+    } catch (e) {
+      setError(await message(e));
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="prose">
+      <span className="eyebrow">비밀번호 찾기</span>
+      <h1>새 비밀번호 정하기</h1>
+      <p className="muted">비밀번호를 바꾸면 모든 기기에서 로그아웃됩니다.</p>
+      <form method="post" onSubmit={submit}>
+        <PasswordField
+          id="reset-password"
+          label="새 비밀번호"
+          autoComplete="new-password"
+          minLength={8}
+          value={password}
+          onChange={setPassword}
+        />
+        <PasswordField
+          id="reset-password-confirm"
+          label="새 비밀번호 확인"
+          autoComplete="new-password"
+          minLength={8}
+          value={confirm}
+          onChange={setConfirm}
+        />
+        <div className="actions">
+          <button type="submit" disabled={!ready || busy || !token}>
+            비밀번호 바꾸기
+          </button>
+        </div>
+      </form>
+      {ready && !token && (
+        <p className="error" role="alert">
+          재설정 링크가 올바르지 않습니다. 메일의 링크를 다시 열거나 새 메일을 받아 주세요.
+        </p>
+      )}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      <p className="help">
+        <Link href="/forgot-password">재설정 메일 다시 받기</Link>
       </p>
     </section>
   );
