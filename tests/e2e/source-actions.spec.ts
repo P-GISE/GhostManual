@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { loadExample, signUpAndVerify } from "./helpers";
+import { loadExample, openAsNewReader, signUpAndVerify, turnOnLinkSharing } from "./helpers";
 
 test("direct writing opens an existing draft after source changes", async ({ page }) => {
   await signUpAndVerify(page);
@@ -58,12 +58,13 @@ test("shared reader can inspect linked source without owner actions", async ({ p
   await page.getByLabel("미확인 항목이 남아 있음을 확인했습니다.").check();
   await page.getByRole("button", { name: "검수 완료·버전 게시" }).click();
   await expect(page.getByText("검수 완료 · 버전 1", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "공유 링크 만들기" }).click();
-  const shareUrl = await page.getByLabel("읽기 전용 링크").inputValue();
-  const reader = await browser.newContext({ viewport: page.viewportSize() });
+  const shareUrl = await turnOnLinkSharing(page);
+  const { context: reader, page: readerPage } = await openAsNewReader(
+    browser,
+    shareUrl,
+    page.viewportSize(),
+  );
   try {
-    const readerPage = await reader.newPage();
-    await readerPage.goto(shareUrl);
     await expect(
       readerPage.getByRole("heading", { name: "신입 구성원 업무 계정 발급", level: 1 }),
     ).toBeVisible();

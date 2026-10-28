@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { loadExample, signUpAndVerify } from "./helpers";
+import { loadExample, openAsNewReader, signUpAndVerify, turnOnLinkSharing } from "./helpers";
 
 test("prewritten example can be reviewed shared and searched without pretending live AI", async ({
   page,
@@ -16,12 +16,13 @@ test("prewritten example can be reviewed shared and searched without pretending 
   await page.getByLabel("미확인 항목이 남아 있음을 확인했습니다.").check();
   await page.getByRole("button", { name: "검수 완료·버전 게시" }).click();
   await expect(page.getByText("검수 완료 · 버전 1", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "공유 링크 만들기" }).click();
-  const url = await page.getByLabel("읽기 전용 링크").inputValue();
+  const url = await turnOnLinkSharing(page);
   expect(url).toContain("/share#");
-  const reader = await browser.newContext({ viewport: page.viewportSize() });
-  const readerPage = await reader.newPage();
-  await readerPage.goto(url);
+  const { context: reader, page: readerPage } = await openAsNewReader(
+    browser,
+    url,
+    page.viewportSize(),
+  );
   await expect(
     readerPage.getByRole("heading", { name: "신입 구성원 업무 계정 발급" }),
   ).toBeVisible();
@@ -36,7 +37,7 @@ test("prewritten example can be reviewed shared and searched without pretending 
   const evidence = readerPage.locator("details").last();
   await evidence.locator("summary").click();
   await expect(evidence).toContainText("신입");
-  await page.getByRole("button", { name: "이 공유 취소" }).click();
+  await page.getByLabel("비공개", { exact: true }).check();
   await readerPage.reload();
   await expect(readerPage.getByRole("main").getByRole("alert")).toBeVisible();
   expect(errors).toEqual([]);

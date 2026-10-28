@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { loadExample, signUpAndVerify } from "./helpers";
+import { loadExample, openAsNewReader, signUpAndVerify, turnOnLinkSharing } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await page.setExtraHTTPHeaders({ "CF-Connecting-IP": "198.51.100.30" });
@@ -59,11 +59,8 @@ test("publication comparison shows changed fields while a later draft remains pr
   await page.getByLabel("이후 게시 버전").selectOption("1");
   await expect(compare.getByText("이전 버전보다 큰 이후 버전을 선택하세요.")).toBeVisible();
   await page.getByLabel("이후 게시 버전").selectOption("2");
-  await page.getByRole("button", { name: "공유 링크 만들기" }).click();
-  const url = await page.getByLabel("읽기 전용 링크").inputValue();
-  const reader = await browser.newContext({ viewport: page.viewportSize() });
-  const rp = await reader.newPage();
-  await rp.goto(url);
+  const url = await turnOnLinkSharing(page);
+  const { context: reader, page: rp } = await openAsNewReader(browser, url, page.viewportSize());
   await expect(rp.getByRole("heading", { name: "신입 구성원 업무 계정 발급" })).toBeVisible();
   await expect(rp.getByText("게시 버전 변경점 비교")).toHaveCount(0);
   await expect(rp.getByText("아직 게시하지 않은 목적", { exact: true })).toHaveCount(0);

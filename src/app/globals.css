@@ -728,3 +728,12 @@ select {
   padding: 6px 12px;
   font-size: 13px;
 }
+.sharing {
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+}
+.sharing legend {
+  margin-bottom: 4px;
+  font-weight: 600;
+}

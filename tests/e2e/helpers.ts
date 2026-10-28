@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Page } from "@playwright/test";
+import { type Browser, expect, type Page } from "@playwright/test";
 import { e2eMailDir } from "./mail-dir";
 
 export const password = "correct horse 9";
@@ -57,4 +57,21 @@ export async function logIn(page: Page, email: string) {
   await page.getByLabel("이메일").fill(email);
   await page.getByLabel("비밀번호").fill(password);
   await page.getByRole("button", { name: "로그인", exact: true }).click();
+}
+export async function turnOnLinkSharing(page: Page) {
+  await page.getByLabel("링크가 있는 사용자 볼 수 있음").check();
+  await expect(page.getByLabel("읽기 전용 링크")).toBeVisible();
+  return page.getByLabel("읽기 전용 링크").inputValue();
+}
+// A separate signed-in account opens the shared link, as a successor would.
+export async function openAsNewReader(
+  browser: Browser,
+  url: string,
+  viewport: ReturnType<Page["viewportSize"]>,
+) {
+  const context = await browser.newContext({ viewport });
+  const page = await context.newPage();
+  await signUpAndVerify(page, undefined, "후임자");
+  await page.goto(url);
+  return { context, page };
 }

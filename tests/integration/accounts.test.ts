@@ -6,11 +6,11 @@ import { limitRequest } from "../../src/lib/rate-limit.ts";
 import { requireSession, tokenHash } from "../../src/lib/session.ts";
 import { createSource, getSource } from "../../src/lib/sources.ts";
 import { exampleSource } from "../fixtures/manual-example.ts";
-import { mailsTo, uniqueEmail, useFileMail, verificationToken } from "./mail-helper.ts";
+import { mailsTo, uniqueEmail, setupFileMail, verificationToken } from "./mail-helper.ts";
 
 let mail = "";
 beforeAll(() => {
-  mail = useFileMail();
+  mail = setupFileMail();
 });
 afterAll(async () => {
   await pool.end();

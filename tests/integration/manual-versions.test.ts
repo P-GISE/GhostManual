@@ -2,9 +2,9 @@ import { afterAll, expect, it } from "vitest";
 import { pool } from "../../src/lib/db.ts";
 import { listManualVersions, publishManual, saveDraft } from "../../src/lib/manuals.ts";
 import { createWorkspace, requireSession } from "../../src/lib/session.ts";
-import { createShare, exchangeShare } from "../../src/lib/shares.ts";
 import { createSource } from "../../src/lib/sources.ts";
 import { exampleDraft, exampleSource } from "../fixtures/manual-example.ts";
+import { shareWithNewReader } from "./mail-helper.ts";
 
 afterAll(async () => {
   await pool.end();
@@ -32,9 +32,6 @@ it("returns immutable publications in descending order, excluding drafts", async
   expect(versions.map((v) => v.content.purpose)).toEqual(["새 검수 목적", exampleDraft.purpose]);
   const other = await requireSession((await createWorkspace()).token);
   await expect(listManualVersions(other, manual.id)).rejects.toMatchObject({ httpStatus: 404 });
-  const share = await createShare(owner, manual.id);
-  const reader = await requireSession(
-    (await exchangeShare(new URL(share.url, "http://localhost").hash.slice(1))).token,
-  );
+  const reader = await requireSession((await shareWithNewReader(owner, manual.id)).token);
   await expect(listManualVersions(reader, manual.id)).rejects.toMatchObject({ httpStatus: 403 });
 });
