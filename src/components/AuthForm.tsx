@@ -56,13 +56,35 @@ function ResendVerification({ email }: { readonly email: string }) {
   );
 }
 
-function GoogleButton({ next }: { readonly next: string }) {
+// Follows Google's sign-in button branding: white surface, gray outline, multicolor G.
+function GoogleButton({ next, divider }: { readonly next: string; readonly divider: string }) {
   return (
-    <p>
-      <a className="button secondary" href={`/api/auth/google?next=${encodeURIComponent(next)}`}>
-        구글로 계속하기
+    <>
+      <a className="google-button" href={`/api/auth/google?next=${encodeURIComponent(next)}`}>
+        <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+          <path
+            fill="#EA4335"
+            d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+          />
+          <path
+            fill="#4285F4"
+            d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+          />
+          <path
+            fill="#FBBC05"
+            d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+          />
+          <path
+            fill="#34A853"
+            d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+          />
+        </svg>
+        Google 계정으로 계속하기
       </a>
-    </p>
+      <p className="auth-divider">
+        <span>또는 {divider}</span>
+      </p>
+    </>
   );
 }
 
@@ -135,6 +157,7 @@ export function LoginForm({
           {notice}
         </p>
       )}
+      {google && <GoogleButton next={next} divider="이메일로 로그인" />}
       <form method="post" onSubmit={submit}>
         <label htmlFor="login-email">이메일</label>
         <input
@@ -169,7 +192,6 @@ export function LoginForm({
         </p>
       )}
       {unverified && <ResendVerification email={email} />}
-      {google && <GoogleButton next={next} />}
       {loggedIn && error && (
         <div>
           <p className="help">
@@ -227,7 +249,12 @@ export function SignupForm({ google }: { readonly google: boolean }) {
     <section className="prose">
       <span className="eyebrow">가입</span>
       <h1>GhostManual 시작하기</h1>
-      <p className="muted">이메일 인증을 마치면 나만의 문서함이 만들어집니다.</p>
+      <p className="muted">
+        {google
+          ? "Google 계정으로 바로 시작하거나, 이메일로 가입하세요. 이메일 가입은 인증 메일을 거칩니다."
+          : "이메일 인증을 마치면 나만의 문서함이 만들어집니다."}
+      </p>
+      {google && <GoogleButton next="/manuals" divider="이메일로 가입" />}
       <form method="post" onSubmit={submit}>
         <label htmlFor="signup-name">이름</label>
         <input
@@ -274,7 +301,6 @@ export function SignupForm({ google }: { readonly google: boolean }) {
           {error}
         </p>
       )}
-      {google && <GoogleButton next="/manuals" />}
       <p className="help">
         이미 계정이 있나요? <Link href="/login">로그인</Link>
       </p>

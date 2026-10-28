@@ -173,3 +173,21 @@ test("home lists available and upcoming features in text", async ({ page }) => {
   await expect(page.getByText("예시 · 준비 중 기능")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+for (const path of ["/login", "/signup"]) {
+  test(`Google sign-in leads the form at full width: ${path}`, async ({ page }) => {
+    await page.goto(path);
+    const google = page.getByRole("link", { name: "Google 계정으로 계속하기", exact: true });
+    await expect(google).toBeVisible();
+    await expect(google.locator("svg")).toHaveCount(1);
+    const [button, form] = await Promise.all([
+      google.boundingBox(),
+      page.locator("main form").boundingBox(),
+    ]);
+    if (!button || !form) throw new Error("Missing Google button or form");
+    expect(button.y + button.height).toBeLessThanOrEqual(form.y);
+    expect(button.width).toBeGreaterThanOrEqual(form.width - 2);
+    expect(button.height).toBeGreaterThanOrEqual(44);
+    await expect(page.getByText(/^또는 이메일로 (로그인|가입)$/)).toBeVisible();
+  });
+}
