@@ -71,7 +71,7 @@ it("expired verification is rejected", async () => {
   );
   await expect(verifyEmail(token)).rejects.toMatchObject({ httpStatus: 400 });
 });
-it("signup does not reveal verified accounts", async () => {
+it("signup does not reveal verified accounts but tells the owner by mail", async () => {
   const email = uniqueEmail();
   await signup({ email, name: "원래", password });
   await verifyEmail(verificationToken(mail, email));
@@ -79,7 +79,11 @@ it("signup does not reveal verified accounts", async () => {
   await expect(
     signup({ email: email.toUpperCase(), name: "다른", password: "other password 1" }),
   ).resolves.toBeUndefined();
-  expect(mailsTo(mail, email)).toHaveLength(1);
+  const mails = mailsTo(mail, email);
+  expect(mails).toHaveLength(2);
+  expect(mails[1]).toContain("이미 가입된 계정");
+  expect(mails[1]).toContain("http://localhost:3200/login");
+  expect(mails[1]).not.toContain("/api/auth/verify");
   const after = await pool.query("SELECT password_hash FROM users WHERE email=$1", [email]);
   expect(after.rows).toEqual(before.rows);
 });

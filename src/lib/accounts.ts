@@ -70,6 +70,17 @@ export async function signup(input: z.input<typeof SignupSchema>): Promise<void>
     return userId ? issueVerification(db, userId) : null;
   });
   if (token) await mailVerification(email, token);
+  // Same screen either way; only the mailbox owner learns the account already exists.
+  else
+    await sendMail(
+      email,
+      "GhostManual 가입 안내",
+      `이 이메일로 이미 가입된 계정이 있습니다. 아래에서 로그인하세요.
+
+${process.env["APP_ORIGIN"]}/login
+
+Google 계정으로 가입했다면 로그인 화면의 "Google 계정으로 계속하기"를 사용하세요. 가입을 시도하지 않았다면 이 메일을 무시하세요.`,
+    );
 }
 export async function resendVerification(input: string): Promise<void> {
   const email = EmailSchema.parse(input);

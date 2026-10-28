@@ -36,7 +36,8 @@ export async function signUp(page: Page, email = uniqueEmail(), name = "테스�
   await page.goto("/signup");
   await page.getByLabel("이름").fill(name);
   await page.getByLabel("이메일").fill(email);
-  await page.getByLabel("비밀번호").fill(password);
+  await page.getByLabel("비밀번호", { exact: true }).fill(password);
+  await page.getByLabel("비밀번호 확인", { exact: true }).fill(password);
   await page.getByRole("button", { name: "가입하기" }).click();
   await expect(page.getByText("인증 메일을 보냈습니다.")).toBeVisible();
   return email;
@@ -56,7 +57,7 @@ export async function loadExample(page: Page) {
 }
 export async function logIn(page: Page, email: string) {
   await page.getByLabel("이메일").fill(email);
-  await page.getByLabel("비밀번호").fill(password);
+  await page.getByLabel("비밀번호", { exact: true }).fill(password);
   await page.getByRole("button", { name: "로그인", exact: true }).click();
 }
 export async function turnOnLinkSharing(page: Page) {

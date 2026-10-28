@@ -56,6 +56,58 @@ function ResendVerification({ email }: { readonly email: string }) {
   );
 }
 
+function PasswordField({
+  id,
+  label,
+  autoComplete,
+  value,
+  onChange,
+  minLength,
+  describedBy,
+}: {
+  readonly id: string;
+  readonly label: string;
+  readonly autoComplete: "current-password" | "new-password";
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+  readonly minLength?: number;
+  readonly describedBy?: string;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <>
+      <label htmlFor={id}>{label}</label>
+      <div className="password-field">
+        <input
+          id={id}
+          type={visible ? "text" : "password"}
+          autoComplete={autoComplete}
+          required
+          minLength={minLength}
+          maxLength={128}
+          aria-describedby={describedBy}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <button
+          type="button"
+          className="password-toggle"
+          aria-label={`${label} ${visible ? "숨기기" : "보기"}`}
+          aria-pressed={visible}
+          aria-controls={id}
+          onClick={() => setVisible((current) => !current)}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+            <circle cx="12" cy="12" r="3" />
+            {visible && <path d="M3 3l18 18" />}
+          </svg>
+        </button>
+      </div>
+    </>
+  );
+}
+
 // Follows Google's sign-in button branding: white surface, gray outline, multicolor G.
 function GoogleButton({ next, divider }: { readonly next: string; readonly divider: string }) {
   return (
@@ -169,15 +221,12 @@ export function LoginForm({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
-        <label htmlFor="login-password">비밀번호</label>
-        <input
+        <PasswordField
           id="login-password"
-          type="password"
+          label="비밀번호"
           autoComplete="current-password"
-          required
-          maxLength={128}
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={setPassword}
         />
         <div className="actions">
           <button type="submit" disabled={!ready || busy || loggedIn !== null}>
@@ -216,11 +265,16 @@ export function SignupForm({ google }: { readonly google: boolean }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (password !== confirm) {
+      setError("비밀번호가 서로 다릅니다. 두 칸에 같은 비밀번호를 입력하세요.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -275,21 +329,26 @@ export function SignupForm({ google }: { readonly google: boolean }) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
-        <label htmlFor="signup-password">비밀번호</label>
-        <input
+        <PasswordField
           id="signup-password"
-          type="password"
+          label="비밀번호"
           autoComplete="new-password"
-          required
           minLength={8}
-          maxLength={128}
-          aria-describedby="signup-password-help"
+          describedBy="signup-password-help"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={setPassword}
         />
         <p id="signup-password-help" className="help">
           8자 이상. 비밀번호 찾기는 아직 없으니 잊지 않게 보관하세요.
         </p>
+        <PasswordField
+          id="signup-password-confirm"
+          label="비밀번호 확인"
+          autoComplete="new-password"
+          minLength={8}
+          value={confirm}
+          onChange={setConfirm}
+        />
         <div className="actions">
           <button type="submit" disabled={!ready || busy}>
             가입하기

@@ -30,7 +30,7 @@ async function fixture(page: Page, sessionStatus = 200, listStatus = 200) {
 }
 async function submitLogin(page: Page) {
   await page.getByLabel("이메일").fill("a@example.com");
-  await page.getByLabel("비밀번호").fill("correct horse 9");
+  await page.getByLabel("비밀번호", { exact: true }).fill("correct horse 9");
   await page.getByRole("button", { name: "로그인", exact: true }).click();
 }
 
