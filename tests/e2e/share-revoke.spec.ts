@@ -29,6 +29,7 @@ test("owner can revoke an existing share after reloading the manual", async ({ p
   ).toBeVisible();
   await page.reload();
   await page.getByLabel("비공개", { exact: true }).check();
+  await expect(page.getByLabel("읽기 전용 링크")).toHaveCount(0);
   await readerPage.reload();
   await expect(readerPage.getByRole("main").getByRole("alert")).toBeVisible();
   await expect(page.getByLabel("비공개", { exact: true })).toBeChecked();
