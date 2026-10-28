@@ -1,5 +1,10 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
-import { e2eMailDir } from "./tests/e2e/mail-dir";
+
+// The deployment image builds without tests/, so the mail folder is defined here and handed to workers.
+const e2eMailDir = join(tmpdir(), "ghostmanual-e2e-mail");
+process.env["E2E_MAIL_DIR"] = e2eMailDir;
 export default defineConfig({
   testDir: "./tests/e2e",
   globalSetup: "./tests/reset-db.ts",

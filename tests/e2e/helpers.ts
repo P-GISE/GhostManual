@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Browser, expect, type Page } from "@playwright/test";
-import { e2eMailDir } from "./mail-dir";
+
+const e2eMailDir = process.env["E2E_MAIL_DIR"] ?? "";
 
 export const password = "correct horse 9";
 export function uniqueEmail() {
