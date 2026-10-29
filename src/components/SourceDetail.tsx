@@ -21,14 +21,17 @@ export function SourceDetail({ id }: { readonly id: string }) {
   useEffect(() => {
     async function load() {
       const sessionSchema = z.object({ role: z.enum(["owner", "reader"]) });
-      let readOnly = false;
-      try {
-        await read("/api/session", sessionSchema);
-      } catch (error) {
-        if (!(error instanceof HTTPError) || error.response.status !== 401) throw error;
-        await read("/api/session", sessionSchema, true);
-        readOnly = true;
-      }
+      // Shared readers are signed in too, so the shared view is chosen explicitly by the link.
+      let readOnly = new URLSearchParams(window.location.search).get("view") === "shared";
+      if (readOnly) await read("/api/session", sessionSchema, true);
+      else
+        try {
+          await read("/api/session", sessionSchema);
+        } catch (error) {
+          if (!(error instanceof HTTPError) || error.response.status !== 401) throw error;
+          await read("/api/session", sessionSchema, true);
+          readOnly = true;
+        }
       const current = await read(`/api/sources/${id}`, sourceSchema, readOnly);
       setReader(readOnly);
       setSource(current);

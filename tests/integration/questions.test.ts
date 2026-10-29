@@ -80,12 +80,11 @@ it("retrieves expected Korean evidence in at least eleven of twelve fixtures and
 });
 
 it("isolates reader question sessions and preserves outdated historical results", async () => {
-  const { createShare, exchangeShare } = await import("../../src/lib/shares.ts");
+  const { shareWithNewReader } = await import("./mail-helper.ts");
   const { owner, source, manual } = await setup();
   await publishManual(owner, manual.id, 1, exampleDraft.unknowns);
-  const share = await createShare(owner, manual.id);
-  const reader = await requireSession((await exchangeShare(share.token)).token);
-  const second = await requireSession((await exchangeShare(share.token)).token);
+  const reader = await requireSession((await shareWithNewReader(owner, manual.id)).token);
+  const second = await requireSession((await shareWithNewReader(owner, manual.id)).token);
   const own = await ask(owner, { question: "업무 계정" }, "owner-question");
   await expect(getQuestion(reader, own.id)).rejects.toMatchObject({ code: "not_found" });
   const readAnswer = await ask(reader, { question: "업무 계정" }, "reader-question");

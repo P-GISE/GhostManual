@@ -1,6 +1,46 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { z } from "zod";
+import { http } from "../lib/client";
+
+// Remounted per path (key) so the name refreshes after login or logout.
+function AccountMenu() {
+  const [name, setName] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let active = true;
+    http
+      .get("/api/me", { cache: "no-store" })
+      .json()
+      .then((body) => {
+        const user = z.object({ name: z.string() }).safeParse(body);
+        if (active) setName(user.success ? user.data.name : null);
+      })
+      .catch(() => {
+        if (active) setName(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  async function logout() {
+    setBusy(true);
+    await http.post("/api/auth/logout").catch(() => {});
+    window.location.assign("/");
+  }
+  return name ? (
+    <span className="account">
+      <span className="account-name">{name}</span>
+      <button type="button" className="secondary" disabled={busy} onClick={logout}>
+        로그아웃
+      </button>
+    </span>
+  ) : (
+    <Link href="/login">로그인</Link>
+  );
+}
 export function Navigation() {
   const pathname = usePathname();
   const reader = pathname === "/share";
@@ -27,6 +67,7 @@ export function Navigation() {
               {label}
             </Link>
           ))}
+          <AccountMenu key={pathname} />
         </nav>
       )}
     </header>

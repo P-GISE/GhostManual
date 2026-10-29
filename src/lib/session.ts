@@ -40,17 +40,28 @@ const rowSchema = z.object({
   expires_at: z.date(),
   share_id: z.uuid().nullable(),
   manual_id: ManualIdSchema.nullable(),
+  terms_pending: z.boolean().optional(),
 });
-export async function requireSession(token: string): Promise<SessionContext> {
+// Accounts that have not agreed to the terms may only reach the consent, account and logout endpoints.
+export async function requireSession(
+  token: string,
+  options: { allowPendingTerms?: boolean } = {},
+): Promise<SessionContext> {
   if (!/^[A-Za-z0-9_-]{43}$/.test(token))
-    throw new AppError("unauthorized", 401, "작업 공간을 다시 시작하세요.");
+    throw new AppError("unauthorized", 401, "로그인이 필요합니다.");
   const result = await pool.query<Record<string, unknown>>(
-    `SELECT s.*,sh.manual_id FROM sessions s JOIN workspaces w ON w.id=s.workspace_id LEFT JOIN shares sh ON sh.id=s.share_id LEFT JOIN manuals m ON m.id=sh.manual_id WHERE s.token_hash=$1 AND s.expires_at>now() AND w.expires_at>now() AND (s.role='owner' OR (sh.revoked_at IS NULL AND sh.expires_at>now() AND m.published_version IS NOT NULL AND m.needs_review=false))`,
+    `SELECT s.*,sh.manual_id,(s.user_id IS NOT NULL AND u.terms_agreed_at IS NULL) AS terms_pending FROM sessions s JOIN workspaces w ON w.id=s.workspace_id LEFT JOIN users u ON u.id=s.user_id LEFT JOIN shares sh ON sh.id=s.share_id LEFT JOIN manuals m ON m.id=sh.manual_id WHERE s.token_hash=$1 AND s.expires_at>now() AND w.expires_at>now() AND (s.role='owner' OR (sh.revoked_at IS NULL AND sh.expires_at>now() AND m.published_version IS NOT NULL AND m.needs_review=false))`,
     [tokenHash(token)],
   );
   const found = result.rows[0];
-  if (!found) throw new AppError("unauthorized", 401, "세션이 만료되거나 공유가 취소됐습니다.");
+  if (!found) throw new AppError("unauthorized", 401, "로그인이 만료됐거나 공유가 취소됐습니다.");
   const row = rowSchema.parse(found);
+  if (row.terms_pending && !options.allowPendingTerms)
+    throw new AppError(
+      "terms_required",
+      403,
+      "이용약관과 개인정보 안내에 동의한 뒤 이용할 수 있습니다.",
+    );
   const base = { workspaceId: row.workspace_id, sessionId: row.id, expiresAt: row.expires_at };
   if (row.role === "owner") return { ...base, role: "owner", shareId: null, manualId: null };
   if (!row.share_id || !row.manual_id)

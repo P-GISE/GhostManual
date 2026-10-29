@@ -7,7 +7,11 @@ import { ManualContent } from "./ManualContent";
 import { ManualVersionComparison } from "./ManualVersionComparison";
 import { QuestionForm } from "./QuestionForm";
 
-const activeShareSchema = z.object({ id: z.uuid(), manualId: z.uuid(), expiresAt: z.string() });
+const sharingSchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("private") }),
+  z.object({ mode: z.literal("link"), url: z.string() }),
+]);
+type Sharing = z.infer<typeof sharingSchema>;
 export function ManualDetail({
   id,
   reader = false,
@@ -20,12 +24,16 @@ export function ManualDetail({
   const [busy, setBusy] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [unknowns, setUnknowns] = useState(false);
-  const [share, setShare] = useState<{ id: string; url: string; expiresAt: string } | null>(null);
-  const [activeShares, setActiveShares] = useState<z.infer<typeof activeShareSchema>[]>([]);
+  const [sharing, setSharing] = useState<Sharing>({ mode: "private" });
+  // The radio reflects the choice immediately; the link appears when the server confirms.
+  const [sharingMode, setSharingMode] = useState<Sharing["mode"]>("private");
   useEffect(() => {
     if (!reader)
-      read(`/api/shares?manualId=${id}`, z.array(activeShareSchema))
-        .then(setActiveShares)
+      read(`/api/shares?manualId=${id}`, sharingSchema)
+        .then((value) => {
+          setSharing(value);
+          setSharingMode(value.mode);
+        })
         .catch(async (e) => setError(await message(e)));
     read(`/api/manuals/${id}`, manualSchema, reader)
       .then(setManual)
@@ -52,33 +60,22 @@ export function ManualDetail({
       setBusy(false);
     }
   }
-  async function sharing() {
+  async function changeSharing(mode: Sharing["mode"]) {
     setBusy(true);
+    setError("");
+    setSharingMode(mode);
     try {
-      setShare(
-        z
-          .object({ id: z.uuid(), url: z.string(), expiresAt: z.string() })
-          .parse(await http.post("/api/shares", { json: { manualId: id } }).json()),
+      setSharing(
+        sharingSchema.parse(await http.put("/api/shares", { json: { manualId: id, mode } }).json()),
       );
-      setActiveShares(await read(`/api/shares?manualId=${id}`, z.array(activeShareSchema)));
     } catch (e) {
+      setSharingMode(sharing.mode);
       setError(await message(e));
     } finally {
       setBusy(false);
     }
   }
-  async function revoke(shareId: string) {
-    setBusy(true);
-    try {
-      await http.delete(`/api/shares/${shareId}`);
-      if (share?.id === shareId) setShare(null);
-      setActiveShares((current) => current.filter((item) => item.id !== shareId));
-    } catch (e) {
-      setError(await message(e));
-    } finally {
-      setBusy(false);
-    }
-  }
+
   if (!manual) return <p role="status">{error || "매뉴얼을 불러오고 있습니다."}</p>;
   const content = reader ? manual.published?.content : manual.draft;
   if (!content)
@@ -157,43 +154,46 @@ export function ManualDetail({
                 검수 완료·버전 게시
               </button>
               <h2>후임자에게 공유</h2>
-              <p className="help">검수된 버전만 읽기·질문 전용으로 공유합니다.</p>
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy || !manual.publishedVersion || manual.needsReview}
-                onClick={sharing}
-              >
-                공유 링크 만들기
-              </button>
-              {share && (
+              <fieldset className="sharing">
+                <legend>공유 설정</legend>
+                <label className="check">
+                  <input
+                    type="radio"
+                    name="sharing"
+                    checked={sharingMode === "private"}
+                    disabled={busy}
+                    onChange={() => changeSharing("private")}
+                  />
+                  비공개
+                </label>
+                <label className="check">
+                  <input
+                    type="radio"
+                    name="sharing"
+                    checked={sharingMode === "link"}
+                    disabled={busy || !manual.publishedVersion || manual.needsReview}
+                    onChange={() => changeSharing("link")}
+                  />
+                  링크가 있는 사용자 볼 수 있음
+                </label>
+              </fieldset>
+              <p className="help">
+                {sharing.mode === "link"
+                  ? "링크를 받은 사람은 로그인한 뒤 검수된 버전만 읽고 질문할 수 있습니다. 비공개로 바꾸면 링크가 바로 막힙니다."
+                  : manual.publishedVersion && !manual.needsReview
+                    ? "나만 볼 수 있습니다. 링크 공유를 켜면 검수된 버전만 공유됩니다."
+                    : "검수 완료·버전 게시 후 링크로 공유할 수 있습니다."}
+              </p>
+              {sharing.mode === "link" && (
                 <>
                   <label htmlFor="share-url">읽기 전용 링크</label>
                   <input
                     id="share-url"
                     readOnly
-                    value={new URL(share.url, window.location.origin).href}
+                    value={new URL(sharing.url, window.location.origin).href}
                   />
-                  <p className="help">만료 {new Date(share.expiresAt).toLocaleString("ko-KR")}</p>
                 </>
               )}
-              <h3>활성 공유 {activeShares.length}개</h3>
-              {activeShares.length === 0 && <p className="help">활성 공유가 없습니다.</p>}
-              {activeShares.map((item, index) => (
-                <div key={item.id}>
-                  <p className="help">
-                    공유 {index + 1} · 만료 {new Date(item.expiresAt).toLocaleString("ko-KR")}
-                  </p>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy}
-                    onClick={() => revoke(item.id)}
-                  >
-                    이 공유 취소
-                  </button>
-                </div>
-              ))}
             </section>
           )}
           <section className="panel evidence-panel">
@@ -205,7 +205,11 @@ export function ManualDetail({
                     {r.field} · 문단 {r.paragraphId}
                   </summary>
                   <p className="source-text">{r.quote}</p>
-                  <Link href={`/sources/${manual.sourceId}#${r.paragraphId}`}>원본 위치 보기</Link>
+                  <Link
+                    href={`/sources/${manual.sourceId}${reader ? "?view=shared" : ""}#${r.paragraphId}`}
+                  >
+                    원본 위치 보기
+                  </Link>
                 </details>
               ))
             ) : (

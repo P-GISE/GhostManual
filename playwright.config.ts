@@ -1,4 +1,10 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
+
+// The deployment image builds without tests/, so the mail folder is defined here and handed to workers.
+const e2eMailDir = join(tmpdir(), "ghostmanual-e2e-mail");
+process.env["E2E_MAIL_DIR"] = e2eMailDir;
 export default defineConfig({
   testDir: "./tests/e2e",
   globalSetup: "./tests/reset-db.ts",
@@ -39,6 +45,8 @@ export default defineConfig({
     env: {
       APP_ORIGIN: "http://localhost:3200",
       AI_ENABLED: "false",
+      MAIL_DRIVER: "file",
+      MAIL_DIR: e2eMailDir,
       TRUST_CLOUDFLARE: "true",
       IP_HASH_SECRET: "test-only-rate-secret-00000000000000000000",
       DATABASE_URL:

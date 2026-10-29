@@ -63,16 +63,15 @@ it("cleans expired workspace once", async () => {
 });
 
 import { publishManual, saveDraft } from "../../src/lib/manuals.ts";
-import { createShare, exchangeShare } from "../../src/lib/shares.ts";
 import { exampleDraft, exampleSource } from "../fixtures/manual-example.ts";
+import { shareWithNewReader } from "./mail-helper.ts";
 
 it("deletes published source with evidence and reader questions without FK failures", async () => {
   const owner = await requireSession((await createWorkspace()).token);
   const source = await createSource(owner, exampleSource);
   const manual = await saveDraft(owner, source.revisionId, exampleDraft);
   const version = await publishManual(owner, manual.id, 1, exampleDraft.unknowns);
-  const share = await createShare(owner, manual.id);
-  const session = await exchangeShare(share.token);
+  const session = await shareWithNewReader(owner, manual.id);
   const questionId = crypto.randomUUID();
   await pool.query(
     "INSERT INTO question_runs(id,workspace_id,session_id,question,result) VALUES($1,$2,$3,'합성 질문','{}')",
@@ -95,8 +94,7 @@ it("deletes workspace containing reviewed snapshots", async () => {
   const source = await createSource(owner, exampleSource);
   const manual = await saveDraft(owner, source.revisionId, exampleDraft);
   await publishManual(owner, manual.id, 1, exampleDraft.unknowns);
-  const share = await createShare(owner, manual.id);
-  const reader = await exchangeShare(share.token);
+  const reader = await shareWithNewReader(owner, manual.id);
   await deleteWorkspace(owner);
   await expect(requireSession(reader.token)).rejects.toMatchObject({ httpStatus: 401 });
   expect(

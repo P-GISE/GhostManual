@@ -23,6 +23,6 @@ export default defineConfig({
     url: "http://127.0.0.1:3320",
     reuseExistingServer: false,
     timeout: 120000,
-    env: { AI_ENABLED: "false" },
+    env: { AI_ENABLED: "false", GOOGLE_CLIENT_ID: "test-client.apps.googleusercontent.com" },
   },
 });

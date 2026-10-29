@@ -1,0 +1,116 @@
+import { afterAll, beforeAll, expect, it } from "vitest";
+import { POST as logoutRoute } from "../../src/app/api/auth/logout/route.ts";
+import { GET as sessionRoute } from "../../src/app/api/session/route.ts";
+import { agreeTerms, currentUser, login, signup, verifyEmail } from "../../src/lib/accounts.ts";
+import { pool } from "../../src/lib/db.ts";
+import { finishGoogle, type GoogleProfile, startGoogle } from "../../src/lib/google.ts";
+import { listManuals } from "../../src/lib/manuals.ts";
+import { requireSession } from "../../src/lib/session.ts";
+import { createSource, getSource } from "../../src/lib/sources.ts";
+import { exampleSource } from "../fixtures/manual-example.ts";
+import { setupFileMail, uniqueEmail, verificationToken } from "./mail-helper.ts";
+
+let mail = "";
+beforeAll(() => {
+  mail = setupFileMail();
+  process.env["GOOGLE_CLIENT_ID"] = "test-client.apps.googleusercontent.com";
+  process.env["GOOGLE_CLIENT_SECRET"] = "test-secret";
+});
+afterAll(async () => {
+  await pool.end();
+});
+const password = "correct horse 9";
+async function googleSignIn(overrides: Partial<GoogleProfile> = {}) {
+  const state = new URL(await startGoogle("/ask")).searchParams.get("state") ?? "";
+  return finishGoogle(state, "code", async () => ({
+    sub: `google-${crypto.randomUUID()}`,
+    email: uniqueEmail(),
+    emailVerified: true,
+    name: "구글",
+    ...overrides,
+  }));
+}
+async function agreedAt(email: string) {
+  const row = await pool.query<{ agreed: boolean }>(
+    "SELECT terms_agreed_at IS NOT NULL AS agreed FROM users WHERE email=$1",
+    [email],
+  );
+  return row.rows[0]?.agreed;
+}
+
+it("email signup requires agreement and records it", async () => {
+  const email = uniqueEmail();
+  // @ts-expect-error consent is deliberately missing
+  await expect(signup({ email, name: "미동의", password })).rejects.toThrow();
+  await signup({ email, name: "동의", password, agreed: true });
+  expect(await agreedAt(email)).toBe(true);
+});
+it("a first Google sign-in must agree before using the service", async () => {
+  const email = uniqueEmail();
+  const result = await googleSignIn({ email });
+  expect(result.termsRequired).toBe(true);
+  expect(await agreedAt(email)).toBe(false);
+  await expect(requireSession(result.token)).rejects.toMatchObject({
+    httpStatus: 403,
+    code: "terms_required",
+  });
+  const pending = await requireSession(result.token, { allowPendingTerms: true });
+  expect((await currentUser(pending)).email).toBe(email);
+  const origin = "http://localhost:3200";
+  const session = await sessionRoute(
+    new Request(`${origin}/api/session`, { headers: { cookie: `gm_owner=${result.token}` } }),
+  );
+  expect(await session.json()).toMatchObject({ role: "owner", termsRequired: true });
+  await agreeTerms(pending);
+  expect(await agreedAt(email)).toBe(true);
+  expect(await listManuals(await requireSession(result.token))).toEqual([]);
+});
+it("Google sign-in to an agreed account goes straight in", async () => {
+  const email = uniqueEmail();
+  await signup({ email, name: "기존", password, agreed: true });
+  await verifyEmail(verificationToken(mail, email));
+  const result = await googleSignIn({ email });
+  expect(result.termsRequired).toBe(false);
+  expect((await requireSession(result.token)).role).toBe("owner");
+});
+it("an account from before terms consent is not shown as newly created", async () => {
+  const fresh = await googleSignIn();
+  const freshCtx = await requireSession(fresh.token, { allowPendingTerms: true });
+  expect((await currentUser(freshCtx)).newAccount).toBe(true);
+  const email = uniqueEmail();
+  const existing = await googleSignIn({ email });
+  await pool.query("UPDATE users SET created_at=now()-interval '2 days' WHERE email=$1", [email]);
+  const ctx = await requireSession(existing.token, { allowPendingTerms: true });
+  expect(await currentUser(ctx)).toMatchObject({ email, newAccount: false });
+});
+it("taking over an unverified email account asks for agreement again", async () => {
+  const email = uniqueEmail();
+  await signup({ email, name: "선점", password, agreed: true });
+  const result = await googleSignIn({ email });
+  expect(result.termsRequired).toBe(true);
+  expect(await agreedAt(email)).toBe(false);
+});
+it("an existing user can leave pending terms without losing their account or source", async () => {
+  const email = uniqueEmail();
+  await signup({ email, name: "기존", password, agreed: true });
+  const session = await verifyEmail(verificationToken(mail, email));
+  const owner = await requireSession(session.token);
+  const source = await createSource(owner, exampleSource);
+  await pool.query("UPDATE users SET terms_agreed_at=NULL WHERE email=$1", [email]);
+  const origin = process.env["APP_ORIGIN"] ?? "http://localhost:3200";
+  const response = await logoutRoute(
+    new Request(`${origin}/api/auth/logout`, {
+      method: "POST",
+      headers: { origin, cookie: `gm_owner=${session.token}` },
+    }),
+  );
+  expect(response.status).toBe(200);
+  await expect(requireSession(session.token, { allowPendingTerms: true })).rejects.toMatchObject({
+    httpStatus: 401,
+  });
+  const next = await login(email, password);
+  const pending = await requireSession(next.token, { allowPendingTerms: true });
+  expect((await currentUser(pending)).email).toBe(email);
+  await agreeTerms(pending);
+  expect((await getSource(await requireSession(next.token), source.id)).text).toBe(source.text);
+});

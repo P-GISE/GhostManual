@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { loadExample, signUpAndVerify } from "./helpers";
 
 test("owner can clear optional lists and cancel unsaved navigation", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "합성 예제 열기" }).click();
+  await signUpAndVerify(page);
+  await loadExample(page);
   await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
   await expect(
     page.getByRole("heading", { name: "신입 구성원 업무 계정 발급", level: 1 }),
@@ -28,8 +29,7 @@ test("owner can clear optional lists and cancel unsaved navigation", async ({ pa
 });
 
 test("source registration preserves input when navigation is cancelled", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "빈 공간 시작" }).click();
+  await signUpAndVerify(page);
   await page.getByRole("link", { name: "새 자료 등록" }).click();
   await page.getByLabel("자료 제목").fill("미저장 원본 제목");
   const sourceUrl = page.url();

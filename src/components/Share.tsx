@@ -1,4 +1,5 @@
 "use client";
+import { HTTPError } from "ky";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { http, message, read } from "../lib/client";
@@ -8,13 +9,13 @@ export function Share() {
   const [error, setError] = useState("");
   useEffect(() => {
     async function exchange() {
+      const token = window.location.hash.slice(1);
       try {
-        const token = window.location.hash.slice(1);
-        window.history.replaceState(null, "", window.location.pathname);
         if (token) {
           const session = z
             .object({ manualId: z.uuid(), expiresAt: z.string() })
             .parse(await http.post("/api/share", { json: { token } }).json());
+          window.history.replaceState(null, "", window.location.pathname);
           setId(session.manualId);
         } else {
           const session = await read(
@@ -25,6 +26,15 @@ export function Share() {
           setId(session.manualId);
         }
       } catch (e) {
+        // Signed-out visitors log in first and come back to the same link.
+        if (token && e instanceof HTTPError && e.response.status === 401) {
+          const code = z.object({ error: z.object({ code: z.string() }) }).safeParse(e.data)?.data
+            ?.error.code;
+          if (code === "unauthorized" || code === "login_required") {
+            window.location.assign(`/login?next=${encodeURIComponent(`/share#${token}`)}`);
+            return;
+          }
+        }
         setError(await message(e));
       }
     }

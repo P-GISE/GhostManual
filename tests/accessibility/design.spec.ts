@@ -1,6 +1,15 @@
 import { expect, test } from "@playwright/test";
 
-for (const path of ["/sources/new", "/ask", "/terms", "/privacy"]) {
+for (const path of [
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/sources/new",
+  "/ask",
+  "/terms",
+  "/privacy",
+]) {
   test(`reading and form columns have equal outer margins: ${path}`, async ({ page }) => {
     await page.goto(path);
     const column = page.locator("main > .prose");
@@ -61,6 +70,7 @@ test("workspace and document surfaces remain aligned with synthetic API data", a
       [`/api/sources/${source.id}`]: source,
       [`/api/manuals/${manual.id}/versions`]: [manual.published],
       "/api/shares": [],
+      "/api/me": { name: "합성 사용자", email: "synthetic@example.com" },
       "/api/session":
         request.headers()["x-ghost-role"] === "reader"
           ? { role: "reader", manualId: manual.id, expiresAt: "2026-10-25T00:00:00Z" }
@@ -106,6 +116,8 @@ test("workspace and document surfaces remain aligned with synthetic API data", a
 test("public entry and form screens are visually captured", async ({ page }, testInfo) => {
   for (const [name, path] of [
     ["home", "/"],
+    ["login", "/login"],
+    ["signup", "/signup"],
     ["register", "/sources/new"],
     ["ask", "/ask"],
     ["terms", "/terms"],
@@ -122,10 +134,10 @@ test("public entry and form screens are visually captured", async ({ page }, tes
   }
 });
 
-test("starting a workspace is visible without scrolling", async ({ page }) => {
+test("starting is visible without scrolling", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => document.fonts.ready);
-  await expect(page.getByRole("button", { name: "빈 공간 시작", exact: true })).toBeInViewport({
+  await expect(page.getByRole("link", { name: "시작하기", exact: true })).toBeInViewport({
     ratio: 1,
   });
 });
@@ -169,4 +181,72 @@ test("home lists available and upcoming features in text", async ({ page }) => {
   ).toContainText("준비 중");
   await expect(page.getByText("예시 · 준비 중 기능")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+for (const path of ["/login", "/signup"]) {
+  test(`Google sign-in leads the form at full width: ${path}`, async ({ page }) => {
+    await page.goto(path);
+    const google = page.getByRole("link", { name: "Google 계정으로 계속하기", exact: true });
+    await expect(google).toBeVisible();
+    await expect(google.locator("svg")).toHaveCount(1);
+    const [button, form] = await Promise.all([
+      google.boundingBox(),
+      page.locator("main form").boundingBox(),
+    ]);
+    if (!button || !form) throw new Error("Missing Google button or form");
+    expect(button.y + button.height).toBeLessThanOrEqual(form.y);
+    expect(button.width).toBeGreaterThanOrEqual(form.width - 2);
+    expect(button.height).toBeGreaterThanOrEqual(44);
+    await expect(page.getByText(/^또는 이메일로 (로그인|가입)$/)).toBeVisible();
+  });
+}
+
+test("a first Google sign-in must agree before starting", async ({ page }) => {
+  const calls = { agreed: 0, deleted: 0 };
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/me" && route.request().method() === "GET")
+      await route.fulfill({
+        json: { name: "구글 사용자", email: "new@example.com", newAccount: true },
+      });
+    else if (path === "/api/auth/terms") {
+      calls.agreed++;
+      await route.fulfill({ json: { agreed: true } });
+    } else if (path === "/api/manuals" || path === "/api/sources")
+      await route.fulfill({ json: [] });
+    else await route.fulfill({ json: {} });
+  });
+  await page.goto("/welcome?next=%2Fmanuals");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("이용약관을 확인해 주세요");
+  await expect(page.getByText("new@example.com")).toBeVisible();
+  const start = page.getByRole("button", { name: "동의하고 시작하기" });
+  await expect(start).toBeDisabled();
+  await page.getByLabel("이용약관과 개인정보 안내에 동의합니다.").check();
+  await start.click();
+  await expect(page).toHaveURL(/\/manuals$/);
+  expect(calls.agreed).toBe(1);
+});
+
+test("an existing account asked to agree can log out without deleting it", async ({ page }) => {
+  const calls = { deleted: 0, loggedOut: 0 };
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/me" && route.request().method() === "GET")
+      await route.fulfill({
+        json: { name: "기존 사용자", email: "old@example.com", newAccount: false },
+      });
+    else if (path === "/api/me") {
+      calls.deleted++;
+      await route.fulfill({ json: { deleted: true } });
+    } else if (path === "/api/auth/logout") {
+      calls.loggedOut++;
+      await route.fulfill({ json: { loggedOut: true } });
+    } else await route.fulfill({ json: {} });
+  });
+  await page.goto("/welcome?next=%2Fmanuals");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("이용약관을 확인해 주세요");
+  await expect(page.getByText("새 계정을 만들었습니다")).toHaveCount(0);
+  await page.getByRole("main").getByRole("button", { name: "동의하지 않고 나가기" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  expect(calls).toEqual({ deleted: 0, loggedOut: 1 });
 });
