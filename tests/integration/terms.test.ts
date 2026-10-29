@@ -1,10 +1,13 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
+import { POST as logoutRoute } from "../../src/app/api/auth/logout/route.ts";
 import { GET as sessionRoute } from "../../src/app/api/session/route.ts";
-import { agreeTerms, currentUser, signup, verifyEmail } from "../../src/lib/accounts.ts";
+import { agreeTerms, currentUser, login, signup, verifyEmail } from "../../src/lib/accounts.ts";
 import { pool } from "../../src/lib/db.ts";
 import { finishGoogle, type GoogleProfile, startGoogle } from "../../src/lib/google.ts";
 import { listManuals } from "../../src/lib/manuals.ts";
 import { requireSession } from "../../src/lib/session.ts";
+import { createSource, getSource } from "../../src/lib/sources.ts";
+import { exampleSource } from "../fixtures/manual-example.ts";
 import { setupFileMail, uniqueEmail, verificationToken } from "./mail-helper.ts";
 
 let mail = "";
@@ -76,4 +79,28 @@ it("taking over an unverified email account asks for agreement again", async () 
   const result = await googleSignIn({ email });
   expect(result.termsRequired).toBe(true);
   expect(await agreedAt(email)).toBe(false);
+});
+it("an existing user can leave pending terms without losing their account or source", async () => {
+  const email = uniqueEmail();
+  await signup({ email, name: "기존", password, agreed: true });
+  const session = await verifyEmail(verificationToken(mail, email));
+  const owner = await requireSession(session.token);
+  const source = await createSource(owner, exampleSource);
+  await pool.query("UPDATE users SET terms_agreed_at=NULL WHERE email=$1", [email]);
+  const origin = process.env["APP_ORIGIN"] ?? "http://localhost:3200";
+  const response = await logoutRoute(
+    new Request(`${origin}/api/auth/logout`, {
+      method: "POST",
+      headers: { origin, cookie: `gm_owner=${session.token}` },
+    }),
+  );
+  expect(response.status).toBe(200);
+  await expect(requireSession(session.token, { allowPendingTerms: true })).rejects.toMatchObject({
+    httpStatus: 401,
+  });
+  const next = await login(email, password);
+  const pending = await requireSession(next.token, { allowPendingTerms: true });
+  expect((await currentUser(pending)).email).toBe(email);
+  await agreeTerms(pending);
+  expect((await getSource(await requireSession(next.token), source.id)).text).toBe(source.text);
 });

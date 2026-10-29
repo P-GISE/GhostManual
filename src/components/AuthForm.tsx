@@ -550,7 +550,7 @@ function TermsConsent({
   );
 }
 
-// First Google sign-in lands here: the account exists but cannot be used until the terms are agreed.
+// Accounts awaiting terms consent cannot use the service yet.
 export function WelcomeForm({ next }: { readonly next: string }) {
   const { ready } = useReady();
   const [user, setUser] = useState<{ name: string; email: string } | null>(null);
@@ -578,21 +578,26 @@ export function WelcomeForm({ next }: { readonly next: string }) {
   }
   async function leave() {
     setBusy(true);
-    await http.delete("/api/me").catch(() => {});
-    window.location.assign("/");
+    setError("");
+    try {
+      await http.post("/api/auth/logout");
+      window.location.assign("/");
+    } catch (e) {
+      setError(await message(e));
+      setBusy(false);
+    }
   }
   return (
     <section className="prose">
-      <span className="eyebrow">가입</span>
-      <h1>새 계정을 만들었습니다</h1>
+      <span className="eyebrow">약관 동의</span>
+      <h1>이용약관을 확인해 주세요</h1>
       <p>
         {user ? (
           <>
-            <strong>{user.name}</strong> ({user.email}) Google 계정으로 GhostManual 계정이
-            만들어졌습니다.
+            <strong>{user.name}</strong> ({user.email}) 계정으로 로그인했습니다.
           </>
         ) : (
-          "Google 계정으로 GhostManual 계정이 만들어졌습니다."
+          "GhostManual에 로그인했습니다."
         )}{" "}
         이용약관과 개인정보 안내에 동의하면 바로 시작합니다.
       </p>
@@ -608,8 +613,7 @@ export function WelcomeForm({ next }: { readonly next: string }) {
         </div>
       </form>
       <p className="help">
-        다른 Google 계정으로 들어오려던 거라면 "동의하지 않고 나가기"를 누르세요. 방금 만든 계정은
-        삭제됩니다.
+        동의하지 않고 나가면 로그아웃됩니다. 계정과 저장된 자료는 삭제되지 않습니다.
       </p>
       {error && (
         <p className="error" role="alert">

@@ -11,11 +11,11 @@ export function Share() {
     async function exchange() {
       const token = window.location.hash.slice(1);
       try {
-        window.history.replaceState(null, "", window.location.pathname);
         if (token) {
           const session = z
             .object({ manualId: z.uuid(), expiresAt: z.string() })
             .parse(await http.post("/api/share", { json: { token } }).json());
+          window.history.replaceState(null, "", window.location.pathname);
           setId(session.manualId);
         } else {
           const session = await read(

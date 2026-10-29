@@ -53,7 +53,7 @@ export const http = ky.create({
           window.location.pathname !== "/welcome"
         )
           window.location.assign(
-            `/welcome?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
+            `/welcome?next=${encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)}`,
           );
       },
     ],

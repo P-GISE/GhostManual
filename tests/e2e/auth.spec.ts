@@ -130,3 +130,33 @@ test("signup cannot be sent without agreeing to the terms", async ({ page }) => 
     "/terms",
   );
 });
+
+test("leaving terms logs out without deleting the account", async ({ page }) => {
+  let deletes = 0;
+  let logouts = 0;
+  await page.route("**/api/me", async (route) => {
+    if (route.request().method() === "DELETE") deletes++;
+    await route.fulfill({ json: { name: "기존 사용자", email: "existing@example.com" } });
+  });
+  await page.route("**/api/auth/logout", async (route) => {
+    logouts++;
+    await route.fulfill({ json: { loggedOut: true } });
+  });
+  await page.goto("/welcome");
+  await expect(page.getByRole("heading", { name: "이용약관을 확인해 주세요" })).toBeVisible();
+  await page.getByRole("button", { name: "동의하지 않고 나가기" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  expect(logouts).toBe(1);
+  expect(deletes).toBe(0);
+});
+
+test("a shared link survives the pending terms redirect", async ({ page }) => {
+  await page.route("**/api/share", (route) =>
+    route.fulfill({ status: 403, json: { error: { code: "terms_required" } } }),
+  );
+  await page.route("**/api/me", (route) =>
+    route.fulfill({ json: { name: "기존 사용자", email: "existing@example.com" } }),
+  );
+  await page.goto("/share#pending-terms-link");
+  await expect(page).toHaveURL(/\/welcome\?next=%2Fshare%23pending-terms-link$/);
+});
