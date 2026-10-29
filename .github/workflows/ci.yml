@@ -57,8 +57,10 @@ jobs:
       - name: Build deployment image without credentials
         run: docker build --label org.opencontainers.image.revision=${{ github.sha }} -t ghostmanual:${{ github.sha }} .
       - name: Export verified deployment image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/feat/ghostmanual-mvp'
         run: docker save ghostmanual:${{ github.sha }} | gzip > ghostmanual-image.tar.gz
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: github.event_name == 'push' && github.ref == 'refs/heads/feat/ghostmanual-mvp'
         with:
           name: ghostmanual-image-${{ github.sha }}
           path: ghostmanual-image.tar.gz
