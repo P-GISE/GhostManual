@@ -136,7 +136,9 @@ test("leaving terms logs out without deleting the account", async ({ page }) => 
   let logouts = 0;
   await page.route("**/api/me", async (route) => {
     if (route.request().method() === "DELETE") deletes++;
-    await route.fulfill({ json: { name: "기존 사용자", email: "existing@example.com" } });
+    await route.fulfill({
+      json: { name: "기존 사용자", email: "existing@example.com", newAccount: true },
+    });
   });
   await page.route("**/api/auth/logout", async (route) => {
     logouts++;

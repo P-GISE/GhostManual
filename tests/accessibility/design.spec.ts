@@ -201,9 +201,7 @@ for (const path of ["/login", "/signup"]) {
   });
 }
 
-test("a first Google sign-in sees the new account and must agree before starting", async ({
-  page,
-}) => {
+test("a first Google sign-in must agree before starting", async ({ page }) => {
   const calls = { agreed: 0, deleted: 0 };
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -219,7 +217,7 @@ test("a first Google sign-in sees the new account and must agree before starting
     else await route.fulfill({ json: {} });
   });
   await page.goto("/welcome?next=%2Fmanuals");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("새 계정을 만들었습니다");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("이용약관을 확인해 주세요");
   await expect(page.getByText("new@example.com")).toBeVisible();
   const start = page.getByRole("button", { name: "동의하고 시작하기" });
   await expect(start).toBeDisabled();
@@ -246,9 +244,9 @@ test("an existing account asked to agree can log out without deleting it", async
     } else await route.fulfill({ json: {} });
   });
   await page.goto("/welcome?next=%2Fmanuals");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("약관 동의가 필요합니다");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("이용약관을 확인해 주세요");
   await expect(page.getByText("새 계정을 만들었습니다")).toHaveCount(0);
-  await page.getByRole("main").getByRole("button", { name: "로그아웃" }).click();
+  await page.getByRole("main").getByRole("button", { name: "동의하지 않고 나가기" }).click();
   await expect(page).toHaveURL(/\/$/);
   expect(calls).toEqual({ deleted: 0, loggedOut: 1 });
 });
