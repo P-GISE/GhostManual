@@ -73,6 +73,16 @@ it("Google sign-in to an agreed account goes straight in", async () => {
   expect(result.termsRequired).toBe(false);
   expect((await requireSession(result.token)).role).toBe("owner");
 });
+it("an account from before terms consent is not shown as newly created", async () => {
+  const fresh = await googleSignIn();
+  const freshCtx = await requireSession(fresh.token, { allowPendingTerms: true });
+  expect((await currentUser(freshCtx)).newAccount).toBe(true);
+  const email = uniqueEmail();
+  const existing = await googleSignIn({ email });
+  await pool.query("UPDATE users SET created_at=now()-interval '2 days' WHERE email=$1", [email]);
+  const ctx = await requireSession(existing.token, { allowPendingTerms: true });
+  expect(await currentUser(ctx)).toMatchObject({ email, newAccount: false });
+});
 it("taking over an unverified email account asks for agreement again", async () => {
   const email = uniqueEmail();
   await signup({ email, name: "선점", password, agreed: true });

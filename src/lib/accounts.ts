@@ -149,8 +149,9 @@ export async function logout(ctx: SessionContext): Promise<void> {
 export async function currentUser(ctx: SessionContext) {
   return transaction(async (db) => {
     await assertSession(db, ctx, true);
-    const result = await db.query<{ name: string; email: string }>(
-      "SELECT u.name,u.email FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1",
+    // Accounts older than an hour existed before terms consent; the welcome screen must not delete them.
+    const result = await db.query<{ name: string; email: string; newAccount: boolean }>(
+      `SELECT u.name,u.email,u.created_at>now()-interval '1 hour' AS "newAccount" FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1`,
       [ctx.sessionId],
     );
     const user = result.rows[0];

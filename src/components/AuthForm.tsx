@@ -550,10 +550,12 @@ function TermsConsent({
   );
 }
 
-// Accounts awaiting terms consent cannot use the service yet.
+// First Google sign-in lands here: the account exists but cannot be used until the terms are agreed.
 export function WelcomeForm({ next }: { readonly next: string }) {
   const { ready } = useReady();
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; email: string; newAccount: boolean } | null>(
+    null,
+  );
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -561,7 +563,11 @@ export function WelcomeForm({ next }: { readonly next: string }) {
     http
       .get("/api/me", { cache: "no-store" })
       .json()
-      .then((body) => setUser(z.object({ name: z.string(), email: z.string() }).parse(body)))
+      .then((body) =>
+        setUser(
+          z.object({ name: z.string(), email: z.string(), newAccount: z.boolean() }).parse(body),
+        ),
+      )
       .catch(async (e) => setError(await message(e)));
   }, []);
   async function start(event: FormEvent) {
@@ -576,29 +582,36 @@ export function WelcomeForm({ next }: { readonly next: string }) {
       setBusy(false);
     }
   }
+  // Only a just-created account is deleted; an older one keeps its documents and just logs out.
   async function leave() {
     setBusy(true);
     setError("");
     try {
-      await http.post("/api/auth/logout");
+      if (user?.newAccount) await http.delete("/api/me");
+      else await http.post("/api/auth/logout");
       window.location.assign("/");
     } catch (e) {
       setError(await message(e));
       setBusy(false);
     }
   }
+  const fresh = user?.newAccount === true;
   return (
     <section className="prose">
-      <span className="eyebrow">약관 동의</span>
-      <h1>이용약관을 확인해 주세요</h1>
+      <span className="eyebrow">{fresh ? "가입" : "약관"}</span>
+      <h1>{fresh ? "새 계정을 만들었습니다" : "약관 동의가 필요합니다"}</h1>
       <p>
-        {user ? (
+        {user && fresh && (
           <>
-            <strong>{user.name}</strong> ({user.email}) 계정으로 로그인했습니다.
+            <strong>{user.name}</strong> ({user.email}) Google 계정으로 GhostManual 계정이
+            만들어졌습니다.{" "}
           </>
-        ) : (
-          "GhostManual에 로그인했습니다."
-        )}{" "}
+        )}
+        {user && !fresh && (
+          <>
+            <strong>{user.name}</strong> ({user.email}) 계정은 아직 약관에 동의하지 않았습니다.{" "}
+          </>
+        )}
         이용약관과 개인정보 안내에 동의하면 바로 시작합니다.
       </p>
       <form method="post" onSubmit={start}>
@@ -607,14 +620,22 @@ export function WelcomeForm({ next }: { readonly next: string }) {
           <button type="submit" disabled={!ready || busy || !agreed}>
             동의하고 시작하기
           </button>
-          <button type="button" className="secondary" disabled={!ready || busy} onClick={leave}>
-            동의하지 않고 나가기
+          <button
+            type="button"
+            className="secondary"
+            disabled={!ready || busy || !user}
+            onClick={leave}
+          >
+            {fresh ? "동의하지 않고 나가기" : "로그아웃"}
           </button>
         </div>
       </form>
-      <p className="help">
-        동의하지 않고 나가면 로그아웃됩니다. 계정과 저장된 자료는 삭제되지 않습니다.
-      </p>
+      {fresh && (
+        <p className="help">
+          다른 Google 계정으로 들어오려던 거라면 "동의하지 않고 나가기"를 누르세요. 방금 만든 계정은
+          삭제됩니다.
+        </p>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
