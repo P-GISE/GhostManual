@@ -217,7 +217,7 @@ test("a first Google sign-in sees the new account and must agree before starting
     else await route.fulfill({ json: {} });
   });
   await page.goto("/welcome?next=%2Fmanuals");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("새 계정을 만들었습니다");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("이용약관을 확인해 주세요");
   await expect(page.getByText("new@example.com")).toBeVisible();
   const start = page.getByRole("button", { name: "동의하고 시작하기" });
   await expect(start).toBeDisabled();
