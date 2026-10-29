@@ -208,7 +208,9 @@ test("a first Google sign-in sees the new account and must agree before starting
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === "/api/me" && route.request().method() === "GET")
-      await route.fulfill({ json: { name: "구글 사용자", email: "new@example.com" } });
+      await route.fulfill({
+        json: { name: "구글 사용자", email: "new@example.com", newAccount: true },
+      });
     else if (path === "/api/auth/terms") {
       calls.agreed++;
       await route.fulfill({ json: { agreed: true } });
@@ -225,4 +227,28 @@ test("a first Google sign-in sees the new account and must agree before starting
   await start.click();
   await expect(page).toHaveURL(/\/manuals$/);
   expect(calls.agreed).toBe(1);
+});
+
+test("an existing account asked to agree can log out without deleting it", async ({ page }) => {
+  const calls = { deleted: 0, loggedOut: 0 };
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/me" && route.request().method() === "GET")
+      await route.fulfill({
+        json: { name: "기존 사용자", email: "old@example.com", newAccount: false },
+      });
+    else if (path === "/api/me") {
+      calls.deleted++;
+      await route.fulfill({ json: { deleted: true } });
+    } else if (path === "/api/auth/logout") {
+      calls.loggedOut++;
+      await route.fulfill({ json: { loggedOut: true } });
+    } else await route.fulfill({ json: {} });
+  });
+  await page.goto("/welcome?next=%2Fmanuals");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("약관 동의가 필요합니다");
+  await expect(page.getByText("새 계정을 만들었습니다")).toHaveCount(0);
+  await page.getByRole("main").getByRole("button", { name: "로그아웃" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  expect(calls).toEqual({ deleted: 0, loggedOut: 1 });
 });
