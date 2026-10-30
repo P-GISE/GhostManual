@@ -355,7 +355,31 @@ ALTER TABLE manual_versions ADD COLUMN history jsonb;
 4. 저장소 분리(S3·회사 드라이브 연동)와 요금제별 용량.
 5. 카카오·네이버 로그인, 관리자·사용량 통계, 구독.
 
-## 11. 남은 확인
+## 11. 역할 분담과 일정 (2026-10-30 박효민 제안)
+
+엔진의 입력·출력(6.4절 스냅샷, 4.2절 변경 묶음, 7절 질문)을 이 문서로 고정해 두 사람이 동시에 작업한다.
+
+| 담당 | 맡는 일 | 주요 위치 |
+|---|---|---|
+| **박기성: 엑셀 분석 엔진·DB·서버** | 3절 migration `005` 검토·확정, xlsx 읽기(파일 → 스냅샷, 6절 거부·한도 포함), 비교와 질문 만들기(7절), 합성 엑셀 테스트 파일(시연용 `정산_1029.xlsx`·`정산_1030.xlsx` 포함)과 단위 테스트, 용량 한도·백업 정책, 중간평가 후 운영 배포 | `db/migrations/005_file_versions.sql`, `src/lib/xlsx/`, `tests/unit/xlsx*`, `tests/fixtures/xlsx/` |
+| **박효민(+Claude Code): API·화면·시연** | 4절 API, 5절 매뉴얼 연결, 8절 화면(버전·질문·미리보기·사용량·프로필 `/account`), 통합·E2E 테스트, 시연 영상 촬영, 제출서 고도화 계획 | `src/app/api/sources/**`, `src/app/api/me`, `src/lib/sources.ts`·`manuals.ts`, `src/components/`, `src/app/account/` |
+
+- 엔진은 DB·HTTP를 모르는 순수 함수로 만든다: `readXlsx(bytes) → { status, snapshot }`, `compareSnapshots(before, after) → ChangeGroup[]`, `buildQuestions(groups) → Question[]`. 정확한 이름은 엔진 PR에서 정하고 이 절을 고친다.
+- 엔진 PR 전까지 API·화면은 같은 모양의 가짜 결과로 개발하고, 병합 후 연결만 바꾼다.
+- `src/lib/xlsx/` 밖의 파일을 고쳐야 하면 서로 먼저 알린다.
+
+| 날짜 | 박기성 | 박효민 |
+|---|---|---|
+| 10/30~31 | migration 초안 검토, xlsx 읽기 | 화면 목업 확인, 구현 계획, migration 반영, API 뼈대 |
+| 11/1~2 | 비교·질문 만들기, 합성 파일 | API·화면 |
+| 11/3 | **엔진 PR 병합** | 엔진 연결, 매뉴얼 연결 |
+| 11/4 | 함께 버그 수정 | E2E·마무리 |
+| 11/5 | — | 시연 영상 촬영 |
+| 11/6 | 제출 | 제출 |
+
+**AI(중간평가 이후, 보류 유지)**: 시작할 때 다시 정한다. 현재 안은 AI 기능(변경 기록 요약, 질문 문구 다듬기, 후임자 답변의 프롬프트·화면)은 박효민, API 키·사용량·비용 한도·로그 점검은 박기성이다. 질문 문구는 `buildQuestions` 한 곳에서 만들므로 AI를 붙여도 엔진의 비교 로직은 바꾸지 않는다.
+
+## 12. 남은 확인
 
 - 박기성: 100 MiB·5 MiB 한도와 DB 저장 방식이 서버 용량에 괜찮은지, 3절 migration 검토.
 - 사용자: 8절 화면 목업 확인.
