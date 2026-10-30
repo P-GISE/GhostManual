@@ -22,8 +22,8 @@
 
 | 항목 | 결정 | 출처 |
 |---|---|---|
-| 올린 사람 | 업로드 순간의 **계정 이름**을 버전에 복사해 고정. 팀은 기록하지 않음 | 사용자 결정(10/30) |
-| 이름 수정 | 프로필 화면에서 수정. 이미 올린 버전의 이름은 바뀌지 않음 | 사용자 결정(10/30) |
+| 올린 사람 | 업로드 순간의 **계정 이름과 소속(부서)**을 버전에 복사해 고정. 소속은 프로필의 선택 입력(1~40자), 비어 있으면 이름만. 팀 기능(초대·권한)은 없음 | 사용자 결정(10/30, 처음엔 이름만 → 같은 날 소속 추가) |
+| 이름·소속 수정 | 계정 화면 "내 프로필"에서 수정. 이미 올린 버전의 이름·소속은 바뀌지 않음 | 사용자 결정(10/30) |
 | 보관 | 계정(workspace)당 원본 파일 합계 **100 MiB**, 파일당 **5 MiB**. 자동 삭제 없음, 넘으면 업로드 거부 | 사용자 결정(10/30). 숫자는 박기성 확인 후 조정 |
 | 형식 | `.xlsx`만 | 사용자 결정(10/30) |
 | 시각 | 서버 저장 시각(`created_at`). 화면은 KST `2026-10-30 14:05` | 상위 설계 9.1 |
@@ -50,9 +50,14 @@ ALTER TABLE source_revisions DROP CONSTRAINT source_revisions_text_check;
 ALTER TABLE source_revisions ADD CONSTRAINT source_revisions_text_check
   CHECK (char_length(text) BETWEEN 1 AND 20000);
 
--- 올린 사람 이름(업로드 당시 값). 이 기능 이전 버전은 NULL → "기록 없음"
-ALTER TABLE source_revisions ADD COLUMN uploaded_by_name text
-  CHECK (char_length(uploaded_by_name) BETWEEN 1 AND 40);
+-- 프로필 소속(부서), 선택 입력
+ALTER TABLE users ADD COLUMN department text
+  CHECK (char_length(department) BETWEEN 1 AND 40);
+
+-- 올린 사람 이름·소속(업로드 당시 값). 이 기능 이전 버전은 NULL → "기록 없음"
+ALTER TABLE source_revisions
+  ADD COLUMN uploaded_by_name text CHECK (char_length(uploaded_by_name) BETWEEN 1 AND 40),
+  ADD COLUMN uploaded_by_department text CHECK (char_length(uploaded_by_department) BETWEEN 1 AND 40);
 
 -- 원본 파일과 비교용 스냅샷 (버전당 1행, 수정 금지)
 CREATE TABLE source_files(
@@ -148,7 +153,7 @@ ALTER TABLE manual_versions ADD COLUMN history jsonb;
   "id": "uuid", "kind": "file", "fileType": "xlsx", "title": "월간 정산",
   "revision": 1, "revisionId": "uuid", "createdAt": "2026-10-30T05:05:00Z",
   "file": { "name": "정산_1030.xlsx", "sizeBytes": 48211 },
-  "uploadedByName": "박효민",
+  "uploadedByName": "박효민", "uploadedByDepartment": "재무팀",
   "compareStatus": "first",
   "changes": [],
   "questions": [
@@ -189,7 +194,7 @@ ALTER TABLE manual_versions ADD COLUMN history jsonb;
 
 ```json
 [
-  { "revision": 2, "revisionId": "uuid", "createdAt": "…", "uploadedByName": "박효민",
+  { "revision": 2, "revisionId": "uuid", "createdAt": "…", "uploadedByName": "박효민", "uploadedByDepartment": "재무팀",
     "file": { "name": "정산_1030.xlsx", "sizeBytes": 50110 },
     "compareStatus": "compared", "changeCount": 3, "questionCount": 3, "answeredCount": 1 }
 ]
@@ -232,14 +237,14 @@ ALTER TABLE manual_versions ADD COLUMN history jsonb;
 
 | Method / Endpoint | 권한 | 내용 |
 |---|---|---|
-| `GET /api/me` | O | 기존 `{ name, email }`에 `usage: { bytes, limitBytes }` 추가 |
-| `PATCH /api/me` | O | `{ "name": "새 이름" }`(1~40자). 이미 올린 버전의 `uploadedByName`은 바뀌지 않음 |
+| `GET /api/me` | O | 기존 `{ name, email }`에 `department`(없으면 `null`), `loginMethods`(`password`·`google`), `usage: { bytes, limitBytes }` 추가 |
+| `PATCH /api/me` | O | `{ "name": "새 이름", "department": "재무팀" }`(각 1~40자, `department`는 `null`로 지움). 이미 올린 버전의 이름·소속은 바뀌지 않음 |
 
 ### 4.8 기존 API 변경
 
 | API | 변경 |
 |---|---|
-| `GET /api/sources`, `GET /api/sources/:id` | 응답에 `kind`, `fileType`, `uploadedByName` 추가 |
+| `GET /api/sources`, `GET /api/sources/:id` | 응답에 `kind`, `fileType`, `uploadedByName`, `uploadedByDepartment` 추가 |
 | `PATCH /api/sources/:id` (텍스트 수정) | 파일 자료이면 `422 file_source_readonly` |
 | `POST /api/sources/:id/generate` (AI 초안) | 파일 자료이면 `422`. AI는 보류 중이며 파일 자료는 직접 작성 |
 | `POST /api/manuals/:id/publish` | 게시 시 `manual_versions.history`에 변경 이력을 함께 저장 |
@@ -271,7 +276,7 @@ ALTER TABLE manual_versions ADD COLUMN history jsonb;
 `history` 구조:
 ```json
 { "v": 1, "revisions": [
-  { "revision": 2, "createdAt": "…", "uploadedByName": "박효민", "fileName": "정산_1030.xlsx",
+  { "revision": 2, "createdAt": "…", "uploadedByName": "박효민", "uploadedByDepartment": "재무팀", "fileName": "정산_1030.xlsx",
     "compareStatus": "compared",
     "changes": [{ "kind": "sheet_added", "sheet": "정산", "range": null }],
     "questions": [{ "question": "…", "answer": "…", "skipped": false }] } ] }
@@ -355,7 +360,7 @@ AI(OpenAI Responses API, 기존 src/lib/ai.ts 호출 경로): 질문 ≤10개 + 
 | 자료 상세(파일 자료) | 파일 정보, **새 버전 올리기**, 버전 목록, 선택한 버전의 질문(답변 입력·건너뛰기)·변경 묶음·시트 미리보기, 버전별 내려받기 |
 | 매뉴얼 검수 | 기존 화면 + "변경 이력" 영역(버전별 변경·질문·답변). 미답변 질문은 기존 "확인 필요" 체크 목록에 보임 |
 | Reader 매뉴얼 | 게시본 + 고정된 변경 이력, 게시 버전 원본 내려받기 |
-| 계정 `/account` | 탭 두 개(10/30 팀 피드백). **내 프로필**: 이름 수정, 이메일, 로그인 방식(이메일·Google 연결). **설정**: 비밀번호 변경(기존 재설정 메일 흐름 재사용, Google 전용 계정은 안내만), 저장 공간 사용량, 계정 삭제(문서함의 기존 버튼을 이곳으로 옮김) |
+| 계정 `/account` | 탭 두 개(10/30 팀 피드백). **내 프로필**: 이름·소속(부서) 수정, 이메일, 로그인 방식(이메일·Google 연결). **설정**: 비밀번호 변경(기존 재설정 메일 흐름 재사용, Google 전용 계정은 안내만), 저장 공간 사용량, 계정 삭제(문서함의 기존 버튼을 이곳으로 옮김) |
 
 목업(2026-10-30)은 자료 상세·새 버전 결과·후임자 화면을 팀이 확인했다. 계정 화면은 위 탭 구조로 목업을 고친 뒤 확정한다. 질문 카드에는 "AI가 만든 질문" 표시와 버전 요약 한 줄을 더한다.
 
@@ -365,8 +370,8 @@ AI(OpenAI Responses API, 기존 src/lib/ai.ts 호출 경로): 질문 ≤10개 + 
 
 | ID | 확인할 결과 |
 |---|---|
-| F11' | 버전마다 계정 이름·KST 시각이 보이고, 이름이 없는 옛 버전은 "기록 없음"이다 |
-| F12' | 프로필에서 이름을 바꿔도 이미 올린 버전의 이름은 그대로다 |
+| F11' | 버전마다 계정 이름·소속·KST 시각이 보이고(소속이 없으면 이름만), 기록이 없는 옛 버전은 "기록 없음"이다 |
+| F12' | 프로필에서 이름·소속을 바꿔도 이미 올린 버전의 값은 그대로다 |
 | F16 | 계정 파일 합계가 100 MiB를 넘는 업로드는 저장 전에 거부되고, 사용량이 화면에 보인다 |
 | F17 | 게시 후 답변을 고쳐도 Reader가 보는 게시본의 변경 이력은 게시 당시 값이다 |
 | F18 | AI가 켜져 있으면 질문·버전 요약이 AI로 만들어지고 "AI가 만든 질문"으로 표시된다. AI 요청에 셀 값·파일 이름·사용자 정보가 없다(테스트 전송 기록으로 확인) |
