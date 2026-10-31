@@ -15,7 +15,7 @@ import {
   revisionSummarySchema,
 } from "../lib/client";
 
-const changeLabels: Record<string, string> = {
+export const changeLabels: Record<string, string> = {
   sheet_added: "시트 추가",
   sheet_removed: "시트 삭제",
   formula_added: "수식 추가",
@@ -37,7 +37,7 @@ const statusText: Record<FileRevision["compareStatus"], string> = {
   no_changes: "직전 버전과 내용이 같습니다",
   limit_exceeded: "시트·셀이 많아 내용 비교를 하지 않았습니다",
 };
-const who = (r: { uploadedByName: string | null; uploadedByDepartment: string | null }) =>
+export const who = (r: { uploadedByName: string | null; uploadedByDepartment: string | null }) =>
   r.uploadedByName
     ? `${r.uploadedByName}${r.uploadedByDepartment ? ` (${r.uploadedByDepartment})` : ""}`
     : "기록 없음";

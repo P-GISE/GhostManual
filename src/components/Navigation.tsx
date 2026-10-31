@@ -32,7 +32,9 @@ function AccountMenu() {
   }
   return name ? (
     <span className="account">
-      <span className="account-name">{name}</span>
+      <Link className="account-name" href="/account">
+        {name}
+      </Link>
       <button type="button" className="secondary" disabled={busy} onClick={logout}>
         로그아웃
       </button>

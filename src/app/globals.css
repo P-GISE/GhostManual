@@ -918,3 +918,54 @@ select {
   border-top: 1px solid var(--border);
   white-space: nowrap;
 }
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+.tabs [role="tab"] {
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+}
+.tabs [role="tab"][aria-selected="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 700;
+}
+.meter {
+  height: 12px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.meter > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+#panel-settings {
+  display: grid;
+  gap: 20px;
+}
+.history-entry {
+  border-left: 3px solid var(--accent);
+  padding: 4px 0 4px 16px;
+  margin-top: 20px;
+}
+.history-entry h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+.history-entry dt {
+  font-weight: 600;
+  margin-top: 10px;
+}
+.history-entry dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}

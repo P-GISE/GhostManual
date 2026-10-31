@@ -24,6 +24,7 @@ export const manual: Manual = {
     content: exampleDraft,
     provenance: "example",
     acknowledgedUnknowns: exampleDraft.unknowns,
+    history: null,
     createdAt: source.createdAt,
   },
   needsReview: false,

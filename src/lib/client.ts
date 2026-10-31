@@ -81,8 +81,35 @@ export const publishedSchema = z.object({
   content: ManualDraftSchema,
   provenance: z.string(),
   acknowledgedUnknowns: z.array(z.string()),
+  history: z
+    .object({
+      revisions: z.array(
+        z.object({
+          revision: z.number(),
+          createdAt: z.string(),
+          uploadedByName: z.string().nullable(),
+          uploadedByDepartment: z.string().nullable(),
+          fileName: z.string(),
+          compareStatus: z.string(),
+          aiSummary: z.string().nullable(),
+          changes: z.array(
+            z.object({
+              kind: z.string(),
+              sheet: z.string().nullable(),
+              range: z.string().nullable(),
+            }),
+          ),
+          questions: z.array(
+            z.object({ question: z.string(), answer: z.string().nullable(), skipped: z.boolean() }),
+          ),
+        }),
+      ),
+    })
+    .nullable()
+    .default(null),
   createdAt: z.string(),
 });
+export type FileHistory = NonNullable<z.infer<typeof publishedSchema>["history"]>;
 export const manualSchema = z.object({
   id: z.uuid(),
   sourceId: z.uuid(),

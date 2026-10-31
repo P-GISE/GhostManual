@@ -31,7 +31,6 @@ export function ManualList() {
             ? !!m.publishedVersion && !m.needsReview
             : !m.publishedVersion && !m.needsReview)),
   );
-  const [deleting, setDeleting] = useState(false);
   const load = useCallback(async () => {
     setBusy(true);
     setLoadError(null);
@@ -71,16 +70,6 @@ export function ManualList() {
       mounted.current = false;
     };
   }, [load]);
-  async function remove() {
-    setDeleting(true);
-    try {
-      await http.delete("/api/me");
-      window.location.assign("/");
-    } catch (e) {
-      setError(await message(e));
-      setDeleting(false);
-    }
-  }
   async function loadExample() {
     setBusy(true);
     setError("");
@@ -216,17 +205,6 @@ export function ManualList() {
           <span className="help">원본 revision {s.revision}</span>
         </div>
       ))}
-      <details>
-        <summary>계정 삭제</summary>
-        <p>계정과 원본, 매뉴얼, 답변, 공유 권한을 모두 삭제합니다. 복구할 수 없습니다.</p>
-        <label className="check">
-          <input type="checkbox" onChange={(e) => setDeleting(e.target.checked)} />
-          삭제할 내용을 확인했습니다.
-        </label>
-        <button type="button" className="secondary" disabled={!deleting} onClick={remove}>
-          계정과 문서 영구 삭제
-        </button>
-      </details>
     </>
   );
 }
