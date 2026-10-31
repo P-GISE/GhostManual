@@ -12,9 +12,13 @@ const SourceViewSchema = z.object({
   title: z.string(),
   text: z.string(),
   createdAt: z.date(),
+  kind: z.enum(["text", "file"]),
+  fileType: z.literal("xlsx").nullable(),
+  uploadedByName: z.string().nullable(),
+  uploadedByDepartment: z.string().nullable(),
 });
 export type SourceView = z.infer<typeof SourceViewSchema>;
-async function assertSourceWrite(
+export async function assertSourceWrite(
   db: DbClient,
   ctx: SessionContext,
   input: SourceInput,
@@ -50,6 +54,9 @@ async function assertSourceWrite(
       "자료 저장이 너무 빠릅니다. 잠시 후 다시 시도하세요.",
     );
 }
+// Copies the uploader's current name and department onto the revision; `param` holds the session id.
+export const uploader = (param: string) =>
+  `(SELECT u.name FROM sessions se JOIN users u ON u.id=se.user_id WHERE se.id=${param}),(SELECT u.department FROM sessions se JOIN users u ON u.id=se.user_id WHERE se.id=${param})`;
 export function paragraphs(text: string) {
   return text
     .split(/\n\s*\n/)
@@ -63,7 +70,7 @@ export async function sourceInTransaction(
   revision?: number,
 ): Promise<SourceView> {
   const found = await db.query<Record<string, unknown>>(
-    `SELECT s.id,r.id AS "revisionId",r.revision,r.title,r.text,r.created_at AS "createdAt" FROM sources s JOIN source_revisions r ON r.source_id=s.id AND r.revision=COALESCE($3,s.revision) WHERE s.id=$1 AND s.workspace_id=$2 AND ($4::uuid IS NULL OR EXISTS(SELECT 1 FROM manuals m WHERE m.id=$4 AND m.source_id=s.id AND m.published_version IS NOT NULL AND m.needs_review=false AND EXISTS(SELECT 1 FROM manual_versions mv WHERE mv.manual_id=m.id AND mv.version=m.published_version AND mv.source_revision_id=r.id)))`,
+    `SELECT s.id,r.id AS "revisionId",r.revision,r.title,r.text,r.created_at AS "createdAt",s.kind,s.file_type AS "fileType",r.uploaded_by_name AS "uploadedByName",r.uploaded_by_department AS "uploadedByDepartment" FROM sources s JOIN source_revisions r ON r.source_id=s.id AND r.revision=COALESCE($3,s.revision) WHERE s.id=$1 AND s.workspace_id=$2 AND ($4::uuid IS NULL OR EXISTS(SELECT 1 FROM manuals m WHERE m.id=$4 AND m.source_id=s.id AND m.published_version IS NOT NULL AND m.needs_review=false AND EXISTS(SELECT 1 FROM manual_versions mv WHERE mv.manual_id=m.id AND mv.version=m.published_version AND mv.source_revision_id=r.id)))`,
     [id, ctx.workspaceId, revision ?? null, ctx.manualId],
   );
   if (!found.rows[0]) throw new AppError("not_found", 404, "자료를 찾을 수 없습니다.");
@@ -80,8 +87,8 @@ export async function createSource(ctx: SessionContext, input: SourceInput): Pro
       ctx.workspaceId,
     ]);
     await db.query(
-      "INSERT INTO source_revisions(id,workspace_id,source_id,revision,title,text) VALUES($1,$2,$3,1,$4,$5)",
-      [newId(), ctx.workspaceId, id, parsed.title, parsed.text],
+      `INSERT INTO source_revisions(id,workspace_id,source_id,revision,title,text,uploaded_by_name,uploaded_by_department) SELECT $1,$2,$3,1,$4,$5,${uploader("$6")}`,
+      [newId(), ctx.workspaceId, id, parsed.title, parsed.text, ctx.sessionId],
     );
     return sourceInTransaction(db, ctx, id);
   });
@@ -107,8 +114,8 @@ export async function updateSource(
     await assertSourceWrite(db, ctx, parsed, false);
     await db.query("UPDATE sources SET revision=revision+1 WHERE id=$1", [id]);
     await db.query(
-      "INSERT INTO source_revisions(id,workspace_id,source_id,revision,title,text) VALUES($1,$2,$3,$4,$5,$6)",
-      [newId(), ctx.workspaceId, id, old.revision + 1, parsed.title, parsed.text],
+      `INSERT INTO source_revisions(id,workspace_id,source_id,revision,title,text,uploaded_by_name,uploaded_by_department) SELECT $1,$2,$3,$4,$5,$6,${uploader("$7")}`,
+      [newId(), ctx.workspaceId, id, old.revision + 1, parsed.title, parsed.text, ctx.sessionId],
     );
     await db.query("UPDATE manuals SET needs_review=true WHERE source_id=$1", [id]);
     return sourceInTransaction(db, ctx, id);

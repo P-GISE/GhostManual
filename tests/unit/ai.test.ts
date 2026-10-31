@@ -13,6 +13,10 @@ const source = {
   title: "발급",
   text: "승인 후 계정을 발급합니다.".repeat(8),
   createdAt: new Date(),
+  kind: "text" as const,
+  fileType: null,
+  uploadedByName: null,
+  uploadedByDepartment: null,
 };
 const draft = {
   title: "발급",
