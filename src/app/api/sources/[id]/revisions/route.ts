@@ -1,9 +1,23 @@
 import { z } from "zod";
 import { AppError } from "../../../../../lib/errors.ts";
-import { addFileRevision, MAX_FILE_BYTES } from "../../../../../lib/file-sources.ts";
+import {
+  addFileRevision,
+  listFileRevisions,
+  MAX_FILE_BYTES,
+} from "../../../../../lib/file-sources.ts";
 import { endpoint, json, readBody, requestSession } from "../../../../../lib/http.ts";
 
 type Context = { params: Promise<{ id: string }> };
+export async function GET(request: Request, context: Context) {
+  return endpoint(request, async () =>
+    json(
+      await listFileRevisions(
+        await requestSession(request),
+        z.uuid().parse((await context.params).id),
+      ),
+    ),
+  );
+}
 export async function POST(request: Request, context: Context) {
   return endpoint(request, async () => {
     const ctx = await requestSession(request);

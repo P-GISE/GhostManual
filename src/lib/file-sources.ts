@@ -374,3 +374,127 @@ export async function addFileRevision(
     return fileRevisionInTransaction(db, ctx, id);
   });
 }
+export type RevisionSummary = {
+  revision: number;
+  revisionId: string;
+  createdAt: Date;
+  uploadedByName: string | null;
+  uploadedByDepartment: string | null;
+  file: { name: string; sizeBytes: number };
+  compareStatus: CompareStatus;
+  changeCount: number;
+  questionCount: number;
+  answeredCount: number;
+};
+export async function listFileRevisions(
+  ctx: SessionContext,
+  id: string,
+): Promise<RevisionSummary[]> {
+  return transaction(async (db) => {
+    await assertSession(db, ctx);
+    // sourceInTransaction resolves a reader to the revision its shared manual was published from.
+    const latest = await sourceInTransaction(db, ctx, id);
+    const rows = await db.query<{ revision: number }>(
+      "SELECT revision FROM source_revisions WHERE source_id=$1 AND workspace_id=$2 ORDER BY revision DESC",
+      [id, ctx.workspaceId],
+    );
+    const list: RevisionSummary[] = [];
+    for (const { revision } of rows.rows) {
+      if (ctx.role === "reader" && revision !== latest.revision) continue;
+      const view = await fileRevisionInTransaction(db, ctx, id, revision);
+      list.push({
+        revision: view.revision,
+        revisionId: view.revisionId,
+        createdAt: view.createdAt,
+        uploadedByName: view.uploadedByName,
+        uploadedByDepartment: view.uploadedByDepartment,
+        file: view.file,
+        compareStatus: view.compareStatus,
+        changeCount: view.changes.length,
+        questionCount: view.questions.length,
+        answeredCount: view.questions.filter((q) => q.answer !== null).length,
+      });
+    }
+    return list;
+  });
+}
+export type SheetPreview = {
+  sheet: string;
+  hidden: boolean;
+  rows: number;
+  cols: number;
+  cells: (string | number | boolean | null)[][];
+};
+function columnName(index: number): string {
+  let name = "";
+  for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26))
+    name = String.fromCharCode(65 + ((n - 1) % 26)) + name;
+  return name;
+}
+export function preview(snapshot: Snapshot): SheetPreview[] {
+  return snapshot.sheets.map((sheet) => ({
+    sheet: sheet.name,
+    hidden: sheet.hidden,
+    rows: sheet.rows,
+    cols: sheet.cols,
+    cells: Array.from({ length: Math.min(sheet.rows, 20) }, (_, r) =>
+      Array.from(
+        { length: Math.min(sheet.cols, 12) },
+        (_, c) => sheet.cells[`${columnName(c)}${r + 1}`]?.v ?? null,
+      ),
+    ),
+  }));
+}
+export async function getFileRevision(ctx: SessionContext, id: string, revision: number) {
+  return transaction(async (db) => {
+    await assertSession(db, ctx);
+    const view = await fileRevisionInTransaction(db, ctx, id, revision);
+    const file = await db.query<{ snapshot: Snapshot | null }>(
+      "SELECT snapshot FROM source_files WHERE revision_id=$1",
+      [view.revisionId],
+    );
+    const snapshot = file.rows[0]?.snapshot;
+    return { ...view, preview: snapshot ? preview(snapshot) : [] };
+  });
+}
+export async function fileContent(ctx: SessionContext, id: string, revision: number) {
+  return transaction(async (db) => {
+    await assertSession(db, ctx);
+    const view = await fileRevisionInTransaction(db, ctx, id, revision);
+    const file = await db.query<{ content: Buffer }>(
+      "SELECT content FROM source_files WHERE revision_id=$1",
+      [view.revisionId],
+    );
+    const content = file.rows[0]?.content;
+    if (!content) throw new AppError("not_found", 404, "자료를 찾을 수 없습니다.");
+    return { fileName: view.file.name, bytes: new Uint8Array(content) };
+  });
+}
+const AnswerSchema = z.union([
+  z.strictObject({ answer: z.string().trim().min(1).max(2000) }),
+  z.strictObject({ skipped: z.literal(true) }),
+]);
+export async function answerQuestion(
+  ctx: SessionContext,
+  id: string,
+  revision: number,
+  questionId: string,
+  input: unknown,
+): Promise<QuestionView> {
+  const parsed = AnswerSchema.safeParse(input);
+  if (!parsed.success)
+    throw new AppError("invalid_input", 422, "답변은 1~2,000자로 입력하거나 건너뛰세요.");
+  return transaction(async (db) => {
+    await assertSession(db, ctx, true);
+    const view = await fileRevisionInTransaction(db, ctx, id, revision);
+    const answer = "answer" in parsed.data ? parsed.data.answer : null;
+    const updated = await db.query(
+      `UPDATE revision_questions SET answer=$1,skipped=$2,answered_at=now() WHERE id=$3 AND revision_id=$4
+        RETURNING id,kind,question,answer,skipped,source,group_positions AS "groupPositions"`,
+      [answer, answer === null, questionId, view.revisionId],
+    );
+    if (!updated.rows[0]) throw new AppError("not_found", 404, "질문을 찾을 수 없습니다.");
+    await syncManual(db, id, revision, null);
+    return QuestionRow.parse(updated.rows[0]);
+  });
+}
