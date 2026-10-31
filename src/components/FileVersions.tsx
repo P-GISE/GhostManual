@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import {
   type FileRevision,
@@ -51,7 +51,7 @@ function QuestionCard({
   readonly question: Question;
   readonly label: string;
   readonly readOnly: boolean;
-  readonly save: (body: { answer: string } | { skipped: true }) => Promise<void>;
+  readonly save: (body: { answer: string } | { skipped: true }) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState(question.answer === null && !question.skipped);
   const [answer, setAnswer] = useState(question.answer ?? "");
@@ -59,9 +59,11 @@ function QuestionCard({
   const id = `answer-${question.id}`;
   async function submit(body: { answer: string } | { skipped: true }) {
     setBusy(true);
-    await save(body);
-    setBusy(false);
-    setEditing(false);
+    try {
+      if (await save(body)) setEditing(false);
+    } finally {
+      setBusy(false);
+    }
   }
   return (
     <fieldset className="question-card" aria-label={question.question}>
@@ -75,6 +77,7 @@ function QuestionCard({
           <label htmlFor={id}>답변</label>
           <textarea
             id={id}
+            disabled={busy}
             rows={3}
             maxLength={2000}
             value={answer}
@@ -120,21 +123,38 @@ function QuestionCard({
   );
 }
 
-export function FileVersions({ id, reader }: { readonly id: string; readonly reader: boolean }) {
+export function FileVersions({
+  id,
+  reader,
+  busy,
+  onBusyChange,
+  onUploaded,
+}: {
+  readonly id: string;
+  readonly reader: boolean;
+  readonly busy: boolean;
+  readonly onBusyChange: (busy: boolean) => void;
+  readonly onUploaded: () => Promise<void>;
+}) {
   const [list, setList] = useState<RevisionSummary[]>([]);
   const [selected, setSelected] = useState<FileRevision | null>(null);
   const [sheet, setSheet] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const selectionRequest = useRef(0);
   const query = reader ? "?view=shared" : "";
   const open = useCallback(
     async (revision: number) => {
-      setSelected(
-        await read(`/api/sources/${id}/revisions/${revision}${query}`, fileRevisionSchema, reader),
+      const request = ++selectionRequest.current;
+      const detail = await read(
+        `/api/sources/${id}/revisions/${revision}${query}`,
+        fileRevisionSchema,
+        reader,
       );
+      if (request !== selectionRequest.current) return;
+      setSelected(detail);
       setSheet(0);
     },
     [id, query, reader],
@@ -155,8 +175,8 @@ export function FileVersions({ id, reader }: { readonly id: string; readonly rea
   }, [refresh, open]);
   async function upload(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!file || !list[0]) return;
-    setBusy(true);
+    if (busy || !file || !list[0]) return;
+    onBusyChange(true);
     setError("");
     setStatus("");
     try {
@@ -166,6 +186,7 @@ export function FileVersions({ id, reader }: { readonly id: string; readonly rea
       const next = fileRevisionSchema.parse(
         await http.post(`/api/sources/${id}/revisions`, { body, timeout: 60000 }).json(),
       );
+      await onUploaded();
       await refresh();
       await open(next.revision);
       setUploading(false);
@@ -178,11 +199,13 @@ export function FileVersions({ id, reader }: { readonly id: string; readonly rea
     } catch (e) {
       setError(await message(e));
     } finally {
-      setBusy(false);
+      onBusyChange(false);
     }
   }
   async function answer(question: Question, body: { answer: string } | { skipped: true }) {
-    if (!selected) return;
+    if (!selected) return false;
+    const request = selectionRequest.current;
+    setError("");
     try {
       const updated = questionResultSchema.parse(
         await http
@@ -191,13 +214,19 @@ export function FileVersions({ id, reader }: { readonly id: string; readonly rea
           })
           .json(),
       );
-      setSelected({
-        ...selected,
-        questions: selected.questions.map((q) => (q.id === updated.id ? updated : q)),
-      });
-      void refresh();
+      setSelected((current) =>
+        request === selectionRequest.current && current?.revisionId === selected.revisionId
+          ? {
+              ...current,
+              questions: current.questions.map((q) => (q.id === updated.id ? updated : q)),
+            }
+          : current,
+      );
+      void refresh().catch(async (e) => setError(await message(e)));
+      return true;
     } catch (e) {
-      setError(await message(e));
+      if (request === selectionRequest.current) setError(await message(e));
+      return false;
     }
   }
   const label = (q: Question) =>
@@ -235,7 +264,7 @@ export function FileVersions({ id, reader }: { readonly id: string; readonly rea
               개인정보가 들어 있지 않은지 확인하세요.
             </p>
             <div className="actions">
-              <button type="submit" disabled={busy || !file}>
+              <button type="submit" disabled={busy || !file || !list[0]}>
                 {busy ? "비교하고 있습니다…" : "올리고 비교하기"}
               </button>
               <button
@@ -250,7 +279,7 @@ export function FileVersions({ id, reader }: { readonly id: string; readonly rea
           </form>
         ) : (
           <div className="actions">
-            <button type="button" onClick={() => setUploading(true)}>
+            <button type="button" disabled={busy || !list[0]} onClick={() => setUploading(true)}>
               새 버전 올리기
             </button>
           </div>

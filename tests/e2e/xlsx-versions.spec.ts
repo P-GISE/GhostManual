@@ -148,10 +148,10 @@ test("concurrent answers retain both results", async ({ page }) => {
   await request;
   await cards.nth(1).getByLabel("답변").fill("두 번째 출처 답변");
   await cards.nth(1).getByRole("button", { name: "답변 저장" }).click();
-  await expect(cards.nth(1).getByText("두 번째 출처 답변", { exact: true })).toBeVisible();
+  await expect(cards.nth(1).locator("p.answer")).toHaveText("두 번째 출처 답변");
   releaseFirst();
-  await expect(cards.nth(0).getByText("첫 번째 업무 답변", { exact: true })).toBeVisible();
-  await expect(cards.nth(1).getByText("두 번째 출처 답변", { exact: true })).toBeVisible();
+  await expect(cards.nth(0).locator("p.answer")).toHaveText("첫 번째 업무 답변");
+  await expect(cards.nth(1).locator("p.answer")).toHaveText("두 번째 출처 답변");
 });
 
 test("a failed answer keeps the draft editable and manual errors are visible", async ({ page }) => {
@@ -174,7 +174,7 @@ test("a failed answer keeps the draft editable and manual errors are visible", a
   await expect(card.getByRole("button", { name: "답변 저장" })).toBeEnabled();
   await page.unroute("**/questions/*");
   await card.getByRole("button", { name: "답변 저장" }).click();
-  await expect(card.getByText("실패해도 보존할 답변", { exact: true })).toBeVisible();
+  await expect(card.locator("p.answer")).toHaveText("실패해도 보존할 답변");
   await page.route("**/api/manuals", (route) =>
     route.request().method() === "POST"
       ? route.fulfill({

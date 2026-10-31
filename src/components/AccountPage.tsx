@@ -197,7 +197,11 @@ export function AccountPage() {
               계정과 원본, 엑셀 버전, 매뉴얼, 답변, 공유 권한을 모두 삭제합니다. 복구할 수 없습니다.
             </p>
             <label className="check">
-              <input type="checkbox" onChange={(e) => setConfirmed(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={(e) => setConfirmed(e.target.checked)}
+              />
               삭제할 내용을 확인했습니다.
             </label>
             <button

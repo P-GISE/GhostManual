@@ -189,7 +189,18 @@ export function SourceDetail({ id }: { readonly id: string }) {
             ? "공유 매뉴얼에 연결된 엑셀 버전입니다. 읽기 전용으로 확인할 수 있습니다."
             : "작업을 마친 엑셀을 새 버전으로 올리면 바뀐 부분을 질문합니다. 새 버전은 연결된 매뉴얼의 재검토가 필요합니다."}
         </p>
-        <FileVersions id={id} reader={reader} />
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        <FileVersions
+          id={id}
+          reader={reader}
+          busy={busy}
+          onBusyChange={setBusy}
+          onUploaded={async () => setSource(await read(`/api/sources/${id}`, sourceSchema))}
+        />
         {manualPanel}
       </>
     );
