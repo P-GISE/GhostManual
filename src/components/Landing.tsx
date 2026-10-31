@@ -18,8 +18,8 @@ const features = [
   ],
   [
     "파일 버전 기록·변경 질문",
-    "엑셀 등 작업 파일을 올리면 이전 버전과 비교해 바뀐 부분의 이유를 묻습니다.",
-    false,
+    "엑셀(.xlsx)을 올릴 때마다 버전으로 쌓고, 이전 버전과 비교해 바뀐 부분의 이유를 묻습니다.",
+    true,
   ],
 ] as const;
 export function Landing() {
@@ -44,7 +44,7 @@ export function Landing() {
         <div className="change-example">
           <div className="change-example-head">
             <strong>구매요청_집계.xlsx · v1 → v2</strong>
-            <span className="badge upcoming">예시 · 준비 중 기능</span>
+            <span className="badge">예시</span>
           </div>
           <p className="change-line">
             &apos;원본&apos; F14 <del>SUM(F2:F13)</del> → <ins>SUBTOTAL(9,F2:F13)</ins>
