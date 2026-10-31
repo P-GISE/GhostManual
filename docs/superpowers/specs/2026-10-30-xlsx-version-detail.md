@@ -104,7 +104,7 @@ CREATE TABLE revision_questions(
   revision_id uuid NOT NULL,
   position integer NOT NULL CHECK (position BETWEEN 0 AND 9),
   kind text NOT NULL CHECK (kind IN ('purpose','origin','change','other')),
-  change_group_ids uuid[] NOT NULL DEFAULT '{}',
+  group_positions integer[] NOT NULL DEFAULT '{}',  -- 같은 버전 change_groups.position (질문을 묶음 저장 전에 만들기 때문)
   question text NOT NULL CHECK (char_length(question) BETWEEN 1 AND 500),
   answer text CHECK (char_length(answer) BETWEEN 1 AND 2000),
   skipped boolean NOT NULL DEFAULT false,
@@ -121,7 +121,7 @@ CREATE TABLE revision_questions(
 ALTER TABLE manual_versions ADD COLUMN history jsonb;
 ```
 
-- `kind='other'`는 "기타 변경 N건" 질문이며 `change_group_ids`에 묶인 묶음 여러 개를 가진다. `kind='change'`는 묶음 하나를 가리킨다.
+- `kind='other'`는 "기타 변경 N건" 질문이며 `group_positions`에 묶음 순번 여러 개를 가진다. `kind='change'`는 묶음 하나를 가리킨다.
 - `source_revisions`·`manual_versions`의 기존 수정 금지 트리거는 `ALTER TABLE ... ADD COLUMN`과 무관하다(행 UPDATE가 아님).
 - 계정 삭제·자료 삭제는 기존 CASCADE로 새 테이블까지 지워진다. 계정 workspace는 만료되지 않는다.
 - 용량 계산: `SELECT COALESCE(sum(size_bytes),0) FROM source_files WHERE workspace_id=$1`. 기존 텍스트 한도(자료 50개·버전 200개·텍스트 2 MiB)는 그대로 함께 적용한다.
@@ -344,7 +344,7 @@ AI(OpenAI Responses API, 기존 src/lib/ai.ts 호출 경로): 질문 ≤10개 + 
 ```
 
 - **입력**: 파일 제목, 시트 목록(이름·행·열 수), 각 시트 머리글 행(1행 값, 시트당 최대 30열·각 40자), 변경 묶음(종류·시트·범위·칸 수·수식 전후 문자열 각 200자 이하). 셀 값·파일 이름·사용자 이름·이메일은 넣지 않는다. 머리글은 "열 이름"으로만 쓰며 2행 이하 값은 보내지 않는다.
-- **출력(구조화 JSON, Zod 검사)**: `{ "summary": "…", "questions": [{ "groupIds": ["…"], "question": "…" }] }`. `groupIds`는 입력에 있는 묶음 id만 허용, 질문 1~300자, 최대 10개. 검사 실패 시 규칙 질문으로 대체.
+- **출력(구조화 JSON, Zod 검사)**: `{ "summary": "…", "questions": [{ "groupPositions": [0], "question": "…" }] }`. `groupPositions`는 입력에 있는 묶음 순번만 허용, 질문 1~300자, 최대 10개. 검사 실패 시 규칙 질문으로 대체.
 - **프롬프트 원칙**: 관찰한 변경만 근거로 묻고 의도를 단정하지 않는다("~하려는 건가요?"처럼 확인형), 엑셀 기능 이름(필터·수식·시트)으로 짧고 친절하게, 한국어.
 - **저장**: `revision_questions.question`에 AI 문구를 저장하고 `source`(`ai`·`rule`) 열을 둔다. 버전 요약은 `source_files`와 같은 버전 단위로 `ai_summary text`(nullable)에 둔다. 화면에 "AI가 만든 질문" 표시. 3절 migration에 두 열을 추가한다.
 - **비용·한도**: 기존 `AI_DAILY_LIMIT`(일 호출 수)와 `usage_counters`를 그대로 쓴다. 업로드 1회 = AI 호출 1회.
