@@ -119,3 +119,30 @@ it("limits a reader to the published version", async () => {
     answerQuestion(reader, v1.id, 2, question.id, { answer: "x" }),
   ).rejects.toMatchObject({ httpStatus: 403 });
 });
+
+it("keeps Reader detail and counts frozen until the manual is published again", async () => {
+  const { ctx, v1, v2, manualId } = await twoVersions();
+  const question = v2.questions[0];
+  if (!question) throw new Error("expected a question");
+  await answerQuestion(ctx, v1.id, 2, question.id, { answer: "published answer" });
+  let manual = await getManual(ctx, manualId);
+  await publishManual(ctx, manualId, manual.draftRevision, manual.draft.unknowns);
+  const reader = await requireSession((await shareWithNewReader(ctx, manualId)).token);
+  await answerQuestion(ctx, v1.id, 2, question.id, { skipped: true });
+  expect((await getFileRevision(ctx, v1.id, 2)).questions[0]).toMatchObject({
+    answer: null,
+    skipped: true,
+  });
+  expect((await getFileRevision(reader, v1.id, 2)).questions[0]).toMatchObject({
+    answer: "published answer",
+    skipped: false,
+  });
+  expect((await listFileRevisions(reader, v1.id))[0]?.answeredCount).toBe(1);
+  manual = await getManual(ctx, manualId);
+  await publishManual(ctx, manualId, manual.draftRevision, manual.draft.unknowns);
+  expect((await getFileRevision(reader, v1.id, 2)).questions[0]).toMatchObject({
+    answer: null,
+    skipped: true,
+  });
+  expect((await listFileRevisions(reader, v1.id))[0]?.answeredCount).toBe(0);
+});

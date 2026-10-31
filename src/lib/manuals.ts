@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
-import { FileHistorySchema, fileHistory } from "./file-sources.ts";
+import { FileHistorySchema, fileHistory, reconcileFileUnknowns } from "./file-sources.ts";
 import { type ManualDraft, ManualDraftSchema } from "./schemas.ts";
 import { assertSession } from "./session.ts";
 import { paragraphs } from "./sources.ts";
@@ -134,6 +134,10 @@ export async function saveDraft(
       .parse(raw);
     if (source.revision !== source.current) throw conflict();
     validateReferences(parsed, source.text);
+    const reconciled = {
+      ...parsed,
+      unknowns: await reconcileFileUnknowns(db, source.sourceId, source.revision, parsed.unknowns),
+    };
     const found = await db.query<Record<string, unknown>>(
       "SELECT id,draft_revision FROM manuals WHERE source_id=$1 AND workspace_id=$2 FOR UPDATE",
       [source.sourceId, ctx.workspaceId],
@@ -146,14 +150,14 @@ export async function saveDraft(
       id = existing.id;
       await db.query(
         "UPDATE manuals SET draft=$1,draft_revision=draft_revision+1,source_revision_id=$2,provenance=$3 WHERE id=$4",
-        [parsed, sourceRevisionId, origin, id],
+        [reconciled, sourceRevisionId, origin, id],
       );
     } else {
       if (expectedDraftRevision !== undefined) throw conflict();
       id = newId();
       await db.query(
         "INSERT INTO manuals(id,workspace_id,source_id,source_revision_id,draft,provenance) VALUES($1,$2,$3,$4,$5,$6)",
-        [id, ctx.workspaceId, source.sourceId, sourceRevisionId, parsed, origin],
+        [id, ctx.workspaceId, source.sourceId, sourceRevisionId, reconciled, origin],
       );
     }
     return manualInTransaction(db, ctx, id);

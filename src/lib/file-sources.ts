@@ -193,7 +193,7 @@ export async function fileRevisionInTransaction(
         )
       ).rows,
     );
-  const questions = z
+  let questions = z
     .array(QuestionRow)
     .parse(
       (
@@ -203,6 +203,21 @@ export async function fileRevisionInTransaction(
         )
       ).rows,
     );
+  if (ctx.role === "reader") {
+    const published = await db.query<{ history: unknown }>(
+      "SELECT mv.history FROM manuals m JOIN manual_versions mv ON mv.manual_id=m.id AND mv.version=m.published_version WHERE m.id=$1 AND m.workspace_id=$2 AND mv.source_revision_id=$3 AND m.needs_review=false",
+      [ctx.manualId, ctx.workspaceId, base.revisionId],
+    );
+    const history = FileHistorySchema.nullable().parse(published.rows[0]?.history ?? null);
+    const frozen = history?.revisions.find((item) => item.revision === base.revision);
+    // Question identity is immutable; only published answers may cross the Reader boundary.
+    questions = (frozen?.questions ?? []).map((snapshot, index) => {
+      const identity = questions[index];
+      if (!identity || identity.question !== snapshot.question)
+        throw new AppError("not_found", 404, "게시된 질문을 찾을 수 없습니다.");
+      return { ...identity, ...snapshot };
+    });
+  }
   // A later revision with questions but no changes could not be compared (one side was over the limit).
   const compareStatus: CompareStatus =
     base.revision === 1
@@ -271,8 +286,36 @@ export function syncUnknowns(
   const room = 30 - kept.length;
   const items = unanswered.map((q) => `${prefix}${q}`.slice(0, 500));
   if (items.length <= room) return [...kept, ...items];
+  if (room < 1)
+    throw new AppError(
+      "unknowns_limit",
+      422,
+      "확인 필요 항목이 30개입니다. 기존 항목을 정리하거나 질문에 답한 뒤 다시 시도하세요.",
+    );
   const rest = items.length - room + 1;
   return [...kept, ...items.slice(0, room - 1), `${prefix}답하지 않은 변경 질문 ${rest}건`];
+}
+export async function reconcileFileUnknowns(
+  db: DbClient,
+  sourceId: string,
+  upToRevision: number,
+  unknowns: readonly string[],
+): Promise<string[]> {
+  const revisions = await db.query<{ revision: number; questions: string[] }>(
+    `SELECT r.revision,COALESCE(array_agg(q.question ORDER BY q.position)
+       FILTER (WHERE q.id IS NOT NULL AND q.answer IS NULL),ARRAY[]::text[]) AS questions
+     FROM source_revisions r JOIN source_files f ON f.revision_id=r.id
+     LEFT JOIN revision_questions q ON q.revision_id=r.id
+     WHERE r.source_id=$1 AND r.revision<=$2 GROUP BY r.revision ORDER BY r.revision`,
+    [sourceId, upToRevision],
+  );
+  const kept = unknowns.filter(
+    (item) => !revisions.rows.some((row) => item.startsWith(unknownPrefix(row.revision))),
+  );
+  return revisions.rows.reduce(
+    (items, row) => syncUnknowns(items, row.revision, row.questions),
+    kept,
+  );
 }
 export async function syncManual(
   db: DbClient,

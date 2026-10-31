@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { pool } from "../../src/lib/db.ts";
-import { addFileRevision, createFileSource } from "../../src/lib/file-sources.ts";
+import {
+  addFileRevision,
+  answerQuestion,
+  createFileSource,
+  getFileRevision,
+} from "../../src/lib/file-sources.ts";
 import { getManual, saveDraft } from "../../src/lib/manuals.ts";
 import { createSource } from "../../src/lib/sources.ts";
 import { exampleDraft, exampleSource } from "../fixtures/manual-example.ts";
@@ -106,6 +111,7 @@ it("flags the linked manual and lists unanswered questions as unknowns", async (
   expect(after.draftRevision).toBe(manual.draftRevision + 1);
   expect(after.draft.unknowns).toEqual([
     "기존 확인 항목",
+    ...v1.questions.map((q) => `[v1 확인 필요] ${q.question}`),
     ...v2.questions.map((q) => `[v2 확인 필요] ${q.question}`),
   ]);
 });
@@ -131,4 +137,55 @@ it("POST /api/sources/:id/revisions uploads a new version", async () => {
   );
   expect(response.status).toBe(201);
   expect(await response.json()).toMatchObject({ revision: 2, compareStatus: "compared" });
+});
+
+it("reconciles unanswered questions from all versions on late draft creation and save", async () => {
+  const { ctx, v1 } = await firstVersion();
+  const v2 = await addFileRevision(ctx, v1.id, {
+    fileName: "정산_1030.xlsx",
+    bytes: fixture("정산_1030.xlsx"),
+    expectedRevision: 1,
+  });
+  const [first, second] = v2.questions;
+  if (!first || !second) throw new Error("expected questions");
+  await answerQuestion(ctx, v1.id, 2, first.id, { answer: "done" });
+  await answerQuestion(ctx, v1.id, 2, second.id, { skipped: true });
+  const input = { ...exampleDraft, references: [], unknowns: ["human"] };
+  const expected = [
+    "human",
+    ...v1.questions.map((q) => `[v1 확인 필요] ${q.question}`),
+    ...v2.questions.slice(1).map((q) => `[v2 확인 필요] ${q.question}`),
+  ];
+  const manual = await saveDraft(ctx, v2.revisionId, input);
+  expect(manual.draft.unknowns).toEqual(expected);
+  const saved = await saveDraft(ctx, v2.revisionId, input, manual.draftRevision);
+  expect(saved.draft.unknowns).toEqual(expected);
+  expect(saved.draftRevision).toBe(manual.draftRevision + 1);
+});
+it("rolls back a new revision and a skipped answer when unknowns have no room", async () => {
+  const { ctx, v1 } = await firstVersion();
+  for (const question of v1.questions)
+    await answerQuestion(ctx, v1.id, 1, question.id, { answer: "done" });
+  const human = Array.from({ length: 30 }, (_, i) => `human ${i}`);
+  const manual = await saveDraft(ctx, v1.revisionId, {
+    ...exampleDraft,
+    references: [],
+    unknowns: human,
+  });
+  await expect(
+    addFileRevision(ctx, v1.id, {
+      fileName: "정산_1030.xlsx",
+      bytes: fixture("정산_1030.xlsx"),
+      expectedRevision: 1,
+    }),
+  ).rejects.toMatchObject({ code: "unknowns_limit", httpStatus: 422 });
+  const question = v1.questions[0];
+  if (!question) throw new Error("expected a question");
+  await expect(answerQuestion(ctx, v1.id, 1, question.id, { skipped: true })).rejects.toMatchObject(
+    { code: "unknowns_limit", httpStatus: 422 },
+  );
+  expect((await getFileRevision(ctx, v1.id, 1)).questions[0]?.answer).toBe("done");
+  await expect(getFileRevision(ctx, v1.id, 2)).rejects.toMatchObject({ httpStatus: 404 });
+  expect((await getManual(ctx, manual.id)).draft.unknowns).toEqual(human);
+  expect((await getManual(ctx, manual.id)).draftRevision).toBe(manual.draftRevision);
 });
