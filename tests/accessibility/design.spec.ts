@@ -168,18 +168,14 @@ test("form placeholder remains readable against its input background", async ({ 
   ).toBeGreaterThanOrEqual(4.5);
 });
 
-test("home lists available and upcoming features in text", async ({ page }) => {
+test("home lists every feature as available in text", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   const features = page.getByRole("list", { name: "GhostManual 기능" }).getByRole("listitem");
   await expect(features).toHaveCount(6);
-  await expect(features.filter({ hasText: "사용 가능" })).toHaveCount(5);
-  await expect(
-    features.filter({
-      has: page.getByRole("heading", { level: 3, name: "파일 버전 기록·변경 질문" }),
-    }),
-  ).toContainText("준비 중");
-  await expect(page.getByText("예시 · 준비 중 기능")).toBeVisible();
+  await expect(features.filter({ hasText: "사용 가능" })).toHaveCount(6);
+  await expect(page.getByText("준비 중")).toHaveCount(0);
+  await expect(page.getByText("예시", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 

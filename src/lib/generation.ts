@@ -2,20 +2,21 @@ import { generateManual } from "./ai.ts";
 import { AppError } from "./errors.ts";
 import { getManual, listManuals, saveDraft } from "./manuals.ts";
 import { finishOperation, payloadHash, reserveAiAttempt } from "./operations.ts";
-import { getSource } from "./sources.ts";
+import { fileReadonly, getSource } from "./sources.ts";
 import type { SessionContext } from "./types.ts";
 export async function generateDraft(
   ctx: SessionContext,
   input: { sourceId: string; expectedRevision: number; key: string },
 ) {
   if (ctx.role !== "owner") throw new AppError("forbidden", 403, "소유자만 생성할 수 있습니다.");
-  if (process.env["AI_ENABLED"] !== "true" || !process.env["OPENAI_API_KEY"])
+  const source = await getSource(ctx, input.sourceId);
+  if (source.kind === "file") throw fileReadonly();
+  if (process.env["AI_ENABLED"] !== "true" || !process.env["ANTHROPIC_API_KEY"])
     throw new AppError(
       "ai_disabled",
       503,
       "AI 연결 전입니다. 자료 저장과 직접 편집, 사전 작성 예시는 사용할 수 있습니다.",
     );
-  const source = await getSource(ctx, input.sourceId);
   if (source.revision !== input.expectedRevision)
     throw new AppError("conflict", 409, "자료가 변경됐습니다.");
   const existing = (await listManuals(ctx)).find((m) => m.sourceId === source.id);

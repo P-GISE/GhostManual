@@ -13,6 +13,10 @@ const source = {
   title: "발급",
   text: "승인 후 계정을 발급합니다.".repeat(8),
   createdAt: new Date(),
+  kind: "text" as const,
+  fileType: null,
+  uploadedByName: null,
+  uploadedByDepartment: null,
 };
 const draft = {
   title: "발급",
@@ -47,23 +51,16 @@ let request: unknown;
 let payload: unknown;
 let httpStatus = 200;
 let stall = false;
-function response(value: unknown) {
+function response(value: unknown, text = JSON.stringify(value)) {
   return {
-    id: "resp_fixture",
-    object: "response",
-    created_at: 1,
-    status: "completed",
-    error: null,
-    incomplete_details: null,
-    output: [
-      {
-        id: "msg_fixture",
-        type: "message",
-        role: "assistant",
-        status: "completed",
-        content: [{ type: "output_text", text: JSON.stringify(value), annotations: [] }],
-      },
-    ],
+    id: "msg_fixture",
+    type: "message",
+    role: "assistant",
+    model: "claude-sonnet-5-5",
+    content: [{ type: "text", text }],
+    stop_reason: "end_turn",
+    stop_sequence: null,
+    usage: { input_tokens: 1, output_tokens: 1 },
   };
 }
 beforeEach(async () => {
@@ -73,7 +70,7 @@ beforeEach(async () => {
   stall = false;
   payload = response(draft);
   vi.stubEnv("AI_ENABLED", "true");
-  vi.stubEnv("OPENAI_API_KEY", "fixture-key");
+  vi.stubEnv("ANTHROPIC_API_KEY", "fixture-key");
   server = createServer(async (req, res) => {
     calls++;
     let body = "";
@@ -101,17 +98,11 @@ it("makes zero calls when disabled", async () => {
 });
 it("sends strict bounded private manual generation", async () => {
   expect(await generateManual(source)).toEqual(draft);
-  const body = z
-    .object({
-      store: z.boolean(),
-      max_output_tokens: z.number(),
-      text: z.object({ format: z.object({ type: z.string(), strict: z.boolean() }) }),
-    })
-    .parse(request);
-  expect(body).toMatchObject({
-    store: false,
-    max_output_tokens: 4000,
-    text: { format: { type: "json_schema", strict: true } },
+  expect(request).toMatchObject({
+    model: "claude-sonnet-5-5",
+    max_tokens: 16000,
+    fallbacks: "default",
+    output_config: { effort: "medium", format: { type: "json_schema" } },
   });
 });
 it.each(["quote", "field", "paragraph"])("rejects invalid manual %s", async (fault) => {
@@ -135,7 +126,7 @@ it("accepts claims using supplied candidate IDs", async () => {
     limitations: [],
   });
   expect((await generateAnswer([candidate], "발급 방법?")).status).toBe("supported");
-  expect(z.object({ max_output_tokens: z.number() }).parse(request).max_output_tokens).toBe(1500);
+  expect(z.object({ max_tokens: z.number() }).parse(request).max_tokens).toBe(8000);
 });
 it("rejects invented candidate IDs", async () => {
   payload = response({
@@ -149,38 +140,36 @@ it("rejects invented candidate IDs", async () => {
   });
 });
 it("distinguishes refusal", async () => {
-  payload = {
-    ...response(draft),
-    output: [
-      { type: "message", role: "assistant", content: [{ type: "refusal", refusal: "거절" }] },
-    ],
-  };
+  payload = { ...response(draft, ""), content: [], stop_reason: "refusal" };
   await expect(generateManual(source)).rejects.toMatchObject({ code: "ai_refused" });
 });
 it("distinguishes incomplete output", async () => {
-  payload = {
-    ...response(draft),
-    status: "incomplete",
-    incomplete_details: { reason: "max_output_tokens" },
-  };
+  payload = { ...response(draft), stop_reason: "max_tokens" };
   await expect(generateManual(source)).rejects.toMatchObject({ code: "ai_incomplete" });
 });
+it.each([
+  { stopReason: "max_tokens", text: '{"title":', code: "ai_incomplete", httpStatus: 502 },
+  {
+    stopReason: "refusal",
+    text: "I cannot help with this request.",
+    code: "ai_refused",
+    httpStatus: 422,
+  },
+])(
+  "classifies $stopReason before parsing non-JSON output",
+  async ({ stopReason, text, code, httpStatus }) => {
+    payload = { ...response(draft, text), stop_reason: stopReason };
+    await expect(generateManual(source)).rejects.toMatchObject({ code, httpStatus });
+    expect(calls).toBe(1);
+  },
+);
 it("rejects invalid JSON", async () => {
-  payload = {
-    ...response(draft),
-    output: [
-      {
-        type: "message",
-        role: "assistant",
-        content: [{ type: "output_text", text: "{bad", annotations: [] }],
-      },
-    ],
-  };
+  payload = response(draft, "{bad");
   await expect(generateManual(source)).rejects.toMatchObject({ code: "ai_invalid_output" });
 });
 it("does not retry provider errors", async () => {
   httpStatus = 500;
-  payload = { error: { message: "fixture", type: "server_error" } };
+  payload = { type: "error", error: { type: "api_error", message: "fixture" } };
   await expect(generateManual(source)).rejects.toMatchObject({ code: "ai_provider_error" });
   expect(calls).toBe(1);
 });
@@ -198,15 +187,13 @@ it("rejects fixture configuration outside test", () => {
 });
 
 it("makes zero calls when the key is missing", async () => {
-  vi.stubEnv("OPENAI_API_KEY", "");
+  vi.stubEnv("ANTHROPIC_API_KEY", "");
   await expect(generateManual(source)).rejects.toMatchObject({ code: "ai_missing_key" });
   expect(calls).toBe(0);
 });
 it("distinguishes provider quota errors without retry", async () => {
   httpStatus = 429;
-  payload = {
-    error: { message: "fixture", type: "insufficient_quota", code: "insufficient_quota" },
-  };
+  payload = { type: "error", error: { type: "rate_limit_error", message: "fixture" } };
   await expect(generateManual(source)).rejects.toMatchObject({ code: "ai_rate_limit" });
   expect(calls).toBe(1);
 });

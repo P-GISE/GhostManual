@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { http, type Manual, manualSchema, message, read } from "../lib/client";
+import { FileHistory } from "./FileHistory";
 import { ManualContent } from "./ManualContent";
 import { ManualVersionComparison } from "./ManualVersionComparison";
 import { QuestionForm } from "./QuestionForm";
@@ -220,6 +221,13 @@ export function ManualDetail({
           </section>
         </aside>
       </div>
+      {manual.published?.history && (
+        <FileHistory
+          history={manual.published.history}
+          sourceId={manual.sourceId}
+          reader={reader}
+        />
+      )}
       {!reader && manual.published && (
         <details>
           <summary>게시된 검수 버전 {manual.published.version} 보기</summary>

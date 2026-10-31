@@ -9,7 +9,70 @@ export const sourceSchema = z.object({
   title: z.string(),
   text: z.string(),
   createdAt: z.string(),
+  kind: z.enum(["text", "file"]).default("text"),
 });
+const questionSchema = z.object({
+  id: z.uuid(),
+  kind: z.string(),
+  question: z.string(),
+  answer: z.string().nullable(),
+  skipped: z.boolean(),
+  source: z.enum(["rule", "ai"]),
+  groupPositions: z.array(z.number()),
+});
+export type Question = z.infer<typeof questionSchema>;
+const fileBase = {
+  revision: z.number(),
+  revisionId: z.uuid(),
+  createdAt: z.string(),
+  uploadedByName: z.string().nullable(),
+  uploadedByDepartment: z.string().nullable(),
+  file: z.object({ name: z.string(), sizeBytes: z.number() }),
+  compareStatus: z.enum(["first", "compared", "no_changes", "limit_exceeded"]),
+};
+export const revisionSummarySchema = z.object({
+  ...fileBase,
+  changeCount: z.number(),
+  questionCount: z.number(),
+  answeredCount: z.number(),
+});
+export type RevisionSummary = z.infer<typeof revisionSummarySchema>;
+export const fileRevisionSchema = z.object({
+  ...fileBase,
+  id: z.uuid(),
+  title: z.string(),
+  aiSummary: z.string().nullable(),
+  changes: z.array(
+    z.object({
+      position: z.number(),
+      kind: z.string(),
+      sheet: z.string().nullable(),
+      range: z.string().nullable(),
+      summary: z.record(z.string(), z.unknown()),
+    }),
+  ),
+  questions: z.array(questionSchema),
+  usage: z.object({ bytes: z.number(), limitBytes: z.number() }),
+  preview: z
+    .array(
+      z.object({
+        sheet: z.string(),
+        hidden: z.boolean(),
+        rows: z.number(),
+        cols: z.number(),
+        cells: z.array(z.array(z.union([z.string(), z.number(), z.boolean(), z.null()]))),
+      }),
+    )
+    .default([]),
+});
+export type FileRevision = z.infer<typeof fileRevisionSchema>;
+export const questionResultSchema = questionSchema;
+export const kst = (iso: string) =>
+  new Date(iso).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 16);
+export const fileSize = (bytes: number) =>
+  bytes < 1048576
+    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+    : `${(bytes / 1048576).toFixed(1)} MB`;
 export const publishedSchema = z.object({
   id: z.uuid(),
   manualId: z.uuid(),
@@ -18,8 +81,35 @@ export const publishedSchema = z.object({
   content: ManualDraftSchema,
   provenance: z.string(),
   acknowledgedUnknowns: z.array(z.string()),
+  history: z
+    .object({
+      revisions: z.array(
+        z.object({
+          revision: z.number(),
+          createdAt: z.string(),
+          uploadedByName: z.string().nullable(),
+          uploadedByDepartment: z.string().nullable(),
+          fileName: z.string(),
+          compareStatus: z.string(),
+          aiSummary: z.string().nullable(),
+          changes: z.array(
+            z.object({
+              kind: z.string(),
+              sheet: z.string().nullable(),
+              range: z.string().nullable(),
+            }),
+          ),
+          questions: z.array(
+            z.object({ question: z.string(), answer: z.string().nullable(), skipped: z.boolean() }),
+          ),
+        }),
+      ),
+    })
+    .nullable()
+    .default(null),
   createdAt: z.string(),
 });
+export type FileHistory = NonNullable<z.infer<typeof publishedSchema>["history"]>;
 export const manualSchema = z.object({
   id: z.uuid(),
   sourceId: z.uuid(),

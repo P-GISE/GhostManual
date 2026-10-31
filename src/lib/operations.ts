@@ -96,3 +96,28 @@ export async function finishOperation(
     );
   });
 }
+// Counts one change-question AI call against the global and per-workspace daily limits; false when used up.
+export async function reserveChangeAi(ctx: SessionContext): Promise<boolean> {
+  return transaction(async (db) => {
+    await db.query("SELECT pg_advisory_xact_lock(782402)");
+    await assertSession(db, ctx, true);
+    const day = "(now() AT TIME ZONE 'UTC')::date";
+    const scopes = [
+      { scope: "global", kind: "all", max: Number(process.env["AI_DAILY_LIMIT"] ?? 100) },
+      { scope: ctx.workspaceId, kind: "change", max: 30 },
+    ];
+    for (const quota of scopes) {
+      const count = await db.query<{ attempts: number }>(
+        `SELECT attempts FROM usage_counters WHERE day=${day} AND scope=$1 AND kind=$2`,
+        [quota.scope, quota.kind],
+      );
+      if ((count.rows[0]?.attempts ?? 0) >= quota.max) return false;
+    }
+    for (const quota of scopes)
+      await db.query(
+        `INSERT INTO usage_counters(day,scope,kind,attempts) VALUES(${day},$1,$2,1) ON CONFLICT(day,scope,kind) DO UPDATE SET attempts=usage_counters.attempts+1`,
+        [quota.scope, quota.kind],
+      );
+    return true;
+  });
+}

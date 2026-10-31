@@ -95,7 +95,7 @@ export async function ask(
     isOutdated: false,
   };
   if (candidates.length) {
-    if (process.env["AI_ENABLED"] !== "true" || !process.env["OPENAI_API_KEY"]) {
+    if (process.env["AI_ENABLED"] !== "true" || !process.env["ANTHROPIC_API_KEY"]) {
       result = {
         ...result,
         status: "unavailable",

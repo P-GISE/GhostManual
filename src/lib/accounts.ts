@@ -146,17 +146,61 @@ export async function logout(ctx: SessionContext): Promise<void> {
     await db.query("DELETE FROM sessions WHERE id=$1", [ctx.sessionId]);
   });
 }
+export const FILE_QUOTA_BYTES = 104857600;
+async function profile(db: DbClient, ctx: SessionContext) {
+  // Accounts older than an hour existed before terms consent; the welcome screen must not delete them.
+  const result = await db.query<Record<string, unknown>>(
+    `SELECT u.name,u.email,u.department,u.password_hash IS NOT NULL AS password,u.google_sub IS NOT NULL AS google,
+      u.created_at>now()-interval '1 hour' AS "newAccount",
+      (SELECT COALESCE(sum(size_bytes),0) FROM source_files WHERE workspace_id=s.workspace_id) AS bytes
+      FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1`,
+    [ctx.sessionId],
+  );
+  if (!result.rows[0]) throw new AppError("unauthorized", 401, "로그인이 필요합니다.");
+  const row = z
+    .object({
+      name: z.string(),
+      email: z.string(),
+      department: z.string().nullable(),
+      password: z.boolean(),
+      google: z.boolean(),
+      newAccount: z.boolean(),
+      bytes: z.coerce.number(),
+    })
+    .parse(result.rows[0]);
+  return {
+    name: row.name,
+    email: row.email,
+    department: row.department,
+    loginMethods: [
+      ...(row.password ? ["password" as const] : []),
+      ...(row.google ? ["google" as const] : []),
+    ],
+    usage: { bytes: row.bytes, limitBytes: FILE_QUOTA_BYTES },
+    newAccount: row.newAccount,
+  };
+}
 export async function currentUser(ctx: SessionContext) {
   return transaction(async (db) => {
     await assertSession(db, ctx, true);
-    // Accounts older than an hour existed before terms consent; the welcome screen must not delete them.
-    const result = await db.query<{ name: string; email: string; newAccount: boolean }>(
-      `SELECT u.name,u.email,u.created_at>now()-interval '1 hour' AS "newAccount" FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1`,
-      [ctx.sessionId],
+    return profile(db, ctx);
+  });
+}
+const ProfileSchema = z.strictObject({
+  name: z.string().trim().min(1).max(40),
+  department: z.string().trim().min(1).max(40).nullable(),
+});
+export async function updateProfile(ctx: SessionContext, input: unknown) {
+  const parsed = ProfileSchema.safeParse(input);
+  if (!parsed.success)
+    throw new AppError("invalid_input", 422, "이름과 소속은 40자까지 입력할 수 있습니다.");
+  return transaction(async (db) => {
+    await assertSession(db, ctx, true);
+    await db.query(
+      "UPDATE users SET name=$1,department=$2 WHERE id=(SELECT user_id FROM sessions WHERE id=$3)",
+      [parsed.data.name, parsed.data.department, ctx.sessionId],
     );
-    const user = result.rows[0];
-    if (!user) throw new AppError("unauthorized", 401, "로그인이 필요합니다.");
-    return user;
+    return profile(db, ctx);
   });
 }
 export async function deleteAccount(ctx: SessionContext): Promise<void> {
