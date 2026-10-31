@@ -229,9 +229,10 @@ export function FileVersions({ id, reader }: { readonly id: string; readonly rea
               aria-describedby="revision-help"
             />
             <p id="revision-help" className="help">
-              .xlsx, 5 MB까지. 직전 버전과 비교해 바뀐 부분을 질문합니다. AI가 켜져 있으면 시트
-              이름·열 이름·수식과 바뀐 위치가 AI(Anthropic Claude)로 전송됩니다. 셀 값은 전송되지
-              않습니다.
+              .xlsx, 5 MB까지. 직전 버전과 비교해 바뀐 부분을 질문합니다. AI가 켜져 있으면 자료
+              제목·시트 이름·첫 행의 열 이름·수식·변경 위치와 개수가 AI(Anthropic Claude)로
+              전송됩니다. 일반 데이터 셀 값과 원본 파일은 보내지 않습니다. 제목·머리글·수식에
+              개인정보가 들어 있지 않은지 확인하세요.
             </p>
             <div className="actions">
               <button type="submit" disabled={busy || !file}>

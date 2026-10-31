@@ -147,6 +147,22 @@ it("distinguishes incomplete output", async () => {
   payload = { ...response(draft), stop_reason: "max_tokens" };
   await expect(generateManual(source)).rejects.toMatchObject({ code: "ai_incomplete" });
 });
+it.each([
+  { stopReason: "max_tokens", text: '{"title":', code: "ai_incomplete", httpStatus: 502 },
+  {
+    stopReason: "refusal",
+    text: "I cannot help with this request.",
+    code: "ai_refused",
+    httpStatus: 422,
+  },
+])(
+  "classifies $stopReason before parsing non-JSON output",
+  async ({ stopReason, text, code, httpStatus }) => {
+    payload = { ...response(draft, text), stop_reason: stopReason };
+    await expect(generateManual(source)).rejects.toMatchObject({ code, httpStatus });
+    expect(calls).toBe(1);
+  },
+);
 it("rejects invalid JSON", async () => {
   payload = response(draft, "{bad");
   await expect(generateManual(source)).rejects.toMatchObject({ code: "ai_invalid_output" });

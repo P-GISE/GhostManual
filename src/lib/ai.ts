@@ -50,7 +50,7 @@ export async function generate<T>(
   const provider = client(timeout);
   try {
     // A declined request is re-run server-side on Anthropic's recommended fallback model.
-    const response = await provider.beta.messages.parse({
+    const response = await provider.beta.messages.create({
       model: process.env["ANTHROPIC_MODEL"] ?? "claude-sonnet-5-5",
       max_tokens: maxTokens,
       betas: ["server-side-fallback-2026-07-01"],
@@ -63,7 +63,8 @@ export async function generate<T>(
       throw new AppError("ai_refused", 422, "AI가 요청을 거절했습니다.");
     if (response.stop_reason === "max_tokens")
       throw new AppError("ai_incomplete", 502, "AI 출력이 완료되지 않았습니다.");
-    const parsed = schema.safeParse(response.parsed_output);
+    const text = response.content.find((block) => block.type === "text");
+    const parsed = schema.safeParse(text ? JSON.parse(text.text) : null);
     if (!parsed.success)
       throw new AppError("ai_invalid_output", 502, "AI 출력 형식이 올바르지 않습니다.");
     return parsed.data;
@@ -77,7 +78,6 @@ export async function generate<T>(
       throw new AppError("ai_rate_limit", 503, "AI 제공자 사용 한도에 도달했습니다.", true);
     if (error instanceof Anthropic.APIError)
       throw new AppError("ai_provider_error", 502, "AI 제공자 요청에 실패했습니다.", true);
-    // The SDK reports structured output it could not parse as its base error class.
     if (error instanceof Anthropic.AnthropicError)
       throw new AppError("ai_invalid_output", 502, "AI 출력 형식이 올바르지 않습니다.");
     throw error;
