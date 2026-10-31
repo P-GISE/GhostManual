@@ -199,7 +199,11 @@ export function SourceDetail({ id }: { readonly id: string }) {
           reader={reader}
           busy={busy}
           onBusyChange={setBusy}
-          onUploaded={async () => setSource(await read(`/api/sources/${id}`, sourceSchema))}
+          onUploaded={({ revision, revisionId }) =>
+            setSource((current) =>
+              current?.id === id ? { ...current, revision, revisionId } : current,
+            )
+          }
         />
         {manualPanel}
       </>

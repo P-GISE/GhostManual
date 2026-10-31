@@ -134,7 +134,7 @@ export function FileVersions({
   readonly reader: boolean;
   readonly busy: boolean;
   readonly onBusyChange: (busy: boolean) => void;
-  readonly onUploaded: () => Promise<void>;
+  readonly onUploaded: (saved: FileRevision) => void;
 }) {
   const [list, setList] = useState<RevisionSummary[]>([]);
   const [selected, setSelected] = useState<FileRevision | null>(null);
@@ -144,27 +144,32 @@ export function FileVersions({
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const selectionRequest = useRef(0);
+  const listRequest = useRef(0);
   const query = reader ? "?view=shared" : "";
+  const readDetail = useCallback(
+    (revision: number) =>
+      read(`/api/sources/${id}/revisions/${revision}${query}`, fileRevisionSchema, reader),
+    [id, query, reader],
+  );
   const open = useCallback(
     async (revision: number) => {
       const request = ++selectionRequest.current;
-      const detail = await read(
-        `/api/sources/${id}/revisions/${revision}${query}`,
-        fileRevisionSchema,
-        reader,
-      );
+      const detail = await readDetail(revision);
       if (request !== selectionRequest.current) return;
       setSelected(detail);
       setSheet(0);
+      setError("");
     },
-    [id, query, reader],
+    [readDetail],
   );
   const refresh = useCallback(async () => {
+    const request = ++listRequest.current;
     const revisions = await read(
       `/api/sources/${id}/revisions${query}`,
       z.array(revisionSummarySchema),
       reader,
     );
+    if (request !== listRequest.current) return [];
     setList(revisions);
     return revisions;
   }, [id, query, reader]);
@@ -186,9 +191,19 @@ export function FileVersions({
       const next = fileRevisionSchema.parse(
         await http.post(`/api/sources/${id}/revisions`, { body, timeout: 60000 }).json(),
       );
-      await onUploaded();
-      await refresh();
-      await open(next.revision);
+      onUploaded(next);
+      ++listRequest.current;
+      const latest = revisionSummarySchema.parse({
+        ...next,
+        changeCount: next.changes.length,
+        questionCount: next.questions.length,
+        answeredCount: next.questions.filter((q) => q.answer !== null).length,
+      });
+      setList((current) =>
+        current[0] && current[0].revision >= latest.revision ? current : [latest, ...current],
+      );
+      setSelected(next);
+      setSheet(0);
       setUploading(false);
       setFile(null);
       setStatus(
@@ -196,6 +211,20 @@ export function FileVersions({
           ? `v${next.revision}를 저장했습니다. 바뀐 부분 ${next.changes.length}건에 질문 ${next.questions.length}개를 만들었습니다. 연결된 매뉴얼은 재검토가 필요합니다.`
           : `v${next.revision}를 저장했습니다. ${statusText[next.compareStatus]}.`,
       );
+      const request = ++selectionRequest.current;
+      void readDetail(next.revision)
+        .then(({ preview }) => {
+          if (request !== selectionRequest.current) return;
+          setSelected((current) =>
+            current?.revisionId === next.revisionId ? { ...current, preview } : current,
+          );
+        })
+        .catch(() => {
+          if (request === selectionRequest.current)
+            setError(
+              `v${next.revision}는 저장됐지만 시트 미리보기를 불러오지 못했습니다. 버전 기록에서 다시 선택하세요.`,
+            );
+        });
     } catch (e) {
       setError(await message(e));
     } finally {

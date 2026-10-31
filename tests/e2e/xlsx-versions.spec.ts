@@ -257,6 +257,9 @@ test("a saved upload stays committed when the follow-up read fails", async ({ pa
     "true",
   );
   await expect(page.getByRole("link", { name: "v2 원본 내려받기" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+    "시트 미리보기를 불러오지 못했습니다",
+  );
   await expect(input).toHaveCount(0);
   await page.getByRole("button", { name: "새 버전 올리기" }).click();
   await expect(input).toHaveValue("");
