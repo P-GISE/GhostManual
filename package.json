@@ -22,9 +22,10 @@
     "node": ">=24 <25"
   },
   "dependencies": {
+    "fast-xml-parser": "5.11.2",
     "ky": "2.1.0",
     "next": "16.4.1",
-    "nodemailer": "10.1.0",
+    "nodemailer": "10.1.4",
     "openai": "7.27.0",
     "pg": "8.23.1",
     "react": "19.3.0",
@@ -39,6 +40,7 @@
     "@types/pg": "8.23.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "fflate": "0.8.3",
     "typescript": "7.0.2",
     "vitest": "5.0.3"
   }

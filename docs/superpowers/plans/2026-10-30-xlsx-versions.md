@@ -52,7 +52,7 @@
 
 ---
 
-### Task 0: 엔진 계약과 자리 (박기성과 함께 확정, 가장 먼저 병합)
+### Task 0: 엔진 계약과 자리 — ✅ 완료(박기성 PR #25, `f6ee13f`)
 
 **Files:**
 - Create: `src/lib/xlsx/types.ts`, `src/lib/xlsx/index.ts`
@@ -81,7 +81,7 @@ export function buildQuestions(groups: ChangeGroup[] | null, first: boolean): Ru
 - [ ] **Step 4:** 같은 명령 PASS, `npm run lint`·`npx tsc --noEmit` 통과.
 - [ ] **Step 5:** `git commit -m "feat: 엑셀 엔진 계약 타입과 자리 추가"` → 박기성에게 계약 확인 요청.
 
-### 박기성 엔진 작업 (참고, 별도 PR, 11/3까지)
+### 박기성 엔진 작업 — ✅ E1~E4 완료(PR #25, 10/31)
 
 - **E1 `readXlsx`**: 스펙 6.2~6.4. 거부(`unsafe_file`): ZIP 서명 아님, `[Content_Types].xml` 없음, `xl/vbaProject.bin`, OLE 암호(`D0 CF 11 E0`), `..`·절대 경로, `<!DOCTYPE`. 한도(→ `limit_exceeded`): 해제 합계 20 MiB, 시트 20, 비어 있지 않은 셀 50,000, XML 파트 10 MiB. 공유 수식 펼치기.
 - **E2 `compareSnapshots`**: 스펙 7절 1~5, 30% 관찰 메모 `note:"rows_may_be_reordered"`. 같은 입력 → 같은 출력.
@@ -90,7 +90,7 @@ export function buildQuestions(groups: ChangeGroup[] | null, first: boolean): Ru
 
 ---
 
-### Task 1: migration 005
+### Task 1: migration 005 — ✅ 완료(박기성 PR #25, 운영 적용 10/31)
 
 **Files:**
 - Create: `db/migrations/005_file_versions.sql`
