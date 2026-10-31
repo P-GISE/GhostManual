@@ -1,7 +1,8 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { http, message, sourceSchema } from "../lib/client";
+import { z } from "zod";
+import { http, message } from "../lib/client";
 import { SourceInputSchema } from "../lib/schemas";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 export function SourceForm() {
@@ -29,7 +30,7 @@ export function SourceForm() {
         body.set("file", file);
         result = await http.post("/api/sources", { body }).json();
       } else result = await http.post("/api/sources", { json: { title, text } }).json();
-      const source = sourceSchema.parse(result);
+      const source = z.object({ id: z.uuid() }).parse(result);
       setSubmitted(true);
       router.push(`/sources/${source.id}`);
     } catch (e) {
@@ -57,18 +58,19 @@ export function SourceForm() {
           placeholder="예: 월말 정산 업무 인수인계"
         />
         <label htmlFor="source-file">
-          TXT / Markdown 파일 <span className="help">선택 사항</span>
+          엑셀·TXT·Markdown 파일 <span className="help">선택 사항</span>
         </label>
         <input
           id="source-file"
           type="file"
-          accept=".txt,.md,.markdown"
+          accept=".xlsx,.txt,.md,.markdown"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           aria-describedby="file-help"
         />
         <p id="file-help" className="help">
-          UTF-8, 최대 256 KiB. 파일을 선택하면 아래 본문 대신 파일 내용을 등록합니다. 원본 파일 대신
-          해독된 텍스트를 저장합니다.
+          엑셀(.xlsx, 최대 5 MB)은 원본 파일을 버전으로 보관하고 새 버전을 올릴 때마다 바뀐 부분을
+          비교해 질문합니다. 매크로·암호 파일은 올릴 수 없습니다. TXT·Markdown(UTF-8, 최대 256
+          KiB)은 파일 내용을 텍스트로 등록합니다.
         </p>
         <label htmlFor="text">업무 내용</label>
         <textarea

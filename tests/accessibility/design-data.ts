@@ -7,6 +7,7 @@ export const source: Source = {
   revisionId: "10000000-0000-4000-8000-000000000002",
   revision: 1,
   createdAt: "2026-10-18T00:00:00.000Z",
+  kind: "text",
 };
 export const manual: Manual = {
   id: "10000000-0000-4000-8000-000000000003",

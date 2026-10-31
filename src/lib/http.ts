@@ -53,7 +53,11 @@ export async function requestSession(
   request: Request,
   options: { allowPendingTerms?: boolean } = {},
 ) {
-  const name = request.headers.get("x-ghost-role") === "reader" ? "gm_reader" : "gm_owner";
+  // Plain links (file downloads) cannot send headers, so `?view=shared` also selects the reader session.
+  const reader =
+    request.headers.get("x-ghost-role") === "reader" ||
+    new URL(request.url).searchParams.get("view") === "shared";
+  const name = reader ? "gm_reader" : "gm_owner";
   const cookie = request.headers
     .get("cookie")
     ?.split(";")

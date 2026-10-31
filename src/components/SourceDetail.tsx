@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { http, manualSchema, message, read, type Source, sourceSchema } from "../lib/client";
 import { type ManualDraft, SourceInputSchema } from "../lib/schemas";
+import { FileVersions } from "./FileVersions";
 import { SourceDelete } from "./SourceDelete";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 export function SourceDetail({ id }: { readonly id: string }) {
@@ -146,6 +147,52 @@ export function SourceDetail({ id }: { readonly id: string }) {
         )}
       </>
     );
+  const manualPanel = reader ? null : (
+    <aside className="panel">
+      <h2>매뉴얼 만들기</h2>
+      <p>업무 목적과 순서, 주의 사항을 정리한 다음 직접 검수합니다.</p>
+      <div className="actions">
+        <button type="button" onClick={() => create(false)} disabled={busy || editing}>
+          직접 작성하기
+        </button>
+        {source.kind === "text" && (
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => create(true)}
+            disabled={busy || editing}
+          >
+            AI 초안 요청
+          </button>
+        )}
+      </div>
+      <p className="help">
+        AI가 비활성화됐거나 연결할 수 없으면 생성 불가 안내를 표시합니다. 합성 예제는 미리 작성된
+        문서입니다.
+      </p>
+      {busy && <p role="status">요청을 처리하고 있습니다.</p>}
+      <SourceDelete
+        confirmed={deleteConfirmed}
+        disabled={busy || editing}
+        onConfirm={setDeleteConfirmed}
+        onDelete={remove}
+      />
+    </aside>
+  );
+  if (source.kind === "file")
+    return (
+      <>
+        <span className="eyebrow">엑셀 자료 · 버전 {source.revision}개</span>
+        <h1>{source.title}</h1>
+        <p className="muted">
+          {reader
+            ? "공유 매뉴얼에 연결된 엑셀 버전입니다. 읽기 전용으로 확인할 수 있습니다."
+            : "작업을 마친 엑셀을 새 버전으로 올리면 바뀐 부분을 질문합니다. 새 버전은 연결된 매뉴얼의 재검토가 필요합니다."}
+        </p>
+        <FileVersions id={id} reader={reader} />
+        {manualPanel}
+      </>
+    );
   return (
     <>
       <span className="eyebrow">원본 자료 · 버전 {source.revision}</span>
@@ -218,36 +265,7 @@ export function SourceDetail({ id }: { readonly id: string }) {
             </>
           )}
         </section>
-        {!reader && (
-          <aside className="panel">
-            <h2>매뉴얼 만들기</h2>
-            <p>업무 목적과 순서, 주의 사항을 정리한 다음 직접 검수합니다.</p>
-            <div className="actions">
-              <button type="button" onClick={() => create(false)} disabled={busy || editing}>
-                직접 작성하기
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => create(true)}
-                disabled={busy || editing}
-              >
-                AI 초안 요청
-              </button>
-            </div>
-            <p className="help">
-              AI가 비활성화됐거나 연결할 수 없으면 생성 불가 안내를 표시합니다. 합성 예제는 미리
-              작성된 문서입니다.
-            </p>
-            {busy && <p role="status">요청을 처리하고 있습니다.</p>}
-            <SourceDelete
-              confirmed={deleteConfirmed}
-              disabled={busy || editing}
-              onConfirm={setDeleteConfirmed}
-              onDelete={remove}
-            />
-          </aside>
-        )}
+        {manualPanel}
       </div>
     </>
   );
