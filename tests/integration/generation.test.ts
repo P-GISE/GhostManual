@@ -28,25 +28,16 @@ function release() {
     JSON.stringify(
       status === 200
         ? {
-            id: "resp_fixture",
-            object: "response",
-            created_at: 1,
-            status: "completed",
-            error: null,
-            incomplete_details: null,
-            output: [
-              {
-                id: "msg_fixture",
-                type: "message",
-                role: "assistant",
-                status: "completed",
-                content: [
-                  { type: "output_text", text: JSON.stringify(exampleDraft), annotations: [] },
-                ],
-              },
-            ],
+            id: "msg_fixture",
+            type: "message",
+            role: "assistant",
+            model: "claude-sonnet-5-5",
+            content: [{ type: "text", text: JSON.stringify(exampleDraft) }],
+            stop_reason: "end_turn",
+            stop_sequence: null,
+            usage: { input_tokens: 1, output_tokens: 1 },
           }
-        : { error: { message: "fixture", type: "server_error" } },
+        : { type: "error", error: { type: "api_error", message: "fixture" } },
     ),
   );
 }
@@ -55,7 +46,7 @@ beforeEach(async () => {
   status = 200;
   pending = undefined;
   vi.stubEnv("AI_ENABLED", "true");
-  vi.stubEnv("OPENAI_API_KEY", "fixture-key");
+  vi.stubEnv("ANTHROPIC_API_KEY", "fixture-key");
   vi.stubEnv("AI_DAILY_LIMIT", "100000");
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();

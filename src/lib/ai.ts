@@ -1,5 +1,5 @@
-import OpenAI from "openai";
-import { zodTextFormat } from "openai/helpers/zod";
+import Anthropic from "@anthropic-ai/sdk";
+import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { type EvidenceCandidate, EvidenceCandidateSchema } from "./ai-schemas.ts";
 import { AppError } from "./errors.ts";
@@ -25,62 +25,61 @@ export function setAITransportForTest(options: TestTransport | null): void {
   }
   testTransport = options;
 }
-function client(timeout: number): OpenAI {
+function client(timeout: number): Anthropic {
   if (process.env["AI_ENABLED"] !== "true")
     throw new AppError("ai_disabled", 503, "AI가 비활성화되어 있습니다.");
-  const apiKey = process.env["OPENAI_API_KEY"];
+  const apiKey = process.env["ANTHROPIC_API_KEY"];
   if (!apiKey) throw new AppError("ai_missing_key", 503, "AI 설정이 필요합니다.");
   const fixture = process.env["NODE_ENV"] === "test" ? testTransport : null;
-  return new OpenAI({
+  return new Anthropic({
     apiKey,
-    baseURL: fixture?.baseURL ?? "https://api.openai.com/v1",
+    ...(fixture ? { baseURL: fixture.baseURL } : {}),
     timeout: fixture?.timeout ?? timeout,
     maxRetries: 0,
   });
 }
 export async function generate<T>(
   schema: z.ZodType<T>,
-  name: string,
+  _name: string,
   input: unknown,
   timeout: number,
   maxTokens: number,
   instructions: string,
+  effort: "low" | "medium" | "high" = "medium",
 ): Promise<T> {
   const provider = client(timeout);
   try {
-    const response = await provider.responses.create({
-      model: process.env["OPENAI_MODEL"] ?? "gpt-4.1-mini",
-      store: false,
-      max_output_tokens: maxTokens,
-      instructions,
-      input: JSON.stringify(input),
-      text: { format: zodTextFormat(schema, name) },
+    // A declined request is re-run server-side on Anthropic's recommended fallback model.
+    const response = await provider.beta.messages.parse({
+      model: process.env["ANTHROPIC_MODEL"] ?? "claude-sonnet-5-5",
+      max_tokens: maxTokens,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      system: instructions,
+      messages: [{ role: "user", content: JSON.stringify(input) }],
+      output_config: { effort, format: betaZodOutputFormat(schema) },
     });
-    if (
-      response.output.some(
-        (item) =>
-          item.type === "message" && item.content.some((content) => content.type === "refusal"),
-      )
-    )
+    if (response.stop_reason === "refusal")
       throw new AppError("ai_refused", 422, "AI가 요청을 거절했습니다.");
-    if (response.status === "incomplete")
+    if (response.stop_reason === "max_tokens")
       throw new AppError("ai_incomplete", 502, "AI 출력이 완료되지 않았습니다.");
-    if (response.status !== "completed")
-      throw new AppError("ai_provider_error", 502, "AI 요청을 완료하지 못했습니다.", true);
-    const parsed = schema.safeParse(JSON.parse(response.output_text));
+    const parsed = schema.safeParse(response.parsed_output);
     if (!parsed.success)
       throw new AppError("ai_invalid_output", 502, "AI 출력 형식이 올바르지 않습니다.");
     return parsed.data;
   } catch (error) {
     if (error instanceof AppError) throw error;
-    if (error instanceof OpenAI.APIConnectionTimeoutError)
+    if (error instanceof Anthropic.APIConnectionTimeoutError)
       throw new AppError("ai_timeout", 504, "AI 요청 시간이 초과됐습니다.", true);
     if (error instanceof SyntaxError || error instanceof z.ZodError)
       throw new AppError("ai_invalid_output", 502, "AI 출력 형식이 올바르지 않습니다.");
-    if (error instanceof OpenAI.RateLimitError)
+    if (error instanceof Anthropic.RateLimitError)
       throw new AppError("ai_rate_limit", 503, "AI 제공자 사용 한도에 도달했습니다.", true);
-    if (error instanceof OpenAI.APIError)
+    if (error instanceof Anthropic.APIError)
       throw new AppError("ai_provider_error", 502, "AI 제공자 요청에 실패했습니다.", true);
+    // The SDK reports structured output it could not parse as its base error class.
+    if (error instanceof Anthropic.AnthropicError)
+      throw new AppError("ai_invalid_output", 502, "AI 출력 형식이 올바르지 않습니다.");
     throw error;
   }
 }
@@ -102,7 +101,7 @@ export async function generateManual(source: SourceView): Promise<ManualDraft> {
     "manual_draft",
     { title: input.title, paragraphs: realParagraphs },
     45000,
-    4000,
+    16000,
     instructions +
       " 매뉴얼 초안을 작성하세요. references는 실제 문단의 정확한 인용과 해당 필드(title, purpose 등 또는 steps.0 같은 배열 위치)를 기록하세요.",
   );
@@ -126,7 +125,7 @@ export async function generateAnswer(
     "answer_model",
     { question: input.question, candidates: parsedCandidates },
     30000,
-    1500,
+    8000,
     instructions +
       " 질문에 답하세요. 모든 주장과 절차에는 제공된 candidate id를 evidenceIds로 지정하세요. 필요한 근거가 없으면 insufficient로 답하세요.",
   );

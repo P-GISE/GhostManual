@@ -11,7 +11,7 @@ export async function generateDraft(
   if (ctx.role !== "owner") throw new AppError("forbidden", 403, "소유자만 생성할 수 있습니다.");
   const source = await getSource(ctx, input.sourceId);
   if (source.kind === "file") throw fileReadonly();
-  if (process.env["AI_ENABLED"] !== "true" || !process.env["OPENAI_API_KEY"])
+  if (process.env["AI_ENABLED"] !== "true" || !process.env["ANTHROPIC_API_KEY"])
     throw new AppError(
       "ai_disabled",
       503,

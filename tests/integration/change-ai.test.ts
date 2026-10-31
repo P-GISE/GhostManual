@@ -18,21 +18,14 @@ const server = createServer(async (request, response) => {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(
       JSON.stringify({
-        id: "resp_fixture",
-        object: "response",
-        created_at: 1,
-        status: "completed",
-        error: null,
-        incomplete_details: null,
-        output: [
-          {
-            id: "msg_fixture",
-            type: "message",
-            role: "assistant",
-            status: "completed",
-            content: [{ type: "output_text", text: JSON.stringify(reply), annotations: [] }],
-          },
-        ],
+        id: "msg_fixture",
+        type: "message",
+        role: "assistant",
+        model: "claude-sonnet-5-5",
+        content: [{ type: "text", text: JSON.stringify(reply) }],
+        stop_reason: "end_turn",
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
       }),
     );
   }, delay);
@@ -45,7 +38,7 @@ beforeEach(async () => {
   bodies.length = 0;
   delay = 0;
   vi.stubEnv("AI_ENABLED", "true");
-  vi.stubEnv("OPENAI_API_KEY", "fixture-key");
+  vi.stubEnv("ANTHROPIC_API_KEY", "fixture-key");
   vi.stubEnv("AI_DAILY_LIMIT", "100000");
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();

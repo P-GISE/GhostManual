@@ -32,7 +32,7 @@
 | 라이브러리 | `fflate`(ZIP) + `fast-xml-parser`(XML)로 필요한 부분만 직접 읽음 | 6절 (구현자 판단) |
 | AI 사용 | 중간보고서 심사에 AI 활용(25점)이 있어 사용. 비교는 규칙 코드, **질문과 버전 요약을 AI가 생성** | 사용자 결정(10/30), 7.1절 |
 | AI로 보내는 범위 | **구조만**: 시트 이름·열 이름(머리글)·수식·바뀐 범위·칸 수. 셀 값은 보내지 않음 | 사용자 결정(10/30, 보안) |
-| AI 제공자·모델 | OpenAI, 박효민 개인 결제 키(로컬 `.env`), `OPENAI_MODEL`=GPT-6 Luna로 시작, 품질이 부족하면 Sol로 설정만 변경 | 사용자 결정(10/30). 공모전 측 키 지원 없음 |
+| AI 제공자·모델 | **Anthropic Claude**(Messages API, 구조화 출력, 거절 시 서버 측 fallback), 모델 `ANTHROPIC_MODEL`=`claude-sonnet-5-5`. 키는 `ANTHROPIC_API_KEY`(로컬 `.env`·운영 `.env`) | 사용자 결정(10/31, OpenAI GPT-6 Luna 안 대체) |
 
 ## 3. DB 스키마 — `db/migrations/005_file_versions.sql` (초안)
 
@@ -338,7 +338,7 @@ ALTER TABLE manual_versions ADD COLUMN history jsonb;
 ```
 규칙 코드: v1·v2 스냅샷 비교 → 변경 묶음(결정적)
       ↓  구조만 담은 입력 (셀 값 없음)
-AI(OpenAI Responses API, 기존 src/lib/ai.ts 호출 경로): 질문 ≤10개 + 버전 요약 1~2문장
+AI(Anthropic Messages API, 기존 src/lib/ai.ts 호출 경로): 질문 ≤10개 + 버전 요약 1~2문장
       ↓  실패·꺼짐·한도 초과·형식 오류
 규칙 질문(7절)으로 대체, 요약 없음
 ```
@@ -349,7 +349,7 @@ AI(OpenAI Responses API, 기존 src/lib/ai.ts 호출 경로): 질문 ≤10개 + 
 - **저장**: `revision_questions.question`에 AI 문구를 저장하고 `source`(`ai`·`rule`) 열을 둔다. 버전 요약은 `source_files`와 같은 버전 단위로 `ai_summary text`(nullable)에 둔다. 화면에 "AI가 만든 질문" 표시. 3절 migration에 두 열을 추가한다.
 - **비용·한도**: 기존 `AI_DAILY_LIMIT`(일 호출 수)와 `usage_counters`를 그대로 쓴다. 업로드 1회 = AI 호출 1회.
 - **동기 처리**: 업로드 요청 안에서 호출하고 제한 시간(예: 20초)을 넘기면 규칙 질문으로 저장한다. 시연에서 업로드가 끊기지 않게 하기 위해서다.
-- **안내**: 업로드 화면과 개인정보 안내에 "시트 이름·열 이름·수식과 바뀐 위치가 AI(OpenAI)로 전송됩니다. 셀 값은 전송되지 않습니다." 표시.
+- **안내**: 업로드 화면과 개인정보 안내에 "시트 이름·열 이름·수식과 바뀐 위치가 AI(Anthropic Claude)로 전송됩니다. 셀 값은 전송되지 않습니다." 표시.
 - **기존 AI 기능**: 매뉴얼 초안 생성·후임자 질문 답변은 `AI_ENABLED=true`로 켜서 시연에 함께 보여 준다. 이 두 기능은 텍스트 자료 원문을 보내므로(기존 동작) 시연은 합성 자료로만 한다.
 
 ## 8. 화면
@@ -414,4 +414,4 @@ AI(OpenAI Responses API, 기존 src/lib/ai.ts 호출 경로): 질문 ≤10개 + 
 ## 12. 남은 확인
 
 - 박기성: 100 MiB·5 MiB 한도와 DB 저장 방식이 서버 용량에 괜찮은지, 3절 migration 검토.
-- 사용자: 8절 계정 화면 목업(탭 구조) 확인, OpenAI 키 준비(로컬 `.env`, 사용 한도 설정).
+- 사용자: 8절 계정 화면 목업(탭 구조) 확인, Anthropic API 키 준비(로컬 `.env`, 사용 한도 설정).

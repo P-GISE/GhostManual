@@ -110,40 +110,35 @@ it("stores provider-validated evidence snapshots and rejects a version changed d
     for await (const chunk of request)
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     const body = z
-      .object({ input: z.string() })
+      .object({ messages: z.array(z.object({ content: z.string() })) })
       .parse(JSON.parse(Buffer.concat(chunks).toString()));
     const data = z
       .object({ candidates: z.array(z.object({ id: z.uuid() })) })
-      .parse(JSON.parse(body.input));
+      .parse(JSON.parse(body.messages[0]?.content ?? ""));
     const id = data.candidates[0]?.id;
     if (changeVersion)
       await pool.query("UPDATE manuals SET needs_review=true WHERE id=$1", [manual.id]);
     response.setHeader("content-type", "application/json");
     response.end(
       JSON.stringify({
-        id: "resp_fixture",
-        object: "response",
-        status: "completed",
-        output: [
+        id: "msg_fixture",
+        type: "message",
+        role: "assistant",
+        model: "claude-sonnet-5-5",
+        content: [
           {
-            id: "msg_fixture",
-            type: "message",
-            role: "assistant",
-            status: "completed",
-            content: [
-              {
-                type: "output_text",
-                annotations: [],
-                text: JSON.stringify({
-                  status: "partial",
-                  claims: [{ text: "승인을 확인합니다.", evidenceIds: [id] }],
-                  procedure: [],
-                  limitations: ["상충하는 승인 규칙은 담당자 확인이 필요합니다."],
-                }),
-              },
-            ],
+            type: "text",
+            text: JSON.stringify({
+              status: "partial",
+              claims: [{ text: "승인을 확인합니다.", evidenceIds: [id] }],
+              procedure: [],
+              limitations: ["상충하는 승인 규칙은 담당자 확인이 필요합니다."],
+            }),
           },
         ],
+        stop_reason: "end_turn",
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
       }),
     );
   });
@@ -151,7 +146,7 @@ it("stores provider-validated evidence snapshots and rejects a version changed d
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("fixture server address");
   process.env["AI_ENABLED"] = "true";
-  process.env["OPENAI_API_KEY"] = "fixture-only";
+  process.env["ANTHROPIC_API_KEY"] = "fixture-only";
   setAITransportForTest({ baseURL: `http://127.0.0.1:${address.port}/v1` });
   try {
     const answer = await ask(owner, { question: "업무 계정 승인" }, "supported-fixture");
@@ -167,7 +162,7 @@ it("stores provider-validated evidence snapshots and rejects a version changed d
   } finally {
     setAITransportForTest(null);
     process.env["AI_ENABLED"] = "false";
-    delete process.env["OPENAI_API_KEY"];
+    delete process.env["ANTHROPIC_API_KEY"];
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     );

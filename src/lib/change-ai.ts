@@ -86,8 +86,9 @@ export async function changeQuestions(
       "change_questions",
       changePrompt(title, after, groups),
       20000,
-      1500,
+      4000,
       instructions + prompt,
+      "low",
     );
     if (result.questions.some((q) => q.groupPositions.some((p) => p < 0 || p >= groups.length)))
       return null;
