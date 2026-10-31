@@ -1,12 +1,21 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { FILE_QUOTA_BYTES } from "./accounts.ts";
+import { changeQuestions } from "./change-ai.ts";
 import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
+import { ManualDraftSchema } from "./schemas.ts";
 import { assertSession } from "./session.ts";
 import { assertSourceWrite, type SourceView, sourceInTransaction, uploader } from "./sources.ts";
 import { newId, type SessionContext } from "./types.ts";
-import { buildQuestions, type ReadResult, type RuleQuestion, readXlsx } from "./xlsx/index.ts";
+import {
+  buildQuestions,
+  compareSnapshots,
+  type ReadResult,
+  type RuleQuestion,
+  readXlsx,
+  type Snapshot,
+} from "./xlsx/index.ts";
 
 export const MAX_FILE_BYTES = 5242880;
 const QuestionRow = z.object({
@@ -247,6 +256,121 @@ export async function createFileSource(
       changes: [],
       questions: buildQuestions([], true).map((q) => ({ ...q, source: "rule" as const })),
     });
+    return fileRevisionInTransaction(db, ctx, id);
+  });
+}
+const unknownPrefix = (revision: number) => `[v${revision} 확인 필요] `;
+// Rewrites the draft's unknowns for one revision: other items stay, unanswered questions are listed.
+export function syncUnknowns(
+  unknowns: readonly string[],
+  revision: number,
+  unanswered: readonly string[],
+): string[] {
+  const prefix = unknownPrefix(revision);
+  const kept = unknowns.filter((item) => !item.startsWith(prefix));
+  const room = 30 - kept.length;
+  const items = unanswered.map((q) => `${prefix}${q}`.slice(0, 500));
+  if (items.length <= room) return [...kept, ...items];
+  const rest = items.length - room + 1;
+  return [...kept, ...items.slice(0, room - 1), `${prefix}답하지 않은 변경 질문 ${rest}건`];
+}
+export async function syncManual(
+  db: DbClient,
+  sourceId: string,
+  revision: number,
+  revisionId: string | null,
+): Promise<void> {
+  const manual = await db.query<{ id: string; draft: unknown }>(
+    "SELECT id,draft FROM manuals WHERE source_id=$1 FOR UPDATE",
+    [sourceId],
+  );
+  const row = manual.rows[0];
+  if (!row) return;
+  const draft = ManualDraftSchema.parse(row.draft);
+  const unanswered = await db.query<{ question: string }>(
+    "SELECT q.question FROM revision_questions q JOIN source_revisions r ON r.id=q.revision_id WHERE r.source_id=$1 AND r.revision=$2 AND q.answer IS NULL ORDER BY q.position",
+    [sourceId, revision],
+  );
+  const unknowns = syncUnknowns(
+    draft.unknowns,
+    revision,
+    unanswered.rows.map((r) => r.question),
+  );
+  await db.query(
+    `UPDATE manuals SET draft=$1,draft_revision=draft_revision+1${revisionId ? ",needs_review=true,source_revision_id=$3" : ""} WHERE id=$2`,
+    revisionId ? [{ ...draft, unknowns }, row.id, revisionId] : [{ ...draft, unknowns }, row.id],
+  );
+}
+export async function addFileRevision(
+  ctx: SessionContext,
+  id: string,
+  input: { fileName: string; bytes: Uint8Array; expectedRevision: number },
+): Promise<FileRevisionView> {
+  const result = readUpload(input.bytes);
+  const conflict = () =>
+    new AppError("conflict", 409, "다른 곳에서 새 버전이 올라왔습니다. 새로고침 후 다시 올리세요.");
+  const previous = await transaction(async (db) => {
+    await assertSession(db, ctx, true);
+    const source = await sourceInTransaction(db, ctx, id);
+    if (source.kind !== "file")
+      throw new AppError(
+        "file_type_mismatch",
+        422,
+        "같은 자료에는 같은 형식의 파일만 올릴 수 있습니다. 새 자료로 올리세요.",
+      );
+    if (source.revision !== input.expectedRevision) throw conflict();
+    const file = await db.query<{ snapshot: Snapshot | null }>(
+      "SELECT snapshot FROM source_files WHERE revision_id=$1",
+      [source.revisionId],
+    );
+    return {
+      title: source.title,
+      revision: source.revision,
+      snapshot: file.rows[0]?.snapshot ?? null,
+    };
+  });
+  const groups =
+    previous.snapshot && result.status === "compared"
+      ? compareSnapshots(previous.snapshot, result.snapshot)
+      : null;
+  // The AI call runs outside any transaction; the write below re-checks the revision.
+  const ai =
+    groups?.length && result.status === "compared"
+      ? await changeQuestions(ctx, previous.title, result.snapshot, groups)
+      : null;
+  const questions = ai
+    ? ai.questions.map((q) => ({
+        kind: "change" as const,
+        groupIndexes: q.groupPositions,
+        question: q.question,
+        source: "ai" as const,
+      }))
+    : buildQuestions(groups, false).map((q) => ({ ...q, source: "rule" as const }));
+  const revision = previous.revision + 1;
+  return transaction(async (db) => {
+    await assertSession(db, ctx, true);
+    const current = await sourceInTransaction(db, ctx, id);
+    if (current.revision !== previous.revision) throw conflict();
+    await assertSourceWrite(
+      db,
+      ctx,
+      { title: previous.title, text: fileText(previous.title, result) },
+      false,
+    );
+    assertFileQuota(await usedFileBytes(db, ctx.workspaceId), input.bytes.length);
+    await db.query("UPDATE sources SET revision=$1 WHERE id=$2", [revision, id]);
+    const revisionId = await insertFileRevision(db, ctx, {
+      sourceId: id,
+      revision,
+      title: previous.title,
+      fileName: input.fileName,
+      bytes: input.bytes,
+      result,
+      aiSummary: ai?.summary ?? null,
+      changes: groups ?? [],
+      questions,
+    });
+    await syncManual(db, id, revision, revisionId);
     return fileRevisionInTransaction(db, ctx, id);
   });
 }
