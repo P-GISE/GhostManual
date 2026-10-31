@@ -498,3 +498,54 @@ export async function answerQuestion(
     return QuestionRow.parse(updated.rows[0]);
   });
 }
+export const FileHistorySchema = z.object({
+  v: z.literal(1),
+  revisions: z.array(
+    z.object({
+      revision: z.number().int(),
+      createdAt: z.coerce.date(),
+      uploadedByName: z.string().nullable(),
+      uploadedByDepartment: z.string().nullable(),
+      fileName: z.string(),
+      compareStatus: z.enum(["first", "compared", "no_changes", "limit_exceeded"]),
+      aiSummary: z.string().nullable(),
+      changes: z.array(
+        z.object({ kind: z.string(), sheet: z.string().nullable(), range: z.string().nullable() }),
+      ),
+      questions: z.array(
+        z.object({ question: z.string(), answer: z.string().nullable(), skipped: z.boolean() }),
+      ),
+    }),
+  ),
+});
+export type FileHistory = z.infer<typeof FileHistorySchema>;
+// Snapshot of every file revision up to the published one, frozen into manual_versions.history.
+export async function fileHistory(
+  db: DbClient,
+  ctx: SessionContext,
+  sourceId: string,
+  upToRevision: number,
+): Promise<FileHistory | null> {
+  const kind = await db.query<{ kind: string }>("SELECT kind FROM sources WHERE id=$1", [sourceId]);
+  if (kind.rows[0]?.kind !== "file") return null;
+  const revisions: FileHistory["revisions"] = [];
+  for (let revision = 1; revision <= upToRevision; revision++) {
+    const view = await fileRevisionInTransaction(db, ctx, sourceId, revision);
+    revisions.push({
+      revision,
+      createdAt: view.createdAt,
+      uploadedByName: view.uploadedByName,
+      uploadedByDepartment: view.uploadedByDepartment,
+      fileName: view.file.name,
+      compareStatus: view.compareStatus,
+      aiSummary: view.aiSummary,
+      changes: view.changes.map(({ kind, sheet, range }) => ({ kind, sheet, range })),
+      questions: view.questions.map(({ question, answer, skipped }) => ({
+        question,
+        answer,
+        skipped,
+      })),
+    });
+  }
+  return { v: 1, revisions };
+}

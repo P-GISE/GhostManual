@@ -18,6 +18,8 @@ const SourceViewSchema = z.object({
   uploadedByDepartment: z.string().nullable(),
 });
 export type SourceView = z.infer<typeof SourceViewSchema>;
+export const fileReadonly = () =>
+  new AppError("file_source_readonly", 422, "파일 자료는 새 버전을 올려서 바꿉니다.");
 export async function assertSourceWrite(
   db: DbClient,
   ctx: SessionContext,
@@ -109,6 +111,7 @@ export async function updateSource(
   return transaction(async (db) => {
     await assertSession(db, ctx, true);
     const old = await sourceInTransaction(db, ctx, id);
+    if (old.kind === "file") throw fileReadonly();
     if (old.revision !== expectedRevision)
       throw new AppError("conflict", 409, "자료가 변경됐습니다. 새 버전을 확인하세요.");
     await assertSourceWrite(db, ctx, parsed, false);

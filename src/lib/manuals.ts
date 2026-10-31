@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
+import { FileHistorySchema, fileHistory } from "./file-sources.ts";
 import { type ManualDraft, ManualDraftSchema } from "./schemas.ts";
 import { assertSession } from "./session.ts";
 import { paragraphs } from "./sources.ts";
@@ -22,6 +23,7 @@ export const ManualVersionViewSchema = z.object({
   content: ManualDraftSchema,
   provenance: ProvenanceSchema,
   acknowledgedUnknowns: z.array(z.string()),
+  history: FileHistorySchema.nullable(),
   createdAt: z.date(),
 });
 export type ManualVersionView = z.infer<typeof ManualVersionViewSchema>;
@@ -73,7 +75,7 @@ async function versionInTransaction(
   version: number,
 ) {
   const row = await db.query<Record<string, unknown>>(
-    `SELECT id,manual_id AS "manualId",version,source_revision_id AS "sourceRevisionId",content,provenance,acknowledged_unknowns AS "acknowledgedUnknowns",created_at AS "createdAt" FROM manual_versions WHERE manual_id=$1 AND workspace_id=$2 AND version=$3`,
+    `SELECT id,manual_id AS "manualId",version,source_revision_id AS "sourceRevisionId",content,provenance,acknowledged_unknowns AS "acknowledgedUnknowns",history,created_at AS "createdAt" FROM manual_versions WHERE manual_id=$1 AND workspace_id=$2 AND version=$3`,
     [id, workspaceId, version],
   );
   return ManualVersionViewSchema.parse(row.rows[0]);
@@ -168,11 +170,11 @@ export async function publishManual(
     const current = await manualInTransaction(db, ctx, id);
     if (current.draftRevision !== expectedRevision) throw conflict();
     const source = await db.query<Record<string, unknown>>(
-      `SELECT r.text,r.revision,s.revision AS current FROM source_revisions r JOIN sources s ON s.id=r.source_id WHERE r.id=$1 AND r.workspace_id=$2`,
+      `SELECT r.text,r.revision,s.revision AS current,s.id AS "sourceId" FROM source_revisions r JOIN sources s ON s.id=r.source_id WHERE r.id=$1 AND r.workspace_id=$2`,
       [current.sourceRevisionId, ctx.workspaceId],
     );
     const row = z
-      .object({ text: z.string(), revision: z.number(), current: z.number() })
+      .object({ text: z.string(), revision: z.number(), current: z.number(), sourceId: z.uuid() })
       .parse(source.rows[0]);
     if (row.revision !== row.current) throw conflict();
     const draft = current.draft;
@@ -192,7 +194,7 @@ export async function publishManual(
       );
     const version = (current.publishedVersion ?? 0) + 1;
     await db.query(
-      "INSERT INTO manual_versions(id,workspace_id,manual_id,version,source_revision_id,content,provenance,acknowledged_unknowns) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+      "INSERT INTO manual_versions(id,workspace_id,manual_id,version,source_revision_id,content,provenance,acknowledged_unknowns,history) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
       [
         newId(),
         ctx.workspaceId,
@@ -202,6 +204,7 @@ export async function publishManual(
         draft,
         current.provenance,
         JSON.stringify(acknowledgements),
+        await fileHistory(db, ctx, row.sourceId, row.revision),
       ],
     );
     await db.query("UPDATE manuals SET published_version=$1,needs_review=false WHERE id=$2", [
@@ -235,7 +238,7 @@ export async function listManualVersions(ctx: SessionContext, id: string) {
     await assertSession(db, ctx, true);
     await manualInTransaction(db, ctx, id);
     const rows = await db.query<Record<string, unknown>>(
-      'SELECT id,manual_id AS "manualId",version,source_revision_id AS "sourceRevisionId",content,provenance,acknowledged_unknowns AS "acknowledgedUnknowns",created_at AS "createdAt" FROM manual_versions WHERE manual_id=$1 AND workspace_id=$2 ORDER BY version DESC',
+      'SELECT id,manual_id AS "manualId",version,source_revision_id AS "sourceRevisionId",content,provenance,acknowledged_unknowns AS "acknowledgedUnknowns",history,created_at AS "createdAt" FROM manual_versions WHERE manual_id=$1 AND workspace_id=$2 ORDER BY version DESC',
       [id, ctx.workspaceId],
     );
     return rows.rows.map((row) => ManualVersionViewSchema.parse(row));
