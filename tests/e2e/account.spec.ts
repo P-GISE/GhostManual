@@ -21,6 +21,12 @@ test("profile and settings tabs save the department and delete the account", asy
   await expect(page.getByRole("progressbar", { name: "저장 공간 사용량" })).toBeVisible();
   await expect(page.getByRole("button", { name: "변경 메일 받기" })).toBeVisible();
   await page.getByLabel("삭제할 내용을 확인했습니다.").check();
+  await page.getByRole("tab", { name: "내 프로필" }).click();
+  await page.getByRole("tab", { name: "설정" }).click();
+  await expect(page.getByLabel("삭제할 내용을 확인했습니다.")).toBeChecked();
+  await page.getByLabel("삭제할 내용을 확인했습니다.").uncheck();
+  await expect(page.getByRole("button", { name: "계정과 문서 영구 삭제" })).toBeDisabled();
+  await page.getByLabel("삭제할 내용을 확인했습니다.").check();
   await page.getByRole("button", { name: "계정과 문서 영구 삭제" }).click();
   await expect(page).toHaveURL(/\/$/);
   await page.goto("/manuals");

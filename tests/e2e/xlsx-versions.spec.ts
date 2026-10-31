@@ -37,6 +37,9 @@ test("an owner uploads two workbook versions, answers questions and sees the cha
   await page.getByRole("button", { name: /^v1/ }).click();
   await expect(page.getByText("매달 거래처 정산 금액을 맞추는 파일입니다.")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.getByText("엑셀 자료 · 버전 2개")).toBeVisible();
+  await page.getByRole("button", { name: "직접 작성하기", exact: true }).click();
+  await expect(page).toHaveURL(/\/manuals\/[\w-]+\/edit$/);
 });
 
 test("a dangerous workbook is refused with a clear message", async ({ page }) => {
@@ -113,4 +116,113 @@ test("demo: publish a manual from workbook versions and a successor sees the cha
   } finally {
     await context.close();
   }
+});
+
+test("concurrent answers retain both results", async ({ page }) => {
+  await signUpAndVerify(page);
+  await page.goto("/sources/new");
+  await page.getByLabel("자료 제목").fill("답변 경합 검증");
+  await page.getByLabel(/엑셀·TXT·Markdown 파일/).setInputFiles(fixture("정산_1029.xlsx"));
+  await page.getByRole("button", { name: "원본 등록" }).click();
+  const cards = page.getByRole("group");
+  await expect(cards).toHaveCount(2);
+  let releaseFirst = () => {};
+  const gate = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  let arrived = () => {};
+  const request = new Promise<void>((resolve) => {
+    arrived = resolve;
+  });
+  let requests = 0;
+  await page.route("**/questions/*", async (route) => {
+    const response = await route.fetch();
+    if (++requests === 1) {
+      arrived();
+      await gate;
+    }
+    await route.fulfill({ response });
+  });
+  await cards.nth(0).getByLabel("답변").fill("첫 번째 업무 답변");
+  await cards.nth(0).getByRole("button", { name: "답변 저장" }).click();
+  await request;
+  await cards.nth(1).getByLabel("답변").fill("두 번째 출처 답변");
+  await cards.nth(1).getByRole("button", { name: "답변 저장" }).click();
+  await expect(cards.nth(1).getByText("두 번째 출처 답변", { exact: true })).toBeVisible();
+  releaseFirst();
+  await expect(cards.nth(0).getByText("첫 번째 업무 답변", { exact: true })).toBeVisible();
+  await expect(cards.nth(1).getByText("두 번째 출처 답변", { exact: true })).toBeVisible();
+});
+
+test("a failed answer keeps the draft editable and manual errors are visible", async ({ page }) => {
+  await signUpAndVerify(page);
+  await page.goto("/sources/new");
+  await page.getByLabel("자료 제목").fill("실패 복구 검증");
+  await page.getByLabel(/엑셀·TXT·Markdown 파일/).setInputFiles(fixture("정산_1029.xlsx"));
+  await page.getByRole("button", { name: "원본 등록" }).click();
+  const card = page.getByRole("group").first();
+  await card.getByLabel("답변").fill("실패해도 보존할 답변");
+  await page.route("**/questions/*", (route) =>
+    route.fulfill({
+      status: 400,
+      json: { error: { code: "invalid_input", message: "답변 저장 실패" } },
+    }),
+  );
+  await card.getByRole("button", { name: "답변 저장" }).click();
+  await expect(page.getByRole("main").getByRole("alert")).toBeVisible();
+  await expect(card.getByLabel("답변")).toHaveValue("실패해도 보존할 답변");
+  await expect(card.getByRole("button", { name: "답변 저장" })).toBeEnabled();
+  await page.unroute("**/questions/*");
+  await card.getByRole("button", { name: "답변 저장" }).click();
+  await expect(card.getByText("실패해도 보존할 답변", { exact: true })).toBeVisible();
+  await page.route("**/api/manuals", (route) =>
+    route.request().method() === "POST"
+      ? route.fulfill({
+          status: 409,
+          json: { error: { code: "conflict", message: "최신 버전 확인 필요" } },
+        })
+      : route.continue(),
+  );
+  await page.getByRole("button", { name: "직접 작성하기", exact: true }).click();
+  await expect(page.getByRole("main").getByRole("alert").last()).toContainText(
+    "최신 버전 확인 필요",
+  );
+  await expect(page.getByRole("button", { name: "직접 작성하기", exact: true })).toBeEnabled();
+});
+
+test("a delayed answer does not switch back to an older selection", async ({ page }) => {
+  await signUpAndVerify(page);
+  await page.goto("/sources/new");
+  await page.getByLabel("자료 제목").fill("버전 선택 경합 검증");
+  await page.getByLabel(/엑셀·TXT·Markdown 파일/).setInputFiles(fixture("정산_1029.xlsx"));
+  await page.getByRole("button", { name: "원본 등록" }).click();
+  await page.getByRole("button", { name: "새 버전 올리기" }).click();
+  await page.getByLabel("새 버전 엑셀 파일").setInputFiles(fixture("정산_1030.xlsx"));
+  await page.getByRole("button", { name: "올리고 비교하기" }).click();
+  await expect(page.getByRole("status")).toContainText("v2를 저장했습니다");
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let arrived = () => {};
+  const request = new Promise<void>((resolve) => {
+    arrived = resolve;
+  });
+  await page.route("**/questions/*", async (route) => {
+    const response = await route.fetch();
+    arrived();
+    await gate;
+    await route.fulfill({ response });
+  });
+  const card = page.getByRole("group").first();
+  await card.getByLabel("답변").fill("늦게 도착하는 답변");
+  await card.getByRole("button", { name: "답변 저장" }).click();
+  await request;
+  await page.getByRole("button", { name: /^v1/ }).click();
+  await expect(page.getByRole("link", { name: "v1 원본 내려받기" })).toBeVisible();
+  const refreshed = page.waitForResponse((r) => /\/revisions$/.test(r.url()));
+  release();
+  await refreshed;
+  await expect(page.getByRole("link", { name: "v1 원본 내려받기" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^v1/ })).toHaveAttribute("aria-current", "true");
 });
