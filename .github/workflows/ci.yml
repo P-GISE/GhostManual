@@ -64,4 +64,5 @@ jobs:
         with:
           name: ghostmanual-image-${{ github.sha }}
           path: ghostmanual-image.tar.gz
-          retention-days: 7
+          retention-days: 1
+          if-no-files-found: error
