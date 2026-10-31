@@ -226,3 +226,44 @@ test("a delayed answer does not switch back to an older selection", async ({ pag
   await expect(page.getByRole("link", { name: "v1 원본 내려받기" })).toBeVisible();
   await expect(page.getByRole("button", { name: /^v1/ })).toHaveAttribute("aria-current", "true");
 });
+
+test("a saved upload stays committed when the follow-up read fails", async ({ page }) => {
+  await signUpAndVerify(page);
+  await page.goto("/sources/new");
+  await page.getByLabel("자료 제목").fill("저장된 버전 복구");
+  await page.getByLabel(/엑셀·TXT·Markdown 파일/).setInputFiles(fixture("정산_1029.xlsx"));
+  await page.getByRole("button", { name: "원본 등록" }).click();
+  await expect(page.getByRole("link", { name: "v1 원본 내려받기" })).toBeVisible();
+  let posts = 0;
+  await page.route("**/api/sources/**", async (route) => {
+    if (route.request().method() === "POST") {
+      posts++;
+      return route.continue();
+    }
+    return route.fulfill({ status: 400, json: { error: { message: "후속 조회 실패" } } });
+  });
+  await page.getByRole("button", { name: "새 버전 올리기" }).click();
+  const input = page.getByLabel("새 버전 엑셀 파일");
+  await input.setInputFiles(fixture("정산_1030.xlsx"));
+  const saved = page.waitForResponse(
+    (r) => r.request().method() === "POST" && /\/revisions$/.test(r.url()),
+  );
+  await page.getByRole("button", { name: "올리고 비교하기" }).click();
+  expect((await saved).status()).toBe(201);
+  await expect(page.getByRole("status").filter({ hasText: "v2를 저장했습니다" })).toBeVisible();
+  await expect(page.getByText("엑셀 자료 · 버전 2개")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^v2 · 최신/ })).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
+  await expect(page.getByRole("link", { name: "v2 원본 내려받기" })).toBeVisible();
+  await expect(input).toHaveCount(0);
+  await page.getByRole("button", { name: "새 버전 올리기" }).click();
+  await expect(input).toHaveValue("");
+  await expect(page.getByRole("button", { name: "올리고 비교하기" })).toBeDisabled();
+  await page.getByRole("button", { name: "취소", exact: true }).click();
+  await page.unroute("**/api/sources/**");
+  await page.getByRole("button", { name: "직접 작성하기", exact: true }).click();
+  await expect(page).toHaveURL(/\/manuals\/[\w-]+\/edit$/);
+  expect(posts).toBe(1);
+});
