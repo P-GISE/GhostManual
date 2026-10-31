@@ -189,3 +189,21 @@ it("rolls back a new revision and a skipped answer when unknowns have no room", 
   expect((await getManual(ctx, manual.id)).draft.unknowns).toEqual(human);
   expect((await getManual(ctx, manual.id)).draftRevision).toBe(manual.draftRevision);
 });
+
+it("preserves a human edit with the question prefix on draft save and subsequent answer", async () => {
+  const { ctx, v1 } = await firstVersion();
+  const question = v1.questions[0];
+  if (!question) throw new Error("expected a question");
+  const manual = await saveDraft(ctx, v1.revisionId, {
+    ...exampleDraft,
+    references: [],
+    unknowns: [],
+  });
+  const human = `[v1 확인 필요] ${question.question} (담당자가 직접 수정)`;
+  await saveDraft(ctx, v1.revisionId, { ...manual.draft, unknowns: [human] }, manual.draftRevision);
+  expect((await getManual(ctx, manual.id)).draft.unknowns).toContain(human);
+  await answerQuestion(ctx, v1.id, 1, question.id, { answer: "done" });
+  const after = (await getManual(ctx, manual.id)).draft.unknowns;
+  expect(after).toContain(human);
+  expect(after).not.toContain(`[v1 확인 필요] ${question.question}`);
+});

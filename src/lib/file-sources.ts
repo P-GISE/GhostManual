@@ -274,48 +274,56 @@ export async function createFileSource(
     return fileRevisionInTransaction(db, ctx, id);
   });
 }
-const unknownPrefix = (revision: number) => `[v${revision} 확인 필요] `;
-// Rewrites the draft's unknowns for one revision: other items stay, unanswered questions are listed.
+type RevisionQuestions = { revision: number; questions: string[]; unanswered: string[] };
+const questionItem = (revision: number, question: string) =>
+  `[v${revision} 확인 필요] ${question}`.slice(0, 500);
+const summaryItem = (revision: number, count: number) =>
+  `[v${revision} 확인 필요] 답하지 않은 변경 질문 ${count}건`;
+
 export function syncUnknowns(
   unknowns: readonly string[],
-  revision: number,
-  unanswered: readonly string[],
+  revisions: readonly RevisionQuestions[],
 ): string[] {
-  const prefix = unknownPrefix(revision);
-  const kept = unknowns.filter((item) => !item.startsWith(prefix));
-  const room = 30 - kept.length;
-  const items = unanswered.map((q) => `${prefix}${q}`.slice(0, 500));
-  if (items.length <= room) return [...kept, ...items];
-  if (room < 1)
-    throw new AppError(
-      "unknowns_limit",
-      422,
-      "확인 필요 항목이 30개입니다. 기존 항목을 정리하거나 질문에 답한 뒤 다시 시도하세요.",
-    );
-  const rest = items.length - room + 1;
-  return [...kept, ...items.slice(0, room - 1), `${prefix}답하지 않은 변경 질문 ${rest}건`];
+  const generated = new Set<string>();
+  for (const { revision, questions } of revisions) {
+    for (const question of questions) generated.add(questionItem(revision, question));
+    for (let count = 2; count <= questions.length; count++)
+      generated.add(summaryItem(revision, count));
+  }
+  const result = unknowns.filter((item) => !generated.has(item));
+  for (const { revision, unanswered } of revisions) {
+    const room = 30 - result.length;
+    const items = unanswered.map((question) => questionItem(revision, question));
+    if (items.length <= room) {
+      result.push(...items);
+    } else if (room > 0) {
+      result.push(...items.slice(0, room - 1), summaryItem(revision, items.length - room + 1));
+    } else {
+      throw new AppError(
+        "unknowns_limit",
+        422,
+        "확인 필요 항목이 30개입니다. 기존 항목을 정리하거나 질문에 답한 뒤 다시 시도하세요.",
+      );
+    }
+  }
+  return result;
 }
 export async function reconcileFileUnknowns(
   db: DbClient,
   sourceId: string,
   upToRevision: number,
   unknowns: readonly string[],
+  fromRevision = 1,
 ): Promise<string[]> {
-  const revisions = await db.query<{ revision: number; questions: string[] }>(
-    `SELECT r.revision,COALESCE(array_agg(q.question ORDER BY q.position)
-       FILTER (WHERE q.id IS NOT NULL AND q.answer IS NULL),ARRAY[]::text[]) AS questions
-     FROM source_revisions r JOIN source_files f ON f.revision_id=r.id
-     LEFT JOIN revision_questions q ON q.revision_id=r.id
-     WHERE r.source_id=$1 AND r.revision<=$2 GROUP BY r.revision ORDER BY r.revision`,
-    [sourceId, upToRevision],
+  const revisions = await db.query<RevisionQuestions>(
+    `SELECT r.revision,array_agg(q.question ORDER BY q.position) AS questions,
+       COALESCE(array_agg(q.question ORDER BY q.position) FILTER (WHERE q.answer IS NULL),
+         ARRAY[]::text[]) AS unanswered
+     FROM source_revisions r JOIN revision_questions q ON q.revision_id=r.id
+     WHERE r.source_id=$1 AND r.revision BETWEEN $3 AND $2 GROUP BY r.revision ORDER BY r.revision`,
+    [sourceId, upToRevision, fromRevision],
   );
-  const kept = unknowns.filter(
-    (item) => !revisions.rows.some((row) => item.startsWith(unknownPrefix(row.revision))),
-  );
-  return revisions.rows.reduce(
-    (items, row) => syncUnknowns(items, row.revision, row.questions),
-    kept,
-  );
+  return syncUnknowns(unknowns, revisions.rows);
 }
 export async function syncManual(
   db: DbClient,
@@ -330,15 +338,7 @@ export async function syncManual(
   const row = manual.rows[0];
   if (!row) return;
   const draft = ManualDraftSchema.parse(row.draft);
-  const unanswered = await db.query<{ question: string }>(
-    "SELECT q.question FROM revision_questions q JOIN source_revisions r ON r.id=q.revision_id WHERE r.source_id=$1 AND r.revision=$2 AND q.answer IS NULL ORDER BY q.position",
-    [sourceId, revision],
-  );
-  const unknowns = syncUnknowns(
-    draft.unknowns,
-    revision,
-    unanswered.rows.map((r) => r.question),
-  );
+  const unknowns = await reconcileFileUnknowns(db, sourceId, revision, draft.unknowns, revision);
   await db.query(
     `UPDATE manuals SET draft=$1,draft_revision=draft_revision+1${revisionId ? ",needs_review=true,source_revision_id=$3" : ""} WHERE id=$2`,
     revisionId ? [{ ...draft, unknowns }, row.id, revisionId] : [{ ...draft, unknowns }, row.id],
