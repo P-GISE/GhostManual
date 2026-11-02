@@ -66,7 +66,7 @@ export function fileText(title: string, result: ReadResult): string {
   if (result.status !== "compared") return `${title}\n(내용 비교 한도를 넘는 엑셀 파일)`;
   const lines = result.snapshot.sheets.map((sheet) => {
     const header = Object.entries(sheet.cells)
-      .filter(([address]) => /^[A-Z]+1$/.test(address))
+      .filter(([address, cell]) => /^[A-Z]+1$/.test(address) && cell.t === "s")
       .map(([, cell]) => String(cell.v ?? ""))
       .filter(Boolean)
       .join(", ");

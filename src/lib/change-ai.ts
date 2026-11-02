@@ -35,7 +35,8 @@ export function changePrompt(
       rows: sheet.rows,
       cols: sheet.cols,
       headers: Object.entries(sheet.cells)
-        .filter(([address]) => /^[A-Z]+1$/.test(address))
+        // Row 1 is not always a header row: only text cells count, so numbers and formula results never leave.
+        .filter(([address, cell]) => /^[A-Z]+1$/.test(address) && cell.t === "s")
         .slice(0, 30)
         .map(([, cell]) => String(cell.v ?? "").slice(0, 40)),
     })),

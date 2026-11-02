@@ -47,3 +47,46 @@ it("caps headers at 30 columns of 40 characters and formulas at 200 characters",
   expect(input.sheets[0]?.headers.every((h) => h.length === 40)).toBe(true);
   expect(input.changes[0]?.before).toHaveLength(200);
 });
+it("sends only text cells of the first row as headers, never numbers or formula results", () => {
+  const after: Snapshot = {
+    v: 1,
+    sheets: [
+      {
+        name: "정산",
+        hidden: false,
+        rows: 1,
+        cols: 3,
+        cells: {
+          A1: { t: "s", v: "합계" },
+          B1: { t: "n", v: 175, f: "SUM(원본!B2:B3)" },
+          C1: { t: "b", v: true },
+        },
+      },
+    ],
+    names: [],
+  };
+  const input = changePrompt("t", after, []);
+  expect(input.sheets[0]?.headers).toEqual(["합계"]);
+  expect(JSON.stringify(input)).not.toContain("175");
+});
+it("keeps numbers out of the stored search text as well", async () => {
+  const { fileText } = await import("../../src/lib/file-sources.ts");
+  const text = fileText("월간 정산", {
+    status: "compared",
+    snapshot: {
+      v: 1,
+      sheets: [
+        {
+          name: "정산",
+          hidden: false,
+          rows: 1,
+          cols: 2,
+          cells: { A1: { t: "s", v: "합계" }, B1: { t: "n", v: 175 } },
+        },
+      ],
+      names: [],
+    },
+  });
+  expect(text).toContain("합계");
+  expect(text).not.toContain("175");
+});
