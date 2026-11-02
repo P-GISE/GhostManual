@@ -25,17 +25,20 @@ export function ManualDetail({
   const [busy, setBusy] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [unknowns, setUnknowns] = useState(false);
-  const [sharing, setSharing] = useState<Sharing>({ mode: "private" });
+  const [sharing, setSharing] = useState<Sharing | null>(null);
   // The radio reflects the choice immediately; the link appears when the server confirms.
-  const [sharingMode, setSharingMode] = useState<Sharing["mode"]>("private");
+  const [sharingMode, setSharingMode] = useState<Sharing["mode"] | null>(null);
   useEffect(() => {
-    if (!reader)
+    if (!reader) {
+      setSharing(null);
+      setSharingMode(null);
       read(`/api/shares?manualId=${id}`, sharingSchema)
         .then((value) => {
           setSharing(value);
           setSharingMode(value.mode);
         })
         .catch(async (e) => setError(await message(e)));
+    }
     read(`/api/manuals/${id}`, manualSchema, reader)
       .then(setManual)
       .catch(async (e) => setError(await message(e)));
@@ -62,6 +65,7 @@ export function ManualDetail({
     }
   }
   async function changeSharing(mode: Sharing["mode"]) {
+    if (!sharing) return;
     setBusy(true);
     setError("");
     setSharingMode(mode);
@@ -162,7 +166,7 @@ export function ManualDetail({
                     type="radio"
                     name="sharing"
                     checked={sharingMode === "private"}
-                    disabled={busy}
+                    disabled={busy || !sharing}
                     onChange={() => changeSharing("private")}
                   />
                   비공개
@@ -172,20 +176,22 @@ export function ManualDetail({
                     type="radio"
                     name="sharing"
                     checked={sharingMode === "link"}
-                    disabled={busy || !manual.publishedVersion || manual.needsReview}
+                    disabled={busy || !sharing || !manual.publishedVersion || manual.needsReview}
                     onChange={() => changeSharing("link")}
                   />
                   링크가 있는 사용자 볼 수 있음
                 </label>
               </fieldset>
-              <p className="help">
-                {sharing.mode === "link"
-                  ? "링크를 받은 사람은 로그인한 뒤 검수된 버전만 읽고 질문할 수 있습니다. 비공개로 바꾸면 링크가 바로 막힙니다."
-                  : manual.publishedVersion && !manual.needsReview
-                    ? "나만 볼 수 있습니다. 링크 공유를 켜면 검수된 버전만 공유됩니다."
-                    : "검수 완료·버전 게시 후 링크로 공유할 수 있습니다."}
+              <p className="help" role={sharing ? undefined : "status"}>
+                {!sharing
+                  ? "공유 상태를 확인하기 전에는 설정을 바꿀 수 없습니다. 오류가 나면 페이지를 새로고침하세요."
+                  : sharing.mode === "link"
+                    ? "링크를 받은 사람은 로그인한 뒤 검수된 버전만 읽고 질문할 수 있습니다. 비공개로 바꾸면 링크가 바로 막힙니다."
+                    : manual.publishedVersion && !manual.needsReview
+                      ? "나만 볼 수 있습니다. 링크 공유를 켜면 검수된 버전만 공유됩니다."
+                      : "검수 완료·버전 게시 후 링크로 공유할 수 있습니다."}
               </p>
-              {sharing.mode === "link" && (
+              {sharing?.mode === "link" && (
                 <>
                   <label htmlFor="share-url">읽기 전용 링크</label>
                   <input
