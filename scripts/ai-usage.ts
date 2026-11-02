@@ -32,11 +32,11 @@ export function cost(line: Line): number | null {
     line.model === "claude-haiku-5-5" &&
     line.inputTokens + line.cacheWriteTokens + line.cacheReadTokens > 100_000;
   return (
-    (longHaiku ? 5 : 1) *
-    (line.inputTokens * price.input +
-      line.cacheWriteTokens * price.input * 1.25 +
-      line.cacheReadTokens * price.cacheRead +
-      line.outputTokens * price.output) /
+    ((longHaiku ? 5 : 1) *
+      (line.inputTokens * price.input +
+        line.cacheWriteTokens * price.input * 1.25 +
+        line.cacheReadTokens * price.cacheRead +
+        line.outputTokens * price.output)) /
     1_000_000
   );
 }

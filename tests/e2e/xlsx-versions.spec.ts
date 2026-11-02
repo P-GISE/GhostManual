@@ -373,7 +373,9 @@ test("switching files during a workbook lookup discards the previous suggestions
     await file.setInputFiles({
       name: "인수인계.txt",
       mimeType: "text/plain",
-      buffer: Buffer.from("담당자는 매일 입고된 자료를 검토하고 승인 결과를 기록합니다. ".repeat(5)),
+      buffer: Buffer.from(
+        "담당자는 매일 입고된 자료를 검토하고 승인 결과를 기록합니다. ".repeat(5),
+      ),
     });
   } finally {
     release.resolve();
