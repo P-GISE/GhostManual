@@ -55,11 +55,12 @@ it("sends only text cells of the first row as headers, never numbers or formula 
         name: "정산",
         hidden: false,
         rows: 1,
-        cols: 3,
+        cols: 4,
         cells: {
           A1: { t: "s", v: "합계" },
           B1: { t: "n", v: 175, f: "SUM(원본!B2:B3)" },
           C1: { t: "b", v: true },
+          D1: { t: "s", v: "cached-result", f: "A2" },
         },
       },
     ],
@@ -81,7 +82,11 @@ it("keeps numbers out of the stored search text as well", async () => {
           hidden: false,
           rows: 1,
           cols: 2,
-          cells: { A1: { t: "s", v: "합계" }, B1: { t: "n", v: 175 } },
+          cells: {
+            A1: { t: "s", v: "합계" },
+            B1: { t: "n", v: 175 },
+            C1: { t: "s", v: "cached-result", f: "A2" },
+          },
         },
       ],
       names: [],
@@ -89,4 +94,5 @@ it("keeps numbers out of the stored search text as well", async () => {
   });
   expect(text).toContain("합계");
   expect(text).not.toContain("175");
+  expect(text).not.toContain("cached-result");
 });

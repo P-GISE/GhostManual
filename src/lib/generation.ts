@@ -46,7 +46,9 @@ export async function generateDraft(
     );
   try {
     const draft =
-      source.kind === "file" ? await draftFromFile(ctx, source.id) : await generateManual(source);
+      source.kind === "file"
+        ? await draftFromFile(ctx, source.id, input.expectedRevision)
+        : await generateManual(source);
     const manual = await saveDraft(ctx, source.revisionId, draft, existing?.draftRevision, "ai");
     await finishOperation(operation.id, { result: { manualId: manual.id } });
     return { manual, operationId: operation.id };

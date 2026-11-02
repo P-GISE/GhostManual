@@ -3,7 +3,7 @@ import { z } from "zod";
 import { FILE_QUOTA_BYTES } from "./accounts.ts";
 import { generateFileManual } from "./ai.ts";
 import { type CellChange, diffCells } from "./cell-diff.ts";
-import { changePrompt, changeQuestions } from "./change-ai.ts";
+import { changePrompt, changeQuestions, textHeaders } from "./change-ai.ts";
 import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
 import { fileStem } from "./file-stem.ts";
@@ -68,11 +68,7 @@ export function readUpload(bytes: Uint8Array): ReadResult {
 export function fileText(title: string, result: ReadResult): string {
   if (result.status !== "compared") return `${title}\n(내용 비교 한도를 넘는 엑셀 파일)`;
   const lines = result.snapshot.sheets.map((sheet) => {
-    const header = Object.entries(sheet.cells)
-      .filter(([address, cell]) => /^[A-Z]+1$/.test(address) && cell.t === "s")
-      .map(([, cell]) => String(cell.v ?? ""))
-      .filter(Boolean)
-      .join(", ");
+    const header = textHeaders(sheet).filter(Boolean).join(", ");
     return `시트 ${sheet.name} (${sheet.rows}행 × ${sheet.cols}열)${header ? `: ${header}` : ""}`;
   });
   return `${title}\n${lines.join("\n")}`.slice(0, 20000);
@@ -643,11 +639,17 @@ export async function similarSources(
   });
 }
 // AI manual draft for a workbook: sheet structure and every version's changes, questions and answers.
-// Names, departments, file names and cell values stay out of the request.
-export async function draftFromFile(ctx: SessionContext, sourceId: string): Promise<ManualDraft> {
-  const { input, revision } = await transaction(async (db) => {
+// Non-formula text in the first row is included as potential headers.
+export async function draftFromFile(
+  ctx: SessionContext,
+  sourceId: string,
+  expectedRevision: number,
+): Promise<ManualDraft> {
+  const input = await transaction(async (db) => {
     await assertSession(db, ctx, true);
     const latest = await sourceInTransaction(db, ctx, sourceId);
+    if (latest.revision !== expectedRevision)
+      throw new AppError("conflict", 409, "자료가 변경됐습니다.");
     const file = await db.query<{ snapshot: Snapshot | null }>(
       "SELECT snapshot FROM source_files WHERE revision_id=$1",
       [latest.revisionId],
@@ -655,29 +657,21 @@ export async function draftFromFile(ctx: SessionContext, sourceId: string): Prom
     const snapshot = file.rows[0]?.snapshot;
     const history = await fileHistory(db, ctx, sourceId, latest.revision);
     return {
-      revision: latest.revision,
-      input: {
-        title: latest.title,
-        sheets: snapshot ? changePrompt(latest.title, snapshot, []).sheets : [],
-        versions: (history?.revisions ?? []).map((r) => ({
-          revision: r.revision,
-          aiSummary: r.aiSummary,
-          changes: r.changes,
-          questions: r.questions.map((q) => ({ question: q.question, answer: q.answer })),
-        })),
-      },
+      title: latest.title,
+      sheets: snapshot ? changePrompt(latest.title, snapshot, []).sheets : [],
+      versions: (history?.revisions ?? []).map((r) => ({
+        revision: r.revision,
+        aiSummary: r.aiSummary,
+        changes: r.changes,
+        questions: r.questions.map((q) => ({ question: q.question, answer: q.answer })),
+      })),
     };
   });
-  const draft = await generateFileManual(input);
-  // Unanswered questions of every version become "확인 필요" items, as a manual written by hand gets them.
-  const unknowns = await transaction((db) =>
-    reconcileFileUnknowns(db, sourceId, revision, draft.unknowns),
-  );
-  return { ...draft, unknowns };
+  return generateFileManual(input);
 }
 export type CellChanges = { compared: boolean; total: number; changes: CellChange[] };
 // Cell-by-cell record of one version against the previous one, rebuilt from the stored immutable snapshots.
-// A reader of the published version sees its changed cells, including previous values, but not older files.
+// A diff includes previous values, which are private even when the current workbook is shared.
 export async function cellChanges(
   ctx: SessionContext,
   id: string,
@@ -685,7 +679,7 @@ export async function cellChanges(
   limit = 500,
 ): Promise<CellChanges> {
   return transaction(async (db) => {
-    await assertSession(db, ctx);
+    await assertSession(db, ctx, true);
     const view = await fileRevisionInTransaction(db, ctx, id, revision);
     if (view.revision === 1) return { compared: true, total: 0, changes: [] };
     const rows = await db.query<{ revision: number; snapshot: Snapshot | null }>(

@@ -11,6 +11,7 @@ import {
   getFileRevision,
 } from "../../src/lib/file-sources.ts";
 import { generateDraft } from "../../src/lib/generation.ts";
+import * as operations from "../../src/lib/operations.ts";
 import { newId } from "../../src/lib/types.ts";
 import { exampleDraft } from "../fixtures/manual-example.ts";
 import { setupFileMail, signedInUser } from "./mail-helper.ts";
@@ -105,4 +106,33 @@ it("drafts a manual for a workbook from its structure and answers, never its cel
     ...v1.questions.slice(1).map((q) => `[v1 확인 필요] ${q.question}`),
     ...v2.questions.map((q) => `[v2 확인 필요] ${q.question}`),
   ]);
+});
+
+it("rejects a newer workbook revision before sending any draft input", async () => {
+  const { ctx } = await signedInUser(mail);
+  const source = await createFileSource(ctx, {
+    title: "정산",
+    fileName: "v1.xlsx",
+    bytes: fixture("정산_1029.xlsx"),
+  });
+  const reserve = operations.reserveAiAttempt;
+  const race = vi.spyOn(operations, "reserveAiAttempt").mockImplementationOnce(async (...args) => {
+    const operation = await reserve(...args);
+    vi.stubEnv("AI_ENABLED", "false");
+    await addFileRevision(ctx, source.id, {
+      fileName: "v2.xlsx",
+      bytes: fixture("정산_1030.xlsx"),
+      expectedRevision: 1,
+    });
+    vi.stubEnv("AI_ENABLED", "true");
+    return operation;
+  });
+  try {
+    await expect(
+      generateDraft(ctx, { sourceId: source.id, expectedRevision: 1, key: newId() }),
+    ).rejects.toMatchObject({ httpStatus: 409 });
+    expect(bodies).toHaveLength(0);
+  } finally {
+    race.mockRestore();
+  }
 });

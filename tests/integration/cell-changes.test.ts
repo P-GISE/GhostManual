@@ -52,7 +52,7 @@ it("cannot compare when either version was over the comparison limit", async () 
   const { ctx, id } = await twoVersions("huge.xlsx");
   expect(await cellChanges(ctx, id, 2)).toEqual({ compared: false, total: 0, changes: [] });
 });
-it("lets a reader see the cell changes of the published version only", async () => {
+it("keeps prior cell values owner-only even when the current version is shared", async () => {
   const { ctx, id } = await twoVersions();
   const latest = await getSource(ctx, id);
   const draft = await saveDraft(ctx, latest.revisionId, {
@@ -63,6 +63,7 @@ it("lets a reader see the cell changes of the published version only", async () 
   const manual = await getManual(ctx, draft.id);
   await publishManual(ctx, draft.id, manual.draftRevision, manual.draft.unknowns);
   const reader = await requireSession((await shareWithNewReader(ctx, draft.id)).token);
-  expect((await cellChanges(reader, id, 2)).total).toBeGreaterThan(0);
-  await expect(cellChanges(reader, id, 1)).rejects.toMatchObject({ httpStatus: 404 });
+  expect((await getSource(reader, id)).revision).toBe(2);
+  await expect(cellChanges(reader, id, 2)).rejects.toMatchObject({ httpStatus: 403 });
+  await expect(cellChanges(reader, id, 1)).rejects.toMatchObject({ httpStatus: 403 });
 });

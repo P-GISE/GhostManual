@@ -2,7 +2,7 @@ import { z } from "zod";
 import { generate, instructions } from "./ai.ts";
 import { reserveChangeAi } from "./operations.ts";
 import type { SessionContext } from "./types.ts";
-import type { ChangeGroup, Snapshot } from "./xlsx/index.ts";
+import type { ChangeGroup, SheetSnapshot, Snapshot } from "./xlsx/index.ts";
 
 export type ChangePromptInput = {
   title: string;
@@ -22,7 +22,15 @@ export type ChangeAiResult = {
   questions: { groupPositions: number[]; question: string }[];
 };
 
-// Structure only: sheet sizes, first-row headers, formulas and change locations. Cell values never leave.
+// The first row may contain data; only non-formula text is eligible as a header.
+export function textHeaders(sheet: SheetSnapshot): string[] {
+  return Object.entries(sheet.cells)
+    .filter(
+      ([address, cell]) => /^[A-Z]+1$/.test(address) && cell.t === "s" && cell.f === undefined,
+    )
+    .map(([, cell]) => String(cell.v ?? ""));
+}
+
 export function changePrompt(
   title: string,
   after: Snapshot,
@@ -34,11 +42,9 @@ export function changePrompt(
       name: sheet.name.slice(0, 40),
       rows: sheet.rows,
       cols: sheet.cols,
-      headers: Object.entries(sheet.cells)
-        // Row 1 is not always a header row: only text cells count, so numbers and formula results never leave.
-        .filter(([address, cell]) => /^[A-Z]+1$/.test(address) && cell.t === "s")
+      headers: textHeaders(sheet)
         .slice(0, 30)
-        .map(([, cell]) => String(cell.v ?? "").slice(0, 40)),
+        .map((header) => header.slice(0, 40)),
     })),
     changes: groups.map((group, position) => {
       const change: ChangePromptInput["changes"][number] = {
