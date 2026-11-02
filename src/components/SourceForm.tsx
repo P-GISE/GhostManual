@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { z } from "zod";
 import { http, message, read } from "../lib/client";
 import { SourceInputSchema } from "../lib/schemas";
@@ -29,6 +29,11 @@ export function SourceForm() {
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [similar, setSimilar] = useState<Similar | null>(null);
+  const lookup = useRef(0);
+  function invalidateLookup() {
+    lookup.current++;
+    setSimilar(null);
+  }
   useUnsavedChanges(!submitted && !!(title || text || file));
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -36,6 +41,8 @@ export function SourceForm() {
   }
   // Asks first when an .xlsx looks like the next version of a workbook already in the library.
   async function register(asNewSource: boolean) {
+    if (busy) return;
+    const request = ++lookup.current;
     setError("");
     if (!file && !SourceInputSchema.safeParse({ title, text }).success) {
       setError("제목은 1~120자, 본문은 100~20,000자로 입력하세요.");
@@ -44,12 +51,21 @@ export function SourceForm() {
     setBusy(true);
     try {
       if (file && /\.xlsx$/i.test(file.name) && !asNewSource) {
+        const digest = await sha256(file);
+        if (request !== lookup.current) {
+          setBusy(false);
+          return;
+        }
         const params = new URLSearchParams({
           fileName: file.name,
           title,
-          sha256: await sha256(file),
+          sha256: digest,
         });
         const found = await read(`/api/sources/similar?${params}`, similarSchema);
+        if (request !== lookup.current) {
+          setBusy(false);
+          return;
+        }
         if (found.length) {
           setSimilar(found);
           setBusy(false);
@@ -67,12 +83,12 @@ export function SourceForm() {
       setSubmitted(true);
       router.push(`/sources/${source.id}`);
     } catch (e) {
-      setError(await message(e));
+      if (request === lookup.current) setError(await message(e));
       setBusy(false);
     }
   }
   async function addVersion(target: Similar[number]) {
-    if (!file) return;
+    if (!file || busy) return;
     setBusy(true);
     setError("");
     try {
@@ -103,7 +119,10 @@ export function SourceForm() {
           required
           maxLength={120}
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => {
+            invalidateLookup();
+            setTitle(e.target.value);
+          }}
           placeholder="예: 월말 정산 업무 인수인계"
         />
         <label htmlFor="source-file">
@@ -115,7 +134,7 @@ export function SourceForm() {
           accept=".xlsx,.txt,.md,.markdown"
           onChange={(e) => {
             setFile(e.target.files?.[0] ?? null);
-            setSimilar(null);
+            invalidateLookup();
           }}
           aria-describedby="file-help"
         />

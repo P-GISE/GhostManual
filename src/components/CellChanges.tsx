@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { z } from "zod";
 import { message, read } from "../lib/client";
 
@@ -25,23 +25,23 @@ const show = (cell: Cell) =>
 export function CellChanges({
   sourceId,
   revision,
-  reader,
 }: {
   readonly sourceId: string;
   readonly revision: number;
-  readonly reader: boolean;
 }) {
   const [data, setData] = useState<z.infer<typeof changesSchema> | null>(null);
   const [error, setError] = useState("");
+  const pending = useRef(false);
   function load(open: boolean) {
-    if (!open || data) return;
-    read(
-      `/api/sources/${sourceId}/revisions/${revision}/cells${reader ? "?view=shared" : ""}`,
-      changesSchema,
-      reader,
-    )
+    if (!open || data || pending.current) return;
+    pending.current = true;
+    setError("");
+    read(`/api/sources/${sourceId}/revisions/${revision}/cells`, changesSchema)
       .then(setData)
-      .catch(async (e) => setError(await message(e)));
+      .catch(async (e) => setError(await message(e)))
+      .finally(() => {
+        pending.current = false;
+      });
   }
   return (
     <details onToggle={(e) => load(e.currentTarget.open)}>
