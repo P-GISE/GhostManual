@@ -1,0 +1,15 @@
+# GhostManual S1 이벤트 배포 운영안
+
+이 변경은 운영 검토용 후보다. 현재 운영 앱은 직접 빌드한 ef5d1b67이며 기존 기록에는 CI run ID가 없다. 배포 변수는 기본값인 비활성 상태로 두고 다음 순서로 확인한다.
+
+1. 저장소 AGENTS.md에 따라 사람이 변경을 확인한 뒤 PR을 만든다. PR에서는 기존 앱 테스트와 추가 실행기 테스트, 실제 빌드 이미지의 OCI archive 검증이 모두 통과해야 한다. 보호 파일을 바꾸지 않은 별도 후속 운영 커밋까지 실제 서버 반영을 확인해야 자동배포 완료로 기록할 수 있다.
+2. 지정 PR 병합 뒤 운영 브랜치 feat/ghostmanual-mvp의 최초 push CI가 성공하고 artifact 이름이 정확히 ghostmanual-event-image-<전체 SHA>인지 확인한다. 기존 polling 실행기는 ghostmanual-image- 접두사만 허용한다. 전환 중 기존 타이머에서 산출물 없음이 기록될 수 있다. 기존 타이머를 다시 활성화하려면 과거 산출물 계약과 원래 Compose·환경·receipt를 먼저 검토한다.
+3. 앱·DB와 다른 서비스 상태, lock, 실제 수동 receipt, 원본 환경·Compose 파일의 소유권·해시를 다시 읽는다. 별도로 실제 Compose와 overlay를 원본 프로젝트 디렉터리에서 해석하고 services.app.image만 문자열 `<verified-image>`로 치환한 전체 JSON의 SHA256(sort_keys=True, separators=(',', ':'))을 기록한다. 두 자료의 원본 파일 정체와 앱 ID가 일치해야 한다. 실제 Compose와 제품 저장소 Compose의 렌더 결과는 MAIL_DRIVER 키에 차이가 있었다. 현장 원본을 사용한다.
+4. 검토자는 제품 Git checkout에서 `python -B deploy/event/prepare-review.py RUNTIME.json MODEL.json SHA RUN REVIEW.json`을 실행한다. 이 도구는 현재 운영 브랜치·성공 CI·단일 산출물·보호 tree·모듈의 Git blob을 고정하고 승인 플래그를 false로 남긴다. 배포 모듈, .github/, deploy/, scripts/, db/, SQL, Compose, 이미지 빌드 경로와 기존 로그인·메일·Google 기능을 검토한 뒤 별도 사본에서 승인 두 항목을 true로 기록한다.
+5. 기존 S1의 새로운 root 전용 `/root/ghostmanual-event-install-<고유 식별자>`(0700)에 승인본 review.json과 정확한 Git blob 원문인 entry.py, install.py, scripts/deploy-poll.py(파일명 deploy-poll.py)를 각각 root:root 0600으로 배치하고 SHA256을 재대조한다. `sudo /usr/bin/python3 -I -B /root/ghostmanual-event-install-<고유 식별자>/install.py`를 한 번 실행한다. 이 단계에서 고정 실행기·별도 상태 폴더·root 환경 및 Compose 사본만 생성한다. 원본 소유권과 데이터베이스를 유지한다. 실패 후에는 같은 stage를 재사용하지 않는다.
+6. 기존 S1의 정확한 대상 instance와 GhostManual 전용 OIDC subject만 허용하는 역할 `PGISE-S1-Deploy-GhostManual`, 고정 문서 `P-GISE-S1-Deploy-GhostManual-v1`(버전 1, Sha/RunId 두 ENV_VAR, 1800초, /usr/local/libexec/ghostmanual-event-entry)을 검증한다. 실제 role ARN, AWS 문서 해시와 정규화 본문 해시를 각각 GHOSTMANUAL_DEPLOY_ROLE_ARN, GHOSTMANUAL_SSM_DOCUMENT_HASH, GHOSTMANUAL_SSM_CONTENT_SHA256에 기록한다. 설치 검증과 S1 쓰기 예약 확인 뒤 GHOSTMANUAL_DEPLOY_ENABLED=true로 전환한다.
+7. 최초 성공 push의 정확한 SHA/run으로 workflow_dispatch를 호출한다. 성공 뒤에는 별도 의미 있는 운영 커밋으로 순수 workflow_run 경로를 검증한다. 두 번 모두 실제 앱 image/revision과 /var/lib/ghostmanual-deploy/event/deployed.json의 SHA/run/artifact ID/digest를 대조하고 DB SELECT 1, 로컬·공개 HTTP, 기존 앱 환경·DB 볼륨·터널·다른 컨테이너 보존을 확인한다. 이후 GhostManual 배포 타이머만 해제한다.
+
+실행기는 기존 배포 lock을 공유한다. 이미지 전환은 고정 프로젝트의 app 서비스에만 `--no-deps --no-build --pull never`를 사용한다. root 전용 환경·Compose는 원본과 바이트 해시가 같아야 하고 해석한 전체 모델도 독립 기준과 일치해야 한다. 환경 원본을 바꾸면 새 검토가 필요하다. DB migration·대량 업무 요청·메일 전송·Google 인증은 이 실행기가 수행하지 않는다.
+
+2GiB 디스크 가드, 원본 변경, 다른 서비스 변경, branch 되돌림, 만료되거나 중복된 artifact는 승격 차단 조건이다. 다운로드 후 Docker load와 앱 교체 앞에 별도 일회성 표지를 기록한다. 실패 시 기존 수동 이미지를 유지하거나 확인된 종전 이미지로 앱을 복구하며 오류를 기록한다. 전환·복구·영수증 쓰기 도중의 전원 중단이나 SIGKILL은 표지와 실제 이미지·영수증을 읽고 수동 대조해야 한다. 기존 환경·복구본·005 이력을 보존하고 작업자가 표지를 자동 제거하거나 설치를 재시도하지 않는다.

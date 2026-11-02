@@ -1,0 +1,146 @@
+name: GhostManual verified SSM deploy
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [feat/ghostmanual-mvp]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Exact successful production-branch push SHA
+        required: true
+        type: string
+      run_id:
+        description: Exact successful production-branch push CI run ID
+        required: true
+        type: string
+concurrency:
+  group: ghostmanual-production-event-deploy
+  cancel-in-progress: false
+  queue: max
+jobs:
+  deploy:
+    if: >-
+      ${{ vars.GHOSTMANUAL_DEPLOY_ENABLED == 'true' && github.repository == 'P-GISE/GhostManual' &&
+          ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/ghostmanual-mvp') ||
+           (github.event_name == 'workflow_run' && github.event.action == 'completed' &&
+            github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'feat/ghostmanual-mvp' &&
+            github.event.workflow_run.status == 'completed' && github.event.workflow_run.conclusion == 'success' &&
+            github.event.workflow_run.head_repository.full_name == github.repository)) }}
+    permissions:
+      actions: read
+      id-token: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Validate canonical run and exact image artifact
+        id: validated
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re, urllib.request
+          with open(os.environ['GITHUB_EVENT_PATH']) as stream:event=json.load(stream)
+          assert event['repository']['full_name']=='P-GISE/GhostManual'
+          if os.environ['GITHUB_EVENT_NAME']=='workflow_dispatch':
+              assert os.environ['GITHUB_REF']=='refs/heads/feat/ghostmanual-mvp'
+              sha=event['inputs']['sha'];run_id=event['inputs']['run_id']
+          else:
+              assert os.environ['GITHUB_EVENT_NAME']=='workflow_run' and event['action']=='completed'
+              sha=event['workflow_run']['head_sha'];run_id=str(event['workflow_run']['id'])
+          assert re.fullmatch('[0-9a-f]{40}',sha) and re.fullmatch('[1-9][0-9]{0,19}',run_id)
+          def api(endpoint):
+              request=urllib.request.Request('https://api.github.com/repos/P-GISE/GhostManual/'+endpoint,
+                  headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              with urllib.request.urlopen(request,timeout=30) as response:return json.load(response)
+          run=api('actions/runs/'+run_id)
+          assert run['id']==int(run_id) and run['head_sha']==sha and run['head_branch']=='feat/ghostmanual-mvp'
+          assert run['event']=='push' and run['path']=='.github/workflows/ci.yml'
+          assert run['status']=='completed' and run['conclusion']=='success' and run['run_attempt']==1
+          assert all(run[key]['full_name']=='P-GISE/GhostManual' for key in ('repository','head_repository'))
+          page=api('actions/runs/'+run_id+'/artifacts?per_page=100')
+          assert page['total_count']<=100 and len(page['artifacts'])==page['total_count']
+          items=[item for item in page['artifacts'] if item['name']=='ghostmanual-event-image-'+sha]
+          assert len(items)==1
+          artifact=items[0]
+          assert artifact['expired'] is False and type(artifact['id']) is int and artifact['id']>0
+          assert 0<artifact['size_in_bytes']<1024**3 and re.fullmatch('sha256:[0-9a-f]{64}',artifact['digest'])
+          assert artifact['workflow_run']['id']==int(run_id) and artifact['workflow_run']['head_sha']==sha
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              for key,value in {'sha':sha,'run_id':run_id,'artifact_id':artifact['id'],'digest':artifact['digest']}.items():
+                  output.write(str(key)+'='+str(value)+'\n')
+          PY
+      - name: Assume only the GhostManual S1 role
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
+        with:
+          aws-region: ap-southeast-2
+          role-to-assume: ${{ vars.GHOSTMANUAL_DEPLOY_ROLE_ARN }}
+          role-session-name: ghostmanual-${{ github.run_id }}
+          role-duration-seconds: 3600
+          mask-aws-account-id: true
+      - name: Call fixed version and verify runtime receipt
+        env:
+          DEPLOY_SHA: ${{ steps.validated.outputs.sha }}
+          DEPLOY_RUN_ID: ${{ steps.validated.outputs.run_id }}
+          EXPECTED_ARTIFACT_ID: ${{ steps.validated.outputs.artifact_id }}
+          EXPECTED_ARTIFACT_DIGEST: ${{ steps.validated.outputs.digest }}
+          EXPECTED_DOCUMENT_HASH: ${{ vars.GHOSTMANUAL_SSM_DOCUMENT_HASH }}
+          EXPECTED_CONTENT_SHA256: ${{ vars.GHOSTMANUAL_SSM_CONTENT_SHA256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,os,re,subprocess,time
+          instance='i-0b4a251ecd2f5bd3e';document_name='P-GISE-S1-Deploy-GhostManual-v1'
+          sha=os.environ['DEPLOY_SHA'];run_id=int(os.environ['DEPLOY_RUN_ID'])
+          document_hash=os.environ['EXPECTED_DOCUMENT_HASH'];content_hash=os.environ['EXPECTED_CONTENT_SHA256']
+          assert re.fullmatch('[0-9a-f]{40}',sha) and run_id>0
+          assert all(re.fullmatch('[0-9a-f]{64}',value) for value in (document_hash,content_hash))
+          def aws(*args,missing_ok=False):
+              result=subprocess.run(['aws','ssm',*args,'--region','ap-southeast-2','--output','json'],
+                  capture_output=True,text=True,timeout=45)
+              if result.returncode:
+                  if missing_ok and 'InvocationDoesNotExist' in result.stderr:return None
+                  raise RuntimeError('ssm_api_failed')
+              return json.loads(result.stdout)
+          document=aws('get-document','--name',document_name,'--document-version','1')
+          assert document['Name']==document_name and document['DocumentVersion']=='1'
+          content=json.loads(document['Content'])
+          canonical=json.dumps(content,sort_keys=True,separators=(',',':')).encode()
+          assert hashlib.sha256(canonical).hexdigest()==content_hash
+          assert set(content['parameters'])=={'Sha','RunId'}
+          assert all(content['parameters'][key]['interpolationType']=='ENV_VAR' for key in ('Sha','RunId'))
+          assert content['mainSteps'][0]['inputs']['runCommand'][-1]=='exec /usr/local/libexec/ghostmanual-event-entry "$SSM_Sha" "$SSM_RunId"'
+          retry_deadline=time.monotonic()+1200
+          while True:
+              sent=aws('send-command','--document-name',document_name,'--document-version','1',
+                  '--document-hash-type','Sha256','--document-hash',document_hash,
+                  '--instance-ids',instance,'--timeout-seconds','120',
+                  '--parameters',json.dumps({'Sha':[sha],'RunId':[str(run_id)]}))
+              command_id=sent['Command']['CommandId']
+              assert re.fullmatch('[0-9a-f-]{36}',command_id)
+              deadline=time.monotonic()+1900
+              while True:
+                  assert time.monotonic()<deadline,'ssm_result_timeout'
+                  result=aws('get-command-invocation','--command-id',command_id,'--instance-id',instance,missing_ok=True)
+                  if result is None or result['Status'] in ('Pending','InProgress','Delayed'):
+                      time.sleep(3);continue
+                  break
+              output=result.get('StandardOutputContent','').strip()
+              if result['ResponseCode']==75:
+                  receipt=json.loads(output)
+                  if receipt.get('reason')=='lock_timeout' and time.monotonic()<retry_deadline:
+                      time.sleep(min(15,max(0,retry_deadline-time.monotonic())));continue
+              assert result['Status']=='Success' and result['ResponseCode']==0,'remote_deploy_failed'
+              receipt=json.loads(output)
+              assert receipt['status'] in ('verified','already_deployed') and receipt['sha']==sha
+              assert all(type(receipt[key]) is int and receipt[key]==run_id for key in ('requested_run_id','deployed_run_id','artifact_run_id'))
+              assert receipt['artifact_id']==int(os.environ['EXPECTED_ARTIFACT_ID'])
+              assert receipt['artifact_digest']==os.environ['EXPECTED_ARTIFACT_DIGEST']
+              assert re.fullmatch('sha256:[0-9a-f]{64}',receipt['image'])
+              assert receipt['source']=='canonical_ci_artifact'
+              print(json.dumps({'status':'verified','sha':sha,'run_id':run_id,'image':receipt['image']}))
+              break
+          PY
