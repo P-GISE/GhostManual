@@ -27,8 +27,42 @@ test("owner can revoke an existing share after reloading the manual", async ({ p
   await expect(
     readerPage.getByRole("heading", { name: "신입 구성원 업무 계정 발급", level: 1 }),
   ).toBeVisible();
+  let revokeRequests = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/shares") && request.method() === "PUT") revokeRequests++;
+  });
+  let releaseSharing: () => void = () => {};
+  const sharingResponse = new Promise<void>((resolve) => {
+    releaseSharing = resolve;
+  });
+  await page.route("**/api/shares?manualId=*", async (route) => {
+    await sharingResponse;
+    await route.continue();
+  });
   await page.reload();
-  await page.getByLabel("비공개", { exact: true }).check();
+  const privateChoice = page.getByLabel("비공개", { exact: true });
+  const linkChoice = page.getByLabel("링크가 있는 사용자 볼 수 있음", { exact: true });
+  try {
+    await expect(
+      page.getByRole("heading", { name: "신입 구성원 업무 계정 발급", level: 1 }),
+    ).toBeVisible();
+    await expect(privateChoice).toBeDisabled();
+    await expect(privateChoice).not.toBeChecked();
+    await expect(linkChoice).toBeDisabled();
+    await expect(linkChoice).not.toBeChecked();
+    await expect(page.getByText("나만 볼 수 있습니다.", { exact: false })).toHaveCount(0);
+    await expect(page.getByLabel("읽기 전용 링크")).toHaveCount(0);
+  } finally {
+    releaseSharing();
+  }
+  await expect(linkChoice).toBeChecked();
+  const revoked = page.waitForResponse(
+    (response) => response.url().endsWith("/api/shares") && response.request().method() === "PUT",
+  );
+  await privateChoice.check();
+  expect((await revoked).ok()).toBe(true);
+  expect((await revoked).request().postDataJSON().mode).toBe("private");
+  expect(revokeRequests).toBe(1);
   await expect(page.getByLabel("읽기 전용 링크")).toHaveCount(0);
   await readerPage.reload();
   await expect(readerPage.getByRole("main").getByRole("alert")).toBeVisible();
