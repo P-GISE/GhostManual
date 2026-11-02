@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily GhostManual PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 18:20:00 UTC
+Persistent=true
+Unit=ghostmanual-backup.service
+
+[Install]
+WantedBy=timers.target

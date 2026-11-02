@@ -7,7 +7,7 @@ services:
     ports:
       - "127.0.0.1:3200:3200"
     environment:
-      DATABASE_URL: postgresql://ghostmanual:${POSTGRES_PASSWORD:?Set database password}@db:5432/ghostmanual
+      DATABASE_URL: postgresql://ghostmanual_app:${APP_DATABASE_PASSWORD:?Set restricted runtime database password}@db:5432/ghostmanual
       APP_ORIGIN: ${APP_ORIGIN:?Set public HTTPS origin}
       TRUST_CLOUDFLARE: "true"
       IP_HASH_SECRET: ${IP_HASH_SECRET:?Set random hashing secret}

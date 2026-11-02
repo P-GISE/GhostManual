@@ -1,0 +1,16 @@
+[Unit]
+Description=Back up GhostManual PostgreSQL to the private S3 bucket
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=AWS_REGION=ap-southeast-2 AWS_PAGER=
+Environment=PATH=/opt/ghostmanual/tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+EnvironmentFile=/etc/ghostmanual-backup.env
+RuntimeDirectory=ghostmanual-backup
+RuntimeDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/local/sbin/ghostmanual-backup
+TimeoutStartSec=15min
