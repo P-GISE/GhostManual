@@ -201,3 +201,37 @@ it("rejects schema-invalid output", async () => {
   payload = response({ title: "missing required fields" });
   await expect(generateManual(source)).rejects.toMatchObject({ code: "ai_invalid_output" });
 });
+it("appends billed token counts per call to AI_USAGE_LOG, never the content", async () => {
+  const { mkdtempSync, readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const log = join(mkdtempSync(join(tmpdir(), "ai-usage-")), "usage.jsonl");
+  vi.stubEnv("AI_USAGE_LOG", log);
+  payload = {
+    ...response(draft),
+    usage: {
+      input_tokens: 1200,
+      output_tokens: 340,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+    },
+  };
+  await generateManual(source);
+  payload = { ...response(draft, ""), content: [], stop_reason: "refusal" };
+  await expect(generateManual(source)).rejects.toMatchObject({ code: "ai_refused" });
+  const lines = readFileSync(log, "utf8")
+    .trim()
+    .split("\n")
+    .map((l) => JSON.parse(l));
+  expect(lines).toHaveLength(2);
+  expect(lines[0]).toMatchObject({
+    kind: "manual_draft",
+    model: "claude-sonnet-5-5",
+    stopReason: "end_turn",
+    inputTokens: 1200,
+    outputTokens: 340,
+  });
+  expect(lines[0].ms).toBeTypeOf("number");
+  expect(lines[1]).toMatchObject({ kind: "manual_draft", stopReason: "refusal" });
+  expect(readFileSync(log, "utf8")).not.toContain(source.title);
+});

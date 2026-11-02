@@ -1,10 +1,25 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { z } from "zod";
-import { http, message } from "../lib/client";
+import { http, message, read } from "../lib/client";
 import { SourceInputSchema } from "../lib/schemas";
 import { useUnsavedChanges } from "./useUnsavedChanges";
+
+const similarSchema = z.array(
+  z.object({
+    id: z.uuid(),
+    title: z.string(),
+    revision: z.number(),
+    fileName: z.string(),
+    sameAsLatest: z.boolean(),
+  }),
+);
+type Similar = z.infer<typeof similarSchema>;
+async function sha256(file: File) {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 export function SourceForm() {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -13,9 +28,21 @@ export function SourceForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [similar, setSimilar] = useState<Similar | null>(null);
+  const lookup = useRef(0);
+  function invalidateLookup() {
+    lookup.current++;
+    setSimilar(null);
+  }
   useUnsavedChanges(!submitted && !!(title || text || file));
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    await register(false);
+  }
+  // Asks first when an .xlsx looks like the next version of a workbook already in the library.
+  async function register(asNewSource: boolean) {
+    if (busy) return;
+    const request = ++lookup.current;
     setError("");
     if (!file && !SourceInputSchema.safeParse({ title, text }).success) {
       setError("제목은 1~120자, 본문은 100~20,000자로 입력하세요.");
@@ -23,6 +50,28 @@ export function SourceForm() {
     }
     setBusy(true);
     try {
+      if (file && /\.xlsx$/i.test(file.name) && !asNewSource) {
+        const digest = await sha256(file);
+        if (request !== lookup.current) {
+          setBusy(false);
+          return;
+        }
+        const params = new URLSearchParams({
+          fileName: file.name,
+          title,
+          sha256: digest,
+        });
+        const found = await read(`/api/sources/similar?${params}`, similarSchema);
+        if (request !== lookup.current) {
+          setBusy(false);
+          return;
+        }
+        if (found.length) {
+          setSimilar(found);
+          setBusy(false);
+          return;
+        }
+      }
       let result: unknown;
       if (file) {
         const body = new FormData();
@@ -33,6 +82,22 @@ export function SourceForm() {
       const source = z.object({ id: z.uuid() }).parse(result);
       setSubmitted(true);
       router.push(`/sources/${source.id}`);
+    } catch (e) {
+      if (request === lookup.current) setError(await message(e));
+      setBusy(false);
+    }
+  }
+  async function addVersion(target: Similar[number]) {
+    if (!file || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const body = new FormData();
+      body.set("file", file);
+      body.set("expectedRevision", String(target.revision));
+      await http.post(`/api/sources/${target.id}/revisions`, { body, timeout: 60000 }).json();
+      setSubmitted(true);
+      router.push(`/sources/${target.id}`);
     } catch (e) {
       setError(await message(e));
       setBusy(false);
@@ -54,7 +119,10 @@ export function SourceForm() {
           required
           maxLength={120}
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => {
+            invalidateLookup();
+            setTitle(e.target.value);
+          }}
           placeholder="예: 월말 정산 업무 인수인계"
         />
         <label htmlFor="source-file">
@@ -64,7 +132,10 @@ export function SourceForm() {
           id="source-file"
           type="file"
           accept=".xlsx,.txt,.md,.markdown"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => {
+            setFile(e.target.files?.[0] ?? null);
+            invalidateLookup();
+          }}
           aria-describedby="file-help"
         />
         <p id="file-help" className="help">
@@ -88,6 +159,36 @@ export function SourceForm() {
           100~20,000자 · 현재 {text.length.toLocaleString()}자. 개인정보와 회사 기밀을 제외해
           주세요.
         </p>
+        {similar && file && (
+          <fieldset className="panel" aria-label="기존 자료의 새 버전인가요?">
+            <h2>기존 자료의 새 버전인가요?</h2>
+            <p>
+              <strong>{file.name}</strong>은 이미 올린 엑셀과 이름이나 내용이 비슷합니다. 같은
+              파일의 다음 버전이라면 새 버전으로 올려야 이전 버전과 비교해 바뀐 부분을 묻습니다.
+            </p>
+            {similar.map((s) => (
+              <div key={s.id} className="actions">
+                <button type="button" disabled={busy} onClick={() => addVersion(s)}>
+                  「{s.title}」의 새 버전으로 올리기
+                </button>
+                <span className="help">
+                  {s.fileName} · 현재 v{s.revision}
+                  {s.sameAsLatest ? " · 최신 버전과 내용이 같습니다" : ""}
+                </span>
+              </div>
+            ))}
+            <div className="actions">
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy}
+                onClick={() => register(true)}
+              >
+                새 자료로 등록
+              </button>
+            </div>
+          </fieldset>
+        )}
         {error && (
           <p id="source-error" className="error" role="alert">
             {error}

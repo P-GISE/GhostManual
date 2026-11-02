@@ -1,10 +1,13 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { FILE_QUOTA_BYTES } from "./accounts.ts";
-import { changeQuestions } from "./change-ai.ts";
+import { generateFileManual } from "./ai.ts";
+import { type CellChange, diffCells } from "./cell-diff.ts";
+import { changePrompt, changeQuestions } from "./change-ai.ts";
 import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
-import { ManualDraftSchema } from "./schemas.ts";
+import { fileStem } from "./file-stem.ts";
+import { type ManualDraft, ManualDraftSchema } from "./schemas.ts";
 import { assertSession } from "./session.ts";
 import { assertSourceWrite, type SourceView, sourceInTransaction, uploader } from "./sources.ts";
 import { newId, type SessionContext } from "./types.ts";
@@ -64,14 +67,9 @@ export function readUpload(bytes: Uint8Array): ReadResult {
 // Search/evidence text for a file revision: sheet names and header rows only, never other cells.
 export function fileText(title: string, result: ReadResult): string {
   if (result.status !== "compared") return `${title}\n(내용 비교 한도를 넘는 엑셀 파일)`;
-  const lines = result.snapshot.sheets.map((sheet) => {
-    const header = Object.entries(sheet.cells)
-      .filter(([address]) => /^[A-Z]+1$/.test(address))
-      .map(([, cell]) => String(cell.v ?? ""))
-      .filter(Boolean)
-      .join(", ");
-    return `시트 ${sheet.name} (${sheet.rows}행 × ${sheet.cols}열)${header ? `: ${header}` : ""}`;
-  });
+  const lines = result.snapshot.sheets.map(
+    (sheet) => `시트 ${sheet.name} (${sheet.rows}행 × ${sheet.cols}열)`,
+  );
   return `${title}\n${lines.join("\n")}`.slice(0, 20000);
 }
 export async function usedFileBytes(db: DbClient, workspaceId: string): Promise<number> {
@@ -591,4 +589,107 @@ export async function fileHistory(
     });
   }
   return { v: 1, revisions };
+}
+export type SimilarSource = {
+  id: string;
+  title: string;
+  revision: number;
+  fileName: string;
+  sameAsLatest: boolean;
+};
+// Existing workbooks this upload is probably a new version of: same file stem, same title or same bytes.
+export async function similarSources(
+  ctx: SessionContext,
+  input: { fileName: string; title: string; sha256: string },
+): Promise<SimilarSource[]> {
+  const stem = fileStem(input.fileName);
+  const title = input.title.trim().toLowerCase();
+  return transaction(async (db) => {
+    await assertSession(db, ctx, true);
+    const rows = await db.query<{
+      id: string;
+      title: string;
+      revision: number;
+      file_name: string;
+      sha256: string;
+    }>(
+      `SELECT s.id,r.title,s.revision,f.file_name,f.sha256 FROM sources s
+        JOIN source_revisions r ON r.source_id=s.id AND r.revision=s.revision
+        JOIN source_files f ON f.revision_id=r.id
+        WHERE s.workspace_id=$1 AND s.kind='file' ORDER BY s.created_at DESC`,
+      [ctx.workspaceId],
+    );
+    return rows.rows
+      .map((r) => ({
+        id: r.id,
+        title: r.title,
+        revision: r.revision,
+        fileName: r.file_name,
+        sameAsLatest: r.sha256 === input.sha256,
+        match:
+          r.sha256 === input.sha256 ||
+          fileStem(r.file_name) === stem ||
+          (title !== "" && r.title.trim().toLowerCase() === title),
+      }))
+      .filter((r) => r.match)
+      .sort((a, b) => Number(b.sameAsLatest) - Number(a.sameAsLatest))
+      .slice(0, 5)
+      .map(({ match: _match, ...r }) => r);
+  });
+}
+// AI manual draft for a workbook: sheet structure and every version's changes, questions and answers.
+// First-row values are excluded too; legacy array caches cannot be identified reliably.
+export async function draftFromFile(
+  ctx: SessionContext,
+  sourceId: string,
+  expectedRevision: number,
+): Promise<ManualDraft> {
+  const input = await transaction(async (db) => {
+    await assertSession(db, ctx, true);
+    const latest = await sourceInTransaction(db, ctx, sourceId);
+    if (latest.revision !== expectedRevision)
+      throw new AppError("conflict", 409, "자료가 변경됐습니다.");
+    const file = await db.query<{ snapshot: Snapshot | null }>(
+      "SELECT snapshot FROM source_files WHERE revision_id=$1",
+      [latest.revisionId],
+    );
+    const snapshot = file.rows[0]?.snapshot;
+    const history = await fileHistory(db, ctx, sourceId, latest.revision);
+    return {
+      title: latest.title,
+      sheets: snapshot ? changePrompt(latest.title, snapshot, []).sheets : [],
+      versions: (history?.revisions ?? []).map((r) => ({
+        revision: r.revision,
+        aiSummary: r.aiSummary,
+        changes: r.changes,
+        questions: r.questions.map((q) => ({ question: q.question, answer: q.answer })),
+      })),
+    };
+  });
+  return generateFileManual(input);
+}
+export type CellChanges = { compared: boolean; total: number; changes: CellChange[] };
+// Cell-by-cell record of one version against the previous one, rebuilt from the stored immutable snapshots.
+// A diff includes previous values, which are private even when the current workbook is shared.
+export async function cellChanges(
+  ctx: SessionContext,
+  id: string,
+  revision: number,
+  limit = 500,
+): Promise<CellChanges> {
+  return transaction(async (db) => {
+    await assertSession(db, ctx, true);
+    const view = await fileRevisionInTransaction(db, ctx, id, revision);
+    if (view.revision === 1) return { compared: true, total: 0, changes: [] };
+    const rows = await db.query<{ revision: number; snapshot: Snapshot | null }>(
+      `SELECT r.revision,f.snapshot FROM source_revisions r JOIN source_files f ON f.revision_id=r.id
+        WHERE r.source_id=$1 AND r.workspace_id=$2 AND r.revision IN ($3,$3-1)`,
+      [id, ctx.workspaceId, view.revision],
+    );
+    const before = rows.rows.find((r) => r.revision === view.revision - 1)?.snapshot;
+    const after = rows.rows.find((r) => r.revision === view.revision)?.snapshot;
+    if (!before || !after) return { compared: false, total: 0, changes: [] };
+    const all = diffCells(before, after);
+    return { compared: true, total: all.length, changes: all.slice(0, limit) };
+  });
 }

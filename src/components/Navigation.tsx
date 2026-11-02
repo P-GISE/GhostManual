@@ -58,7 +58,7 @@ export function Navigation() {
           {[
             { href: "/manuals", label: "문서함" },
             { href: "/sources/new", label: "자료 등록" },
-            { href: "/ask", label: "질문하기" },
+            { href: "/help", label: "도움말" },
           ].map(({ href, label }) => (
             <Link
               key={href}

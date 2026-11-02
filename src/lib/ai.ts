@@ -1,3 +1,4 @@
+import { appendFile } from "node:fs/promises";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
@@ -38,9 +39,31 @@ function client(timeout: number): Anthropic {
     maxRetries: 0,
   });
 }
+// shortcut: local JSON lines file for cost measurement (AI_USAGE_LOG); move to a DB table before production billing.
+async function recordUsage(kind: string, started: number, response: Anthropic.Beta.BetaMessage) {
+  const file = process.env["AI_USAGE_LOG"];
+  if (!file) return;
+  const { usage } = response;
+  const line = {
+    at: new Date().toISOString(),
+    kind,
+    model: response.model,
+    stopReason: response.stop_reason,
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
+    cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+    ms: Date.now() - started,
+  };
+  await appendFile(
+    file,
+    `${JSON.stringify(line)}
+`,
+  ).catch(() => {});
+}
 export async function generate<T>(
   schema: z.ZodType<T>,
-  _name: string,
+  name: string,
   input: unknown,
   timeout: number,
   maxTokens: number,
@@ -48,6 +71,7 @@ export async function generate<T>(
   effort: "low" | "medium" | "high" = "medium",
 ): Promise<T> {
   const provider = client(timeout);
+  const started = Date.now();
   try {
     // A declined request is re-run server-side on Anthropic's recommended fallback model.
     const response = await provider.beta.messages.create({
@@ -59,6 +83,7 @@ export async function generate<T>(
       messages: [{ role: "user", content: JSON.stringify(input) }],
       output_config: { effort, format: betaZodOutputFormat(schema) },
     });
+    await recordUsage(name, started, response);
     if (response.stop_reason === "refusal")
       throw new AppError("ai_refused", 422, "AI가 요청을 거절했습니다.");
     if (response.stop_reason === "max_tokens")
@@ -92,6 +117,19 @@ function validField(draft: ManualDraft, field: string): boolean {
       ? value.some((_, index) => field === `${key}.${index}`)
       : key === field && value !== null,
   );
+}
+// Workbook sources: structure plus the author's answers instead of the source text; cells are never in `input`.
+export async function generateFileManual(input: unknown): Promise<ManualDraft> {
+  const draft = await generate(
+    ManualDraftSchema,
+    "file_manual_draft",
+    input,
+    45000,
+    16000,
+    instructions +
+      " 엑셀 업무 파일의 시트 구조, 버전별 변경, 작성자의 질문·답변으로 인수인계 매뉴얼 초안을 작성하세요. 답변에 없는 절차나 규칙은 지어내지 말고 unknowns에 확인할 점으로 적으세요. references는 빈 배열로 두세요.",
+  );
+  return { ...draft, references: [] };
 }
 export async function generateManual(source: SourceView): Promise<ManualDraft> {
   const input = SourceInputSchema.parse({ title: source.title, text: source.text });

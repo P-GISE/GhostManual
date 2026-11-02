@@ -6,7 +6,7 @@ import type { ChangeGroup, Snapshot } from "./xlsx/index.ts";
 
 export type ChangePromptInput = {
   title: string;
-  sheets: { name: string; rows: number; cols: number; headers: string[] }[];
+  sheets: { name: string; rows: number; cols: number }[];
   changes: {
     position: number;
     kind: string;
@@ -22,7 +22,7 @@ export type ChangeAiResult = {
   questions: { groupPositions: number[]; question: string }[];
 };
 
-// Structure only: sheet sizes, first-row headers, formulas and change locations. Cell values never leave.
+// Legacy snapshots lose array-formula follower provenance, so all cell values stay out.
 export function changePrompt(
   title: string,
   after: Snapshot,
@@ -34,10 +34,6 @@ export function changePrompt(
       name: sheet.name.slice(0, 40),
       rows: sheet.rows,
       cols: sheet.cols,
-      headers: Object.entries(sheet.cells)
-        .filter(([address]) => /^[A-Z]+1$/.test(address))
-        .slice(0, 30)
-        .map(([, cell]) => String(cell.v ?? "").slice(0, 40)),
     })),
     changes: groups.map((group, position) => {
       const change: ChangePromptInput["changes"][number] = {

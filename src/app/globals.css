@@ -969,3 +969,81 @@ select {
   margin: 4px 0 0;
   overflow-wrap: anywhere;
 }
+.table-scroll del {
+  color: var(--muted);
+}
+.table-scroll ins {
+  text-decoration: none;
+  font-weight: 600;
+}
+.table-scroll th {
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.chat-log {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.chat-turn {
+  display: grid;
+  gap: 8px;
+}
+.chat-question {
+  justify-self: end;
+  max-width: min(80%, 640px);
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--accent);
+  color: #ffffff;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat-answer {
+  max-width: min(100%, 760px);
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px 14px 14px 4px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.chat-answer > :first-child {
+  margin-top: 0;
+}
+.help-steps {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 32px;
+  display: grid;
+  gap: 12px;
+}
+.help-steps > li {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 14px;
+  margin: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.help-steps h2 {
+  margin: 6px 0 4px;
+  font-size: 1.125rem;
+}
+.help-steps p {
+  margin: 0 0 6px;
+}
+.help-step-number {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+}

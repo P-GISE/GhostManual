@@ -25,6 +25,34 @@ test("an owner uploads two workbook versions, answers questions and sees the cha
   await expect(page.getByRole("status")).toContainText("v2를 저장했습니다");
   await expect(page.getByRole("heading", { name: "v1과 비교해 바뀐 부분 3건" })).toBeVisible();
   await expect(page.getByText(/'원본' F2:F40의 수식을/)).toBeVisible();
+  const cells = page.getByText("칸별 변경 보기 (이전 값 → 새 값)");
+  const retryStarted = Promise.withResolvers<void>();
+  const resume = Promise.withResolvers<void>();
+  let requests = 0;
+  await page.route("**/revisions/2/cells", async (route) => {
+    if (++requests === 1)
+      return route.fulfill({ status: 400, json: { error: { message: "칸별 변경 조회 실패" } } });
+    retryStarted.resolve();
+    await resume.promise;
+    await route.continue();
+  });
+  await cells.click();
+  const comparison = cells.locator("..");
+  await expect(comparison.getByRole("alert")).toContainText("칸별 변경 조회 실패");
+  await cells.click();
+  await cells.click();
+  await retryStarted.promise;
+  try {
+    await expect(comparison.getByRole("alert")).toHaveCount(0);
+    await cells.click();
+    await cells.click();
+    await expect(comparison.getByRole("status")).toBeVisible();
+  } finally {
+    resume.resolve();
+  }
+  await expect(page.getByText(/바뀐 칸 \d+개/)).toBeVisible();
+  await expect(page.getByRole("cell", { name: /^=SUMIF/ }).first()).toBeVisible();
+  expect(requests).toBe(2);
 
   const skipped = page.getByRole("group").filter({ hasText: "바뀐 값" }).first();
   await skipped.getByRole("button", { name: "건너뛰기" }).click();
@@ -113,6 +141,11 @@ test("demo: publish a manual from workbook versions and a successor sees the cha
     );
     expect(download.status()).toBe(200);
     expect(download.headers()["content-disposition"]).toContain("attachment");
+
+    await reader.goto(`${sourceUrl}?view=shared`);
+    await expect(reader.getByRole("link", { name: "v2 원본 내려받기" })).toBeVisible();
+    await expect(reader.getByText(/칸별 변경 보기/)).toHaveCount(0);
+    await expect(reader.getByRole("link", { name: "v1 원본 내려받기" })).toHaveCount(0);
   } finally {
     await context.close();
   }
@@ -269,4 +302,89 @@ test("a saved upload stays committed when the follow-up read fails", async ({ pa
   await page.getByRole("button", { name: "직접 작성하기", exact: true }).click();
   await expect(page).toHaveURL(/\/manuals\/[\w-]+\/edit$/);
   expect(posts).toBe(1);
+});
+
+test("registering the next workbook as a new source suggests adding it as a new version", async ({
+  page,
+}) => {
+  await signUpAndVerify(page);
+  await page.goto("/sources/new");
+  await page.getByLabel("자료 제목").fill("월간 정산");
+  await page.getByLabel(/엑셀·TXT·Markdown 파일/).setInputFiles(fixture("정산_1029.xlsx"));
+  await page.getByRole("button", { name: "원본 등록" }).click();
+  await expect(page.getByRole("heading", { name: "월간 정산", level: 1 })).toBeVisible();
+  await expect(page.getByText(/다음에 이 파일 작업을 마치면/)).toBeVisible();
+  const sourceUrl = page.url();
+
+  await page.goto("/sources/new");
+  await page.getByLabel("자료 제목").fill("10월 정산");
+  await page.getByLabel(/엑셀·TXT·Markdown 파일/).setInputFiles(fixture("정산_1030.xlsx"));
+  await page.getByRole("button", { name: "원본 등록" }).click();
+  const suggestion = page.getByRole("group", { name: "기존 자료의 새 버전인가요?" });
+  await expect(suggestion).toContainText("정산_1029.xlsx");
+  await suggestion.getByRole("button", { name: "「월간 정산」의 새 버전으로 올리기" }).click();
+  await expect(page).toHaveURL(sourceUrl);
+  await expect(page.getByRole("button", { name: /^v2/ })).toBeVisible();
+  await expect(page.getByText(/다음에 이 파일 작업을 마치면/)).toHaveCount(0);
+});
+
+test("the suggestion can be declined to register a separate source", async ({ page }) => {
+  await signUpAndVerify(page);
+  await page.goto("/sources/new");
+  await page.getByLabel("자료 제목").fill("월간 정산");
+  await page.getByLabel(/엑셀·TXT·Markdown 파일/).setInputFiles(fixture("정산_1029.xlsx"));
+  await page.getByRole("button", { name: "원본 등록" }).click();
+  await expect(page.getByRole("heading", { name: "월간 정산", level: 1 })).toBeVisible();
+  await page.goto("/sources/new");
+  await page.getByLabel("자료 제목").fill("다른 정산");
+  await page.getByLabel(/엑셀·TXT·Markdown 파일/).setInputFiles(fixture("정산_1030.xlsx"));
+  await page.getByRole("button", { name: "원본 등록" }).click();
+  await page.getByRole("button", { name: "새 자료로 등록" }).click();
+  await expect(page.getByRole("heading", { name: "다른 정산", level: 1 })).toBeVisible();
+});
+
+test("switching files during a workbook lookup discards the previous suggestions", async ({
+  page,
+}) => {
+  await signUpAndVerify(page);
+  const file = page.getByLabel(/엑셀·TXT·Markdown 파일/);
+  const submit = page.getByRole("button", { name: "원본 등록" });
+  await page.goto("/sources/new");
+  await page.getByLabel("자료 제목").fill("월간 정산");
+  await file.setInputFiles(fixture("정산_1029.xlsx"));
+  await submit.click();
+  await expect(page.getByRole("heading", { name: "월간 정산", level: 1 })).toBeVisible();
+  const original = page.url();
+
+  await page.goto("/sources/new");
+  await page.getByLabel("자료 제목").fill("다른 업무");
+  await file.setInputFiles(fixture("정산_1030.xlsx"));
+  const lookedUp = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  await page.route("**/api/sources/similar?**", async (route) => {
+    const response = await route.fetch();
+    lookedUp.resolve();
+    await release.promise;
+    await route.fulfill({ response });
+  });
+  await submit.click();
+  await lookedUp.promise;
+  try {
+    await file.setInputFiles({
+      name: "인수인계.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from(
+        "담당자는 매일 입고된 자료를 검토하고 승인 결과를 기록합니다. ".repeat(5),
+      ),
+    });
+  } finally {
+    release.resolve();
+  }
+  await expect(submit).toBeEnabled();
+  await expect(page.getByRole("group", { name: "기존 자료의 새 버전인가요?" })).toHaveCount(0);
+  await submit.click();
+  await expect(page.getByRole("heading", { name: "다른 업무", level: 1 })).toBeVisible();
+  await expect(page.getByText("원본 자료 · 버전 1")).toBeVisible();
+  await page.goto(original);
+  await expect(page.getByText("엑셀 자료 · 버전 1개")).toBeVisible();
 });

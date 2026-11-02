@@ -168,3 +168,40 @@ it("stores provider-validated evidence snapshots and rejects a version changed d
     );
   }
 });
+
+it("builds workbook evidence from the snapshot even for legacy search text", async () => {
+  const owner = await requireSession((await createWorkspace()).token);
+  const source = await createSource(owner, {
+    title: "정산업무",
+    text: "정산업무 987654321 cached-result ".repeat(8),
+  });
+  await pool.query("UPDATE sources SET kind='file',file_type='xlsx' WHERE id=$1", [source.id]);
+  const snapshot = {
+    v: 1,
+    names: [],
+    sheets: [
+      {
+        name: "장부",
+        hidden: false,
+        rows: 1,
+        cols: 3,
+        cells: {
+          A1: { t: "s", v: "지급절차" },
+          B1: { t: "n", v: 987654321 },
+          C1: { t: "s", v: "cached-result", f: "A2" },
+        },
+      },
+    ],
+  };
+  await pool.query(
+    `INSERT INTO source_files(revision_id,workspace_id,file_name,size_bytes,sha256,content,compare_status,snapshot)
+     VALUES($1,$2,'legacy.xlsx',1,repeat('a',64),$3,'compared',$4)`,
+    [source.revisionId, owner.workspaceId, Buffer.from([0]), snapshot],
+  );
+  const manual = await saveDraft(owner, source.revisionId, { ...exampleDraft, references: [] });
+  await publishManual(owner, manual.id, 1, exampleDraft.unknowns);
+  const quotes = (await retrieve(owner, "정산업무", manual.id)).map((candidate) => candidate.quote);
+  expect(quotes.join(" ")).toContain("장부");
+  expect(quotes.join(" ")).not.toContain("지급절차");
+  expect(quotes.join(" ")).not.toMatch(/987654321|cached-result/);
+});

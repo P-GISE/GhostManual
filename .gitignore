@@ -13,3 +13,6 @@ test-results/
 *.tsbuildinfo
 
 *.log
+
+# Local AI cost measurement logs
+*.jsonl
