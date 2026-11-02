@@ -2,11 +2,11 @@ import { z } from "zod";
 import { generate, instructions } from "./ai.ts";
 import { reserveChangeAi } from "./operations.ts";
 import type { SessionContext } from "./types.ts";
-import type { ChangeGroup, SheetSnapshot, Snapshot } from "./xlsx/index.ts";
+import type { ChangeGroup, Snapshot } from "./xlsx/index.ts";
 
 export type ChangePromptInput = {
   title: string;
-  sheets: { name: string; rows: number; cols: number; headers: string[] }[];
+  sheets: { name: string; rows: number; cols: number }[];
   changes: {
     position: number;
     kind: string;
@@ -22,15 +22,7 @@ export type ChangeAiResult = {
   questions: { groupPositions: number[]; question: string }[];
 };
 
-// The first row may contain data; only non-formula text is eligible as a header.
-export function textHeaders(sheet: SheetSnapshot): string[] {
-  return Object.entries(sheet.cells)
-    .filter(
-      ([address, cell]) => /^[A-Z]+1$/.test(address) && cell.t === "s" && cell.f === undefined,
-    )
-    .map(([, cell]) => String(cell.v ?? ""));
-}
-
+// Legacy snapshots lose array-formula follower provenance, so all cell values stay out.
 export function changePrompt(
   title: string,
   after: Snapshot,
@@ -42,9 +34,6 @@ export function changePrompt(
       name: sheet.name.slice(0, 40),
       rows: sheet.rows,
       cols: sheet.cols,
-      headers: textHeaders(sheet)
-        .slice(0, 30)
-        .map((header) => header.slice(0, 40)),
     })),
     changes: groups.map((group, position) => {
       const change: ChangePromptInput["changes"][number] = {

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { FILE_QUOTA_BYTES } from "./accounts.ts";
 import { generateFileManual } from "./ai.ts";
 import { type CellChange, diffCells } from "./cell-diff.ts";
-import { changePrompt, changeQuestions, textHeaders } from "./change-ai.ts";
+import { changePrompt, changeQuestions } from "./change-ai.ts";
 import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
 import { fileStem } from "./file-stem.ts";
@@ -67,10 +67,9 @@ export function readUpload(bytes: Uint8Array): ReadResult {
 // Search/evidence text for a file revision: sheet names and header rows only, never other cells.
 export function fileText(title: string, result: ReadResult): string {
   if (result.status !== "compared") return `${title}\n(내용 비교 한도를 넘는 엑셀 파일)`;
-  const lines = result.snapshot.sheets.map((sheet) => {
-    const header = textHeaders(sheet).filter(Boolean).join(", ");
-    return `시트 ${sheet.name} (${sheet.rows}행 × ${sheet.cols}열)${header ? `: ${header}` : ""}`;
-  });
+  const lines = result.snapshot.sheets.map(
+    (sheet) => `시트 ${sheet.name} (${sheet.rows}행 × ${sheet.cols}열)`,
+  );
   return `${title}\n${lines.join("\n")}`.slice(0, 20000);
 }
 export async function usedFileBytes(db: DbClient, workspaceId: string): Promise<number> {
@@ -639,7 +638,7 @@ export async function similarSources(
   });
 }
 // AI manual draft for a workbook: sheet structure and every version's changes, questions and answers.
-// Non-formula text in the first row is included as potential headers.
+// First-row values are excluded too; legacy array caches cannot be identified reliably.
 export async function draftFromFile(
   ctx: SessionContext,
   sourceId: string,

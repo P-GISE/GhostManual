@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { strToU8, unzipSync, zipSync } from "fflate";
 import { expect, it } from "vitest";
 import { changePrompt } from "../../src/lib/change-ai.ts";
 import { compareSnapshots, readXlsx, type Snapshot } from "../../src/lib/xlsx/index.ts";
@@ -9,7 +10,7 @@ const snapshot = (name: string): Snapshot => {
   return result.snapshot;
 };
 
-it("sends structure, headers and formulas but no cell values", () => {
+it("sends structure and formulas but no first-row or ordinary cell values", () => {
   const before = snapshot("정산_1029.xlsx");
   const after = snapshot("정산_1030.xlsx");
   const input = changePrompt("월간 정산", after, compareSnapshots(before, after));
@@ -17,13 +18,13 @@ it("sends structure, headers and formulas but no cell values", () => {
   const header = after.sheets[0]?.cells["A1"]?.v;
   const value = after.sheets[0]?.cells["A2"]?.v;
   expect(typeof header).toBe("string");
-  expect(sent).toContain(String(header));
+  expect(sent).not.toContain(String(header));
   expect(sent).not.toContain(JSON.stringify(value));
   expect(sent).toContain("SUM(");
   expect(sent).not.toContain("정산_1030.xlsx");
   expect(input.changes.map((c) => c.position)).toEqual([0, 1, 2]);
 });
-it("caps headers at 30 columns of 40 characters and formulas at 200 characters", () => {
+it("excludes all first-row values and caps formulas at 200 characters", () => {
   const cells: Snapshot["sheets"][number]["cells"] = {};
   for (let i = 0; i < 35; i++)
     cells[`${String.fromCharCode(65 + (i % 26)).repeat(i < 26 ? 1 : 2)}1`] = {
@@ -43,11 +44,11 @@ it("caps headers at 30 columns of 40 characters and formulas at 200 characters",
       summary: { before: "x".repeat(300), after: "y" },
     },
   ]);
-  expect(input.sheets[0]?.headers).toHaveLength(30);
-  expect(input.sheets[0]?.headers.every((h) => h.length === 40)).toBe(true);
+  expect(input.sheets).toEqual([{ name: "S", rows: 1, cols: 35 }]);
+  expect(JSON.stringify(input)).not.toContain("가".repeat(50));
   expect(input.changes[0]?.before).toHaveLength(200);
 });
-it("sends only text cells of the first row as headers, never numbers or formula results", () => {
+it("excludes every first-row value including text and formula caches", () => {
   const after: Snapshot = {
     v: 1,
     sheets: [
@@ -67,7 +68,7 @@ it("sends only text cells of the first row as headers, never numbers or formula 
     names: [],
   };
   const input = changePrompt("t", after, []);
-  expect(input.sheets[0]?.headers).toEqual(["합계"]);
+  expect(JSON.stringify(input)).not.toMatch(/합계|cached-result/);
   expect(JSON.stringify(input)).not.toContain("175");
 });
 it("keeps numbers out of the stored search text as well", async () => {
@@ -92,7 +93,23 @@ it("keeps numbers out of the stored search text as well", async () => {
       names: [],
     },
   });
-  expect(text).toContain("합계");
+  expect(text).not.toContain("합계");
+  expect(text).toContain("시트 정산");
   expect(text).not.toContain("175");
   expect(text).not.toContain("cached-result");
+});
+
+it("keeps array-formula follower caches out of AI and stored search text", async () => {
+  const entries = unzipSync(new Uint8Array(readFileSync("tests/fixtures/xlsx/정산_1029.xlsx")));
+  entries["xl/worksheets/sheet1.xml"] = strToU8(
+    `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="str"><f t="array" ref="A1:B1">TRANSPOSE(A2:A3)</f><v>anchor-cache</v></c><c r="B1" t="str"><v>private-cache</v></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>source-private</t></is></c></row></sheetData></worksheet>`,
+  );
+  const result = readXlsx(zipSync(entries));
+  if (result.status !== "compared") throw new Error("expected snapshot");
+  expect(result.snapshot.sheets[0]?.cells["B1"]?.v).toBe("private-cache");
+  const { fileText } = await import("../../src/lib/file-sources.ts");
+  expect(JSON.stringify(changePrompt("synthetic", result.snapshot, []))).not.toMatch(
+    /anchor-cache|private-cache|source-private/,
+  );
+  expect(fileText("synthetic", result)).not.toMatch(/anchor-cache|private-cache|source-private/);
 });

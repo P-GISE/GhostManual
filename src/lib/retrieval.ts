@@ -61,11 +61,8 @@ export async function retrieve(
       `WITH eligible AS (
  SELECT m.id AS manual_id,v.id AS version_id,m.source_id,v.source_revision_id,v.version,v.content,r.title,
  CASE WHEN s.kind='file' THEN left(r.title || chr(10) || coalesce((
-   SELECT string_agg(format('시트 %s (%s행 × %s열)%s',sheet->>'name',sheet->>'rows',sheet->>'cols',
-     (SELECT coalesce(': ' || string_agg(cell->>'v',', ' ORDER BY length(address),address COLLATE "C"),'')
-      FROM jsonb_each(sheet->'cells') h(address,cell)
-      WHERE address ~ '^[A-Z]+1$' AND cell->>'t'='s' AND NOT cell ? 'f' AND cell->>'v'<>'')
-   ),chr(10) ORDER BY pos)
+   SELECT string_agg(format('시트 %s (%s행 × %s열)',sheet->>'name',sheet->>'rows',sheet->>'cols'),
+     chr(10) ORDER BY pos)
    FROM jsonb_array_elements(f.snapshot->'sheets') WITH ORDINALITY sheets(sheet,pos)
  ),'(내용 비교 한도를 넘는 엑셀 파일)'),20000) ELSE r.text END AS text
  FROM manuals m JOIN manual_versions v ON v.manual_id=m.id AND v.version=m.published_version

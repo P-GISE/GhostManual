@@ -201,6 +201,7 @@ it("builds workbook evidence from the snapshot even for legacy search text", asy
   const manual = await saveDraft(owner, source.revisionId, { ...exampleDraft, references: [] });
   await publishManual(owner, manual.id, 1, exampleDraft.unknowns);
   const quotes = (await retrieve(owner, "정산업무", manual.id)).map((candidate) => candidate.quote);
-  expect(quotes.join(" ")).toContain("지급절차");
+  expect(quotes.join(" ")).toContain("장부");
+  expect(quotes.join(" ")).not.toContain("지급절차");
   expect(quotes.join(" ")).not.toMatch(/987654321|cached-result/);
 });
