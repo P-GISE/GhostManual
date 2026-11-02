@@ -9,6 +9,7 @@ for (const path of [
   "/ask",
   "/terms",
   "/privacy",
+  "/help",
 ]) {
   test(`reading and form columns have equal outer margins: ${path}`, async ({ page }) => {
     await page.goto(path);
