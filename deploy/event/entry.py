@@ -36,6 +36,17 @@ def check(value, reason):
         raise Refusal(reason)
 
 
+def validate_initial_receipt(previous, initial):
+    expected_run = initial.get('run_id')
+    actual_run = previous.get('run_id')
+    check(isinstance(initial.get('sha'), str) and SHA.fullmatch(initial['sha'])
+          and isinstance(initial.get('image'), str) and DIGEST.fullmatch(initial['image'])
+          and previous.get('sha') == initial['sha'] and previous.get('image') == initial['image']
+          and (expected_run is None or type(expected_run) is int and expected_run > 0)
+          and (actual_run is None or type(actual_run) is int and actual_run > 0)
+          and actual_run == expected_run, 'initial_receipt_changed')
+
+
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
