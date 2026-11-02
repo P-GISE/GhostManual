@@ -1,0 +1,8 @@
+{
+  "Rules": [{
+    "ID": "ExpirePostgresAfter30Days",
+    "Status": "Enabled",
+    "Filter": {"Prefix": "postgres/"},
+    "Expiration": {"Days": 30}
+  }]
+}
