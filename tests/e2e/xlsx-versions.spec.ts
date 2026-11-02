@@ -25,6 +25,9 @@ test("an owner uploads two workbook versions, answers questions and sees the cha
   await expect(page.getByRole("status")).toContainText("v2를 저장했습니다");
   await expect(page.getByRole("heading", { name: "v1과 비교해 바뀐 부분 3건" })).toBeVisible();
   await expect(page.getByText(/'원본' F2:F40의 수식을/)).toBeVisible();
+  await page.getByText("칸별 변경 보기 (이전 값 → 새 값)").click();
+  await expect(page.getByText(/바뀐 칸 \d+개/)).toBeVisible();
+  await expect(page.getByRole("cell", { name: /^=SUMIF/ }).first()).toBeVisible();
 
   const skipped = page.getByRole("group").filter({ hasText: "바뀐 값" }).first();
   await skipped.getByRole("button", { name: "건너뛰기" }).click();

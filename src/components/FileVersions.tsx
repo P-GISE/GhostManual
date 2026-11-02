@@ -14,6 +14,7 @@ import {
   read,
   revisionSummarySchema,
 } from "../lib/client";
+import { CellChanges } from "./CellChanges";
 
 export const changeLabels: Record<string, string> = {
   sheet_added: "시트 추가",
@@ -412,6 +413,12 @@ export function FileVersions({
                     </li>
                   ))}
                 </ul>
+                <CellChanges
+                  key={selected.revision}
+                  sourceId={id}
+                  revision={selected.revision}
+                  reader={reader}
+                />
               </section>
             )}
             {shown && (

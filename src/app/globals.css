@@ -969,3 +969,16 @@ select {
   margin: 4px 0 0;
   overflow-wrap: anywhere;
 }
+.table-scroll del {
+  color: var(--muted);
+}
+.table-scroll ins {
+  text-decoration: none;
+  font-weight: 600;
+}
+.table-scroll th {
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}

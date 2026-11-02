@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { FILE_QUOTA_BYTES } from "./accounts.ts";
 import { generateFileManual } from "./ai.ts";
+import { type CellChange, diffCells } from "./cell-diff.ts";
 import { changePrompt, changeQuestions } from "./change-ai.ts";
 import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
@@ -673,4 +674,29 @@ export async function draftFromFile(ctx: SessionContext, sourceId: string): Prom
     reconcileFileUnknowns(db, sourceId, revision, draft.unknowns),
   );
   return { ...draft, unknowns };
+}
+export type CellChanges = { compared: boolean; total: number; changes: CellChange[] };
+// Cell-by-cell record of one version against the previous one, rebuilt from the stored immutable snapshots.
+// A reader of the published version sees its changed cells, including previous values, but not older files.
+export async function cellChanges(
+  ctx: SessionContext,
+  id: string,
+  revision: number,
+  limit = 500,
+): Promise<CellChanges> {
+  return transaction(async (db) => {
+    await assertSession(db, ctx);
+    const view = await fileRevisionInTransaction(db, ctx, id, revision);
+    if (view.revision === 1) return { compared: true, total: 0, changes: [] };
+    const rows = await db.query<{ revision: number; snapshot: Snapshot | null }>(
+      `SELECT r.revision,f.snapshot FROM source_revisions r JOIN source_files f ON f.revision_id=r.id
+        WHERE r.source_id=$1 AND r.workspace_id=$2 AND r.revision IN ($3,$3-1)`,
+      [id, ctx.workspaceId, view.revision],
+    );
+    const before = rows.rows.find((r) => r.revision === view.revision - 1)?.snapshot;
+    const after = rows.rows.find((r) => r.revision === view.revision)?.snapshot;
+    if (!before || !after) return { compared: false, total: 0, changes: [] };
+    const all = diffCells(before, after);
+    return { compared: true, total: all.length, changes: all.slice(0, limit) };
+  });
 }
