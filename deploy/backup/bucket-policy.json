@@ -7,7 +7,7 @@
       "Principal": "*",
       "Action": "s3:*",
       "Resource": ["arn:aws:s3:::REPLACE_BUCKET", "arn:aws:s3:::REPLACE_BUCKET/*"],
-      "Condition": {"Bool": {"aws:SecureTransport": "false"}}
+      "Condition": { "Bool": { "aws:SecureTransport": "false" } }
     },
     {
       "Sid": "RequireCreateOnlyWrites",
@@ -15,7 +15,7 @@
       "Principal": "*",
       "Action": "s3:PutObject",
       "Resource": "arn:aws:s3:::REPLACE_BUCKET/postgres/*",
-      "Condition": {"Null": {"s3:if-none-match": "true"}}
+      "Condition": { "Null": { "s3:if-none-match": "true" } }
     }
   ]
 }
