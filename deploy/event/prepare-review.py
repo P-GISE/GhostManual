@@ -27,13 +27,12 @@ def main(runtime_path, model_path, sha, run_id, out):
                 and all(model['source_files'][name] == {key: rt['files']['/opt/ghostmanual/' + name][key]
                         for key in ('sha256', 'uid', 'gid', 'mode', 'inode', 'device')} for name in entry.FILES)
                 and entry.DIGEST.fullmatch('sha256:' + model['model_sha256']), 'independent_model_mismatch')
+    initial = dict(sha=app['revision'], image=app['image'], app_id=app['id'],
+                   run_id=previous.get('run_id'), source='observed_existing_release')
+    entry.validate_initial_receipt(previous, initial)
     entry.check(rt['read_only'] is True and not any(rt['state_markers'].values())
                 and not rt['files']['/usr/local/libexec/ghostmanual-event-entry']['exists']
-                and previous.get('run_id') is None and previous.get('sha') == app['revision']
-                == 'ef5d1b6745f88d55be98f645cd397a1e5cf1317a'
-                and previous.get('image') == app['image']
-                == 'sha256:f1af35d6a80cd6eb917a482e12cd359268e1f9dd4c22e36bbad92ffc0f88386e'
-                and app['running'] and not app['oom'] and app['restarts'] == 0, 'manual_baseline_changed')
+                and app['running'] and not app['oom'] and app['restarts'] == 0, 'existing_baseline_changed')
     tree = entry.protected_tree(api('git/trees/' + sha + '?recursive=1'))
     artifact = entry.canonical(api, sha, int(run_id), tree)
     sources = {'entry.py': 'deploy/event/entry.py', 'deploy-poll.py': 'scripts/deploy-poll.py',
@@ -47,8 +46,7 @@ def main(runtime_path, model_path, sha, run_id, out):
     lock = rt['files'][str('/var/lib/ghostmanual-deploy/deploy.lock')]
     cfg = dict(approved=False, semantic_review=False, first_sha=sha, first_run_id=int(run_id),
                first_artifact=artifact, protected_tree=tree, module_hashes=hashes,
-               lock_identity=[lock['device'], lock['inode']], initial=dict(sha=app['revision'], image=app['image'],
-               app_id=app['id'], source='manual_server_build'),
+               lock_identity=[lock['device'], lock['inode']], initial=initial,
                legacy_receipt_sha256=rt['files']['/var/lib/ghostmanual-deploy/deployed.json']['sha256'],
                config_hashes=config_hashes, model_sha256=model['model_sha256'])
     with Path(out).open('x', encoding='utf-8') as stream:

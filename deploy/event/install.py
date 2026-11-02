@@ -71,8 +71,7 @@ def run():
         actual = entry.canonical(legacy.api, cfg['first_sha'], cfg['first_run_id'], cfg['protected_tree'])
         check(actual == cfg['first_artifact'])
         previous = json.loads(entry.trusted_file(entry.STATE / 'deployed.json'))
-        check(previous['sha'] == cfg['initial']['sha'] and previous['image'] == cfg['initial']['image']
-              and previous.get('run_id') is None)
+        entry.validate_initial_receipt(previous, cfg['initial'])
         before = entry.runtime(legacy, cfg['initial'])
         expected = entry.normalized_others(legacy)
         originals = {n: entry.read_origin(n, cfg['config_hashes'][n]) for n in entry.FILES}
