@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 
-// USD per million tokens, Anthropic list prices as of 2026-10 (verify before reporting). Cache writes are 1.25x input.
+// USD per million tokens, Anthropic list prices verified 2026-11-02 (platform.claude.com/docs/en/about-claude/pricing). Cache writes are 1.25x input.
 const prices: Record<string, { input: number; output: number; cacheRead: number }> = {
-  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.2 },
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1 },
   "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2 },
   "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheRead: 0.01 },
 };
@@ -28,7 +28,11 @@ export type Row = {
 export function cost(line: Line): number | null {
   const price = prices[line.model];
   if (!price) return null;
+  const longHaiku =
+    line.model === "claude-haiku-5-5" &&
+    line.inputTokens + line.cacheWriteTokens + line.cacheReadTokens > 100_000;
   return (
+    (longHaiku ? 5 : 1) *
     (line.inputTokens * price.input +
       line.cacheWriteTokens * price.input * 1.25 +
       line.cacheReadTokens * price.cacheRead +

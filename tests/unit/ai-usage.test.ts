@@ -40,3 +40,12 @@ it("marks cost unknown when a fallback model has no price", () => {
   const [row] = summarize([line("change_questions", 10, 10, "claude-other")]);
   expect(row?.usdTotal).toBeNull();
 });
+
+it("uses the current Sonnet cache read price without charging uncached input", () => {
+  expect(cost({ ...line("x", 0, 0), cacheReadTokens: 1_000_000 })).toBeCloseTo(0.1);
+});
+it("prices Haiku long prompts by total input including cache tokens", () => {
+  expect(cost(line("x", 100_000, 0, "claude-haiku-5-5"))).toBeCloseTo(0.01, 8);
+  expect(cost(line("x", 100_001, 0, "claude-haiku-5-5"))).toBeCloseTo(0.0500005, 8);
+  expect(cost({ ...line("x", 1, 10, "claude-haiku-5-5"), cacheReadTokens: 100_000 })).toBeCloseTo(0.0050255, 8);
+});
