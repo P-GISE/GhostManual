@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { FILE_QUOTA_BYTES } from "./accounts.ts";
-import { changeQuestions } from "./change-ai.ts";
+import { generateFileManual } from "./ai.ts";
+import { changePrompt, changeQuestions } from "./change-ai.ts";
 import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
 import { fileStem } from "./file-stem.ts";
-import { ManualDraftSchema } from "./schemas.ts";
+import { type ManualDraft, ManualDraftSchema } from "./schemas.ts";
 import { assertSession } from "./session.ts";
 import { assertSourceWrite, type SourceView, sourceInTransaction, uploader } from "./sources.ts";
 import { newId, type SessionContext } from "./types.ts";
@@ -639,4 +640,37 @@ export async function similarSources(
       .slice(0, 5)
       .map(({ match: _match, ...r }) => r);
   });
+}
+// AI manual draft for a workbook: sheet structure and every version's changes, questions and answers.
+// Names, departments, file names and cell values stay out of the request.
+export async function draftFromFile(ctx: SessionContext, sourceId: string): Promise<ManualDraft> {
+  const { input, revision } = await transaction(async (db) => {
+    await assertSession(db, ctx, true);
+    const latest = await sourceInTransaction(db, ctx, sourceId);
+    const file = await db.query<{ snapshot: Snapshot | null }>(
+      "SELECT snapshot FROM source_files WHERE revision_id=$1",
+      [latest.revisionId],
+    );
+    const snapshot = file.rows[0]?.snapshot;
+    const history = await fileHistory(db, ctx, sourceId, latest.revision);
+    return {
+      revision: latest.revision,
+      input: {
+        title: latest.title,
+        sheets: snapshot ? changePrompt(latest.title, snapshot, []).sheets : [],
+        versions: (history?.revisions ?? []).map((r) => ({
+          revision: r.revision,
+          aiSummary: r.aiSummary,
+          changes: r.changes,
+          questions: r.questions.map((q) => ({ question: q.question, answer: q.answer })),
+        })),
+      },
+    };
+  });
+  const draft = await generateFileManual(input);
+  // Unanswered questions of every version become "확인 필요" items, as a manual written by hand gets them.
+  const unknowns = await transaction((db) =>
+    reconcileFileUnknowns(db, sourceId, revision, draft.unknowns),
+  );
+  return { ...draft, unknowns };
 }

@@ -1,8 +1,9 @@
 import { generateManual } from "./ai.ts";
 import { AppError } from "./errors.ts";
+import { draftFromFile } from "./file-sources.ts";
 import { getManual, listManuals, saveDraft } from "./manuals.ts";
 import { finishOperation, payloadHash, reserveAiAttempt } from "./operations.ts";
-import { fileReadonly, getSource } from "./sources.ts";
+import { getSource } from "./sources.ts";
 import type { SessionContext } from "./types.ts";
 export async function generateDraft(
   ctx: SessionContext,
@@ -10,7 +11,6 @@ export async function generateDraft(
 ) {
   if (ctx.role !== "owner") throw new AppError("forbidden", 403, "소유자만 생성할 수 있습니다.");
   const source = await getSource(ctx, input.sourceId);
-  if (source.kind === "file") throw fileReadonly();
   if (process.env["AI_ENABLED"] !== "true" || !process.env["ANTHROPIC_API_KEY"])
     throw new AppError(
       "ai_disabled",
@@ -45,7 +45,8 @@ export async function generateDraft(
       "이 요청은 실패했습니다. 새 요청으로 다시 시도하세요.",
     );
   try {
-    const draft = await generateManual(source);
+    const draft =
+      source.kind === "file" ? await draftFromFile(ctx, source.id) : await generateManual(source);
     const manual = await saveDraft(ctx, source.revisionId, draft, existing?.draftRevision, "ai");
     await finishOperation(operation.id, { result: { manualId: manual.id } });
     return { manual, operationId: operation.id };

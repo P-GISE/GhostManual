@@ -71,7 +71,7 @@ it("keeps history null for text manuals", async () => {
   const published = await publishManual(ctx, draft.id, draft.draftRevision, exampleDraft.unknowns);
   expect(published.history).toBeNull();
 });
-it("rejects text edits and AI drafts on file sources", async () => {
+it("rejects text edits on file sources but lets them request an AI draft", async () => {
   const { PATCH } = await import("../../src/app/api/sources/[id]/route.ts");
   const { POST } = await import("../../src/app/api/sources/[id]/generate/route.ts");
   const { ctx, token } = await signedInUser(mail);
@@ -100,6 +100,7 @@ it("rejects text edits and AI drafts on file sources", async () => {
     }),
     params,
   );
-  expect(generate.status).toBe(422);
-  expect((await generate.json()).error.code).toBe("file_source_readonly");
+  // AI is off in this suite, so the draft request reaches the AI check instead of a file-type refusal.
+  expect(generate.status).toBe(503);
+  expect((await generate.json()).error.code).toBe("ai_disabled");
 });

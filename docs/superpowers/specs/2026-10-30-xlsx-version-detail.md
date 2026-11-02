@@ -246,7 +246,7 @@ ALTER TABLE manual_versions ADD COLUMN history jsonb;
 |---|---|
 | `GET /api/sources`, `GET /api/sources/:id` | 응답에 `kind`, `fileType`, `uploadedByName`, `uploadedByDepartment` 추가 |
 | `PATCH /api/sources/:id` (텍스트 수정) | 파일 자료이면 `422 file_source_readonly` |
-| `POST /api/sources/:id/generate` (AI 초안) | 파일 자료이면 `422`. AI는 보류 중이며 파일 자료는 직접 작성 |
+| `POST /api/sources/:id/generate` (AI 초안) | 파일 자료는 셀 값 없이 시트 구조·버전별 변경·질문·답변으로 초안 생성(2026-11-02 사용자 결정). 답하지 않은 질문은 확인 필요 항목으로 추가 |
 | `POST /api/manuals/:id/publish` | 게시 시 `manual_versions.history`에 변경 이력을 함께 저장 |
 | `GET /api/manuals/:id` (Reader 포함) | 게시 버전의 `history` 포함 |
 

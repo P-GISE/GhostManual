@@ -155,20 +155,19 @@ export function SourceDetail({ id }: { readonly id: string }) {
         <button type="button" onClick={() => create(false)} disabled={busy || editing}>
           직접 작성하기
         </button>
-        {source.kind === "text" && (
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => create(true)}
-            disabled={busy || editing}
-          >
-            AI 초안 요청
-          </button>
-        )}
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => create(true)}
+          disabled={busy || editing}
+        >
+          AI 초안 요청
+        </button>
       </div>
       <p className="help">
-        AI가 비활성화됐거나 연결할 수 없으면 생성 불가 안내를 표시합니다. 합성 예제는 미리 작성된
-        문서입니다.
+        {source.kind === "file"
+          ? "엑셀의 시트 구조와 버전별 질문·답변으로 초안을 만듭니다. 셀 값은 보내지 않으며, 질문에 답할수록 초안이 정확해집니다. 답하지 않은 질문은 확인 필요 항목으로 남습니다."
+          : "AI가 비활성화됐거나 연결할 수 없으면 생성 불가 안내를 표시합니다. 합성 예제는 미리 작성된 문서입니다."}
       </p>
       {busy && <p role="status">요청을 처리하고 있습니다.</p>}
       <SourceDelete
