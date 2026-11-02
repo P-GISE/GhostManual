@@ -4,6 +4,7 @@ import { FILE_QUOTA_BYTES } from "./accounts.ts";
 import { changeQuestions } from "./change-ai.ts";
 import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
+import { fileStem } from "./file-stem.ts";
 import { ManualDraftSchema } from "./schemas.ts";
 import { assertSession } from "./session.ts";
 import { assertSourceWrite, type SourceView, sourceInTransaction, uploader } from "./sources.ts";
@@ -591,4 +592,51 @@ export async function fileHistory(
     });
   }
   return { v: 1, revisions };
+}
+export type SimilarSource = {
+  id: string;
+  title: string;
+  revision: number;
+  fileName: string;
+  sameAsLatest: boolean;
+};
+// Existing workbooks this upload is probably a new version of: same file stem, same title or same bytes.
+export async function similarSources(
+  ctx: SessionContext,
+  input: { fileName: string; title: string; sha256: string },
+): Promise<SimilarSource[]> {
+  const stem = fileStem(input.fileName);
+  const title = input.title.trim().toLowerCase();
+  return transaction(async (db) => {
+    await assertSession(db, ctx, true);
+    const rows = await db.query<{
+      id: string;
+      title: string;
+      revision: number;
+      file_name: string;
+      sha256: string;
+    }>(
+      `SELECT s.id,r.title,s.revision,f.file_name,f.sha256 FROM sources s
+        JOIN source_revisions r ON r.source_id=s.id AND r.revision=s.revision
+        JOIN source_files f ON f.revision_id=r.id
+        WHERE s.workspace_id=$1 AND s.kind='file' ORDER BY s.created_at DESC`,
+      [ctx.workspaceId],
+    );
+    return rows.rows
+      .map((r) => ({
+        id: r.id,
+        title: r.title,
+        revision: r.revision,
+        fileName: r.file_name,
+        sameAsLatest: r.sha256 === input.sha256,
+        match:
+          r.sha256 === input.sha256 ||
+          fileStem(r.file_name) === stem ||
+          (title !== "" && r.title.trim().toLowerCase() === title),
+      }))
+      .filter((r) => r.match)
+      .sort((a, b) => Number(b.sameAsLatest) - Number(a.sameAsLatest))
+      .slice(0, 5)
+      .map(({ match: _match, ...r }) => r);
+  });
 }

@@ -313,6 +313,12 @@ export function FileVersions({
             </button>
           </div>
         ))}
+      {!reader && list.length === 1 && !uploading && (
+        <p className="notice">
+          다음에 이 파일 작업을 마치면 <strong>여기서 "새 버전 올리기"</strong>를 누르세요. 이전
+          버전과 비교해 바뀐 부분을 물어봅니다. 자료 등록으로 다시 올리면 별개의 자료가 됩니다.
+        </p>
+      )}
       <div className="version-layout">
         <section className="panel" aria-labelledby="versions-title">
           <h2 id="versions-title">버전 기록</h2>

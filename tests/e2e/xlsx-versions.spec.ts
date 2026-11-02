@@ -270,3 +270,42 @@ test("a saved upload stays committed when the follow-up read fails", async ({ pa
   await expect(page).toHaveURL(/\/manuals\/[\w-]+\/edit$/);
   expect(posts).toBe(1);
 });
+
+test("registering the next workbook as a new source suggests adding it as a new version", async ({
+  page,
+}) => {
+  await signUpAndVerify(page);
+  await page.goto("/sources/new");
+  await page.getByLabel("자료 제목").fill("월간 정산");
+  await page.getByLabel(/엑셀·TXT·Markdown 파일/).setInputFiles(fixture("정산_1029.xlsx"));
+  await page.getByRole("button", { name: "원본 등록" }).click();
+  await expect(page.getByRole("heading", { name: "월간 정산", level: 1 })).toBeVisible();
+  await expect(page.getByText(/다음에 이 파일 작업을 마치면/)).toBeVisible();
+  const sourceUrl = page.url();
+
+  await page.goto("/sources/new");
+  await page.getByLabel("자료 제목").fill("10월 정산");
+  await page.getByLabel(/엑셀·TXT·Markdown 파일/).setInputFiles(fixture("정산_1030.xlsx"));
+  await page.getByRole("button", { name: "원본 등록" }).click();
+  const suggestion = page.getByRole("group", { name: "기존 자료의 새 버전인가요?" });
+  await expect(suggestion).toContainText("정산_1029.xlsx");
+  await suggestion.getByRole("button", { name: "「월간 정산」의 새 버전으로 올리기" }).click();
+  await expect(page).toHaveURL(sourceUrl);
+  await expect(page.getByRole("button", { name: /^v2/ })).toBeVisible();
+  await expect(page.getByText(/다음에 이 파일 작업을 마치면/)).toHaveCount(0);
+});
+
+test("the suggestion can be declined to register a separate source", async ({ page }) => {
+  await signUpAndVerify(page);
+  await page.goto("/sources/new");
+  await page.getByLabel("자료 제목").fill("월간 정산");
+  await page.getByLabel(/엑셀·TXT·Markdown 파일/).setInputFiles(fixture("정산_1029.xlsx"));
+  await page.getByRole("button", { name: "원본 등록" }).click();
+  await expect(page.getByRole("heading", { name: "월간 정산", level: 1 })).toBeVisible();
+  await page.goto("/sources/new");
+  await page.getByLabel("자료 제목").fill("다른 정산");
+  await page.getByLabel(/엑셀·TXT·Markdown 파일/).setInputFiles(fixture("정산_1030.xlsx"));
+  await page.getByRole("button", { name: "원본 등록" }).click();
+  await page.getByRole("button", { name: "새 자료로 등록" }).click();
+  await expect(page.getByRole("heading", { name: "다른 정산", level: 1 })).toBeVisible();
+});
