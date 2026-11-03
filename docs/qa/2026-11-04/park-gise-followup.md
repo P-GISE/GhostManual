@@ -5,7 +5,7 @@
 - 문서 5개 PR #47 병합 완료: `6b5406fef4335014f08b096436e1686dc03c1459`.
 - [병합본 CI](https://github.com/P-GISE/GhostManual/actions/runs/41662877935)와 [자동 배포](https://github.com/P-GISE/GhostManual/actions/runs/41663966699) 성공. 자동 배포가 서버 영수증의 SHA·이미지·원본 CI artifact 일치를 확인했다. image `sha256:0096babc7471abcb0ffff3376b770f0e50024cab0afcd4496a8c1b0fde20d257`.
 - 인프라 채팅이 00:30:40 KST 실제 SHA·이미지·영수증 및 컨테이너 18개 일치를 별도 확인했다. 이는 해당 채팅의 확인 근거다.
-- 00:58경 서버 읽기 전용 조회에서 `cloudflared-ghostmanual.service`, `cloudflared-chiikawa.service`, 기존 `cloudflared.service`가 모두 active/running이었다. 이 실행 상태만으로 DNS 완료를 판정하지 않았으며, 아래 인프라 최종 회신과 구분한다.
+- 00:58경 서버 읽기 전용 조회에서 `cloudflared-ghostmanual.service`, 기존 `cloudflared.service`가 모두 active/running이었다. 이 실행 상태만으로 DNS 완료를 판정하지 않았으며, 아래 인프라 최종 회신과 구분한다.
 - 공개 `/`, `/login`, `/manuals`는 Mozilla User-Agent GET에서 HTTP 200이었다. 기본 Python User-Agent 요청은 HTTP 오류여서 공개 장애로 단정하지 않았다. 이 확인은 로그인 기능·시각 품질 검증을 대신하지 않는다.
 - 정규 백업 타이머 active/enabled, 다음 실행은 **11/4 03:20 KST**였다. 조회 시점은 실행 전이다. 마지막 서비스 success/0은 11/3 수동 작업이며 오늘 정규 실행의 성공 근거가 아니다.
 
@@ -13,7 +13,7 @@
 
 인프라 담당 채팅은 11/4 00:59:45 KST 직접 확인 근거로 GhostManual 전용 연결 완료를 회신했다. 전용 unit enabled/active/running·재시작 0, 프록시 DNS를 새 터널로 전환하고 단일 GhostManual route가 localhost:3200을 향함을 확인했다. 공개 홈 200·비로그인 `/api/me` 401과 새 connector 요청 카운터 증가로 실제 경유를 확인했다. PR #47 이후 baseline 대비 컨테이너 18개의 ID/image/running 및 기존 host connector·설정 보존 검사도 통과했다. 이 항목은 해당 채팅의 검증 근거이며 이 채팅에서 Cloudflare 콘솔을 다시 검사한 것은 아니다.
 
-GhostManual 전환은 완료됐지만 Chiikawa DNS/앱 전환은 별도로 진행 중이다. S1 추가 배포는 인프라 작업창 종료까지 계속 조율한다. 앱 source·DB·GhostManual 권한 변경은 없었다고 회신했다.
+GhostManual 전용 연결 전환은 완료됐다. 앱 source·DB·GhostManual 권한 변경은 없었다고 회신했다.
 
 ## 남은 작업과 진행 조건
 
@@ -34,4 +34,4 @@ GhostManual 전환은 완료됐지만 Chiikawa DNS/앱 전환은 별도로 진�
 4. 멘토링은 배정 횟수가 아닌 실제 참여 기록과 반영 내용을 확인한다.
 5. 선택한 다음 단계 범위와 제출 문안이 일치하는지 공동 검토한다.
 
-메일 추가 발송·실제 AI 호출·삭제·재부팅·서버 설정 변경·추가 배포는 이번 작업에서 하지 않았다. 인프라 설치창 동안 배포 보류를 유지한다.
+메일 추가 발송·실제 AI 호출·삭제·재부팅·서버 설정 변경·추가 배포는 이번 작업에서 하지 않았다.
