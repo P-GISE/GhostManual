@@ -1,5 +1,7 @@
 # 박기성 남은 작업·일정 — 2026-11-03 KST
 
+> 11/4 후속: 문서 PR #47 병합·자동 배포 완료(현재 `6b5406f`/image `0096babc…`). [최신 확인·남은 작업](../2026-11-04/park-gise-followup.md)을 우선하며, 아래 PR #46 운영 식별은 11/3 당시 기록이다. 03:20 정규 백업은 확인 시각 기준 실행 전이다.
+
 ## 현재 기준
 
 엑셀 엔진·migration 005 운영 적용·앱 DB 최소권한/관리자 분리·S3 일일 백업과 격리 복원·백업 실패 알림 연결·운영 루트 암호화/40 GiB 확장·Owner 합성 텍스트 PDF 렌더 검증은 완료했다. PR #45 문서 반영과 운영 배포, PR #44 원문을 통합·보완한 PR #46 병합·CI·자동 배포도 완료했다. 현재 운영은 `437f4e6`/image `5788e112…`이며 11/3 22:14 KST 실제 앱·영수증 일치와 DB 3개·다른 서비스 17개·설정·공개 8호스트 보존을 확인했다. 합성 업무 카드의 미게시 변경/할 일/검수 CTA와 필터 3개 44px는 실제 DOM으로 확인했다. 캡처 저장은 실패해 픽셀 검증으로 취급하지 않는다. [통합 보완 근거](pr44-integration-fixes.md) · [최신 CI](https://github.com/P-GISE/GhostManual/actions/runs/41641300313) · [운영 배포](https://github.com/P-GISE/GhostManual/actions/runs/41642115347) · [제출용 담당 원고](park-gise-report-contribution.md).
