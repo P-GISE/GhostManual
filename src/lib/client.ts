@@ -10,6 +10,7 @@ export const sourceSchema = z.object({
   text: z.string(),
   createdAt: z.string(),
   kind: z.enum(["text", "file"]).default("text"),
+  openQuestions: z.number().default(0),
 });
 const questionSchema = z.object({
   id: z.uuid(),
