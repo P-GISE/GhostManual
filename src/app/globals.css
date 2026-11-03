@@ -1079,3 +1079,158 @@ select {
     background: #ffffff;
   }
 }
+.task-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 4px;
+}
+.task-search {
+  flex: 1 1 320px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid #c9d2cb;
+  border-radius: 10px;
+  background: #fafbf9;
+  color: var(--muted);
+}
+.task-search:focus-within {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.task-search input {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--ink);
+}
+.task-chips {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.task-chips button {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid #c9d2cb;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 500;
+}
+.task-chips button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+}
+.task-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.task-card {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+  padding: 18px 22px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(32, 44, 40, 0.04);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.task-card:hover,
+.task-card:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(32, 44, 40, 0.08);
+}
+.task-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #e3efe9;
+  color: var(--accent);
+}
+.task-icon.text {
+  background: #eceff4;
+  color: #3c4a6b;
+}
+.task-main {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.task-main h2 {
+  margin: 0 0 4px;
+  font-size: 1.125rem;
+}
+.task-link {
+  color: var(--ink);
+  text-decoration: none;
+}
+/* The whole card opens the task; the meta link and the action button sit above this layer. */
+.task-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+}
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+.task-meta a,
+.task-action {
+  position: relative;
+  z-index: 1;
+}
+.task-status {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #eef1ee;
+  color: #4d5a54;
+}
+.task-status.draft {
+  background: #fff1d6;
+  color: #7a4300;
+}
+.task-status.review {
+  background: #fde8e1;
+  color: #8a2c0d;
+}
+.task-status.done {
+  background: #e3efe9;
+  color: #1f5a45;
+}

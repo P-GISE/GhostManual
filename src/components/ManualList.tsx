@@ -17,20 +17,51 @@ export function ManualList() {
     null,
   );
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const visibleManuals = manuals.filter(
-    (m) =>
-      m.draft.title
-        .normalize("NFKC")
-        .toLocaleLowerCase("ko-KR")
-        .includes(query.trim().normalize("NFKC").toLocaleLowerCase("ko-KR")) &&
-      (status === "all" ||
-        (status === "review"
-          ? m.needsReview
-          : status === "published"
-            ? !!m.publishedVersion && !m.needsReview
-            : !m.publishedVersion && !m.needsReview)),
+  const [filter, setFilter] = useState<"all" | "todo" | "published">("all");
+  const normalize = (v: string) => v.trim().normalize("NFKC").toLocaleLowerCase("ko-KR");
+  // One card per task: a source with its manual (if any), its status and the next thing to do.
+  const tasks = sources.map((s) => {
+    const manual = manuals.find((m) => m.sourceId === s.id);
+    const unpublishedChanges =
+      !!manual?.published &&
+      JSON.stringify(manual.draft) !== JSON.stringify(manual.published.content);
+    const published = !!manual?.publishedVersion && !manual.needsReview && !unpublishedChanges;
+    const status = !manual
+      ? { label: "매뉴얼 없음", tone: "none" }
+      : manual.needsReview
+        ? { label: "재검토 필요", tone: "review" }
+        : unpublishedChanges
+          ? { label: "미게시 변경", tone: "review" }
+          : published
+            ? { label: `게시됨 v${manual.publishedVersion}`, tone: "done" }
+            : { label: "검수 전", tone: "draft" };
+    const action =
+      s.openQuestions > 0
+        ? { label: `답할 질문 ${s.openQuestions}개`, href: `/sources/${s.id}`, primary: true }
+        : !manual
+          ? { label: "매뉴얼 만들기", href: `/sources/${s.id}`, primary: true }
+          : !published
+            ? { label: "검수하고 게시", href: `/manuals/${manual.id}`, primary: false }
+            : { label: "매뉴얼 보기", href: `/manuals/${manual.id}`, primary: false };
+    return {
+      source: s,
+      manual,
+      published,
+      status,
+      action,
+      todo: !published || s.openQuestions > 0,
+    };
+  });
+  const visible = tasks.filter(
+    (t) =>
+      normalize(`${t.source.title} ${t.manual?.draft.title ?? ""}`).includes(normalize(query)) &&
+      (filter === "all" || (filter === "todo" ? t.todo : t.published)),
   );
+  const chips = [
+    { id: "all", label: "전체", count: tasks.length },
+    { id: "todo", label: "할 일 있음", count: tasks.filter((t) => t.todo).length },
+    { id: "published", label: "게시됨", count: tasks.filter((t) => t.published).length },
+  ] as const;
   const load = useCallback(async () => {
     setBusy(true);
     setLoadError(null);
@@ -115,7 +146,9 @@ export function ManualList() {
         <div>
           <span className="eyebrow">내 문서함</span>
           <h1>업무 문서함</h1>
-          <p className="muted">원본과 검수한 매뉴얼을 따로 관리합니다.</p>
+          <p className="muted">
+            업무 하나에 원본 파일과 매뉴얼이 함께 있습니다. 오른쪽 버튼이 지금 할 일입니다.
+          </p>
         </div>
         <Link className="button" href="/sources/new">
           새 자료 등록
@@ -131,12 +164,9 @@ export function ManualList() {
           {error}
         </p>
       )}
-      <h2>
-        매뉴얼 <span className="muted">{manuals.length}</span>
-      </h2>
-      {!busy && !manuals.length && (
+      {!busy && !tasks.length && (
         <div className="panel">
-          <h3>아직 매뉴얼이 없습니다.</h3>
+          <h2>아직 등록한 업무가 없습니다.</h2>
           <p className="muted">업무 자료를 등록한 다음 매뉴얼을 작성하고 검수하세요.</p>
           <div className="actions">
             <Link href="/sources/new">첫 자료 등록하기</Link>
@@ -146,65 +176,85 @@ export function ManualList() {
           </div>
         </div>
       )}
-      {!busy && manuals.length > 0 && (
+      {!busy && tasks.length > 0 && (
         <>
-          <div className="filter-bar">
-            <div>
-              <label htmlFor="manual-search">매뉴얼 제목 검색</label>
+          <div className="task-toolbar">
+            <div className="task-search">
+              <svg
+                aria-hidden="true"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20 20l-3.5-3.5" />
+              </svg>
               <input
-                id="manual-search"
                 type="search"
+                aria-label="업무 검색"
+                placeholder="업무 이름으로 찾기"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
             </div>
-            <div>
-              <label htmlFor="manual-status">검수 상태</label>
-              <select id="manual-status" value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="all">전체</option>
-                <option value="draft">미검수 초안</option>
-                <option value="published">게시본 있음</option>
-                <option value="review">재검토 필요</option>
-              </select>
-            </div>
+            <fieldset className="task-chips" aria-label="상태로 거르기">
+              {chips.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  aria-pressed={filter === c.id}
+                  onClick={() => setFilter(c.id)}
+                >
+                  {c.label} {c.count}
+                </button>
+              ))}
+            </fieldset>
           </div>
           <p className="help" role="status">
-            전체 {manuals.length}개 중 {visibleManuals.length}개 표시
+            전체 {tasks.length}개 중 {visible.length}개 표시
           </p>
-          {visibleManuals.length === 0 && (
-            <p className="muted">검색·상태 조건에 맞는 매뉴얼이 없습니다.</p>
-          )}
+          {visible.length === 0 && <p className="muted">조건에 맞는 업무가 없습니다.</p>}
+          <ul className="task-list">
+            {visible.map((t) => (
+              <li key={t.source.id} className="task-card">
+                <span className={`task-icon ${t.source.kind}`} aria-hidden="true">
+                  {t.source.kind === "file" ? "XLSX" : "TXT"}
+                </span>
+                <div className="task-main">
+                  <h2>
+                    <Link
+                      className="task-link"
+                      href={t.manual ? `/manuals/${t.manual.id}` : `/sources/${t.source.id}`}
+                    >
+                      {t.manual?.draft.title ?? t.source.title}
+                    </Link>
+                  </h2>
+                  <p className="task-meta">
+                    <span>
+                      {t.source.kind === "file" ? "엑셀" : "텍스트"} · 버전 {t.source.revision}개
+                    </span>
+                    <Link href={`/sources/${t.source.id}`}>원본 보기</Link>
+                    {t.manual?.provenance === "example" && <span>합성 예제</span>}
+                  </p>
+                </div>
+                <span className={`task-status ${t.status.tone}`}>{t.status.label}</span>
+                <Link
+                  className={
+                    t.action.primary ? "button task-action" : "button secondary task-action"
+                  }
+                  href={t.action.href}
+                >
+                  {t.action.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </>
       )}
-      {visibleManuals.map((m) => (
-        <div className="row" key={m.id}>
-          <div>
-            <h3>
-              <Link href={`/manuals/${m.id}`}>{m.draft.title}</Link>
-            </h3>
-            <span className="help">
-              초안 revision {m.draftRevision} · 게시 버전 {m.publishedVersion ?? "없음"}
-            </span>
-          </div>
-          <span className="badge">
-            {m.needsReview
-              ? "재검토 필요"
-              : m.publishedVersion
-                ? "게시본 있음 · 초안 별도"
-                : "미검수 초안"}
-          </span>
-        </div>
-      ))}
-      <h2>
-        원본 자료 <span className="muted">{sources.length}</span>
-      </h2>
-      {!busy && !sources.length && <p className="muted">등록된 원본 자료가 없습니다.</p>}
-      {sources.map((s) => (
-        <div className="row" key={s.id}>
-          <Link href={`/sources/${s.id}`}>{s.title}</Link>
-          <span className="help">원본 revision {s.revision}</span>
-        </div>
-      ))}
     </>
   );
 }

@@ -390,3 +390,18 @@ test("switching files during a workbook lookup discards the previous suggestions
   await page.goto(original);
   await expect(page.getByText("엑셀 자료 · 버전 1개")).toBeVisible();
 });
+
+test("the library card points to the questions still waiting for an answer", async ({ page }) => {
+  await signUpAndVerify(page);
+  await page.goto("/sources/new");
+  await page.getByLabel("자료 제목").fill("월간 정산");
+  await page.getByLabel(/엑셀·TXT·Markdown 파일/).setInputFiles(fixture("정산_1029.xlsx"));
+  await page.getByRole("button", { name: "원본 등록" }).click();
+  await expect(page.getByRole("heading", { name: "월간 정산", level: 1 })).toBeVisible();
+  const sourceUrl = page.url();
+  await page.getByRole("link", { name: "문서함", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "월간 정산" })).toBeVisible();
+  await expect(page.getByText("매뉴얼 없음", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "답할 질문 2개" }).click();
+  await expect(page).toHaveURL(sourceUrl);
+});

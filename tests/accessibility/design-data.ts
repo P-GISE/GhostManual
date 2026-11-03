@@ -8,6 +8,7 @@ export const source: Source = {
   revision: 1,
   createdAt: "2026-10-18T00:00:00.000Z",
   kind: "text",
+  openQuestions: 0,
 };
 export const manual: Manual = {
   id: "10000000-0000-4000-8000-000000000003",

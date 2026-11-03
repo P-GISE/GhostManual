@@ -43,7 +43,7 @@ test("login: the SSR button cannot lose a click before hydration", async ({ page
     await page.getByLabel("비밀번호", { exact: true }).fill("correct horse 9");
     await button.click();
     await expect(page).toHaveURL(/\/manuals$/);
-    await expect(page.getByText("아직 매뉴얼이 없습니다.")).toBeVisible();
+    await expect(page.getByText("아직 등록한 업무가 없습니다.")).toBeVisible();
     expect(logins).toBe(1);
     expect(
       (await context.cookies()).some(

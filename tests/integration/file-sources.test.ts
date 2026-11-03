@@ -121,3 +121,21 @@ it("POST /api/sources accepts an xlsx upload", async () => {
   expect(response.status).toBe(201);
   expect(await response.json()).toMatchObject({ kind: "file", revision: 1 });
 });
+it("lists how many questions of a workbook are still waiting for an answer", async () => {
+  const { listSources } = await import("../../src/lib/sources.ts");
+  const { answerQuestion } = await import("../../src/lib/file-sources.ts");
+  const { ctx } = await signedInUser(mail);
+  const view = await createFileSource(ctx, {
+    title: "할 일 세기",
+    fileName: "정산_1029.xlsx",
+    bytes: fixture("정산_1029.xlsx"),
+  });
+  const open = async () => (await listSources(ctx)).find((s) => s.id === view.id)?.openQuestions;
+  expect(await open()).toBe(2);
+  const [first, second] = view.questions;
+  if (!first || !second) throw new Error("expected two questions");
+  await answerQuestion(ctx, view.id, 1, first.id, { answer: "정산용" });
+  expect(await open()).toBe(1);
+  await answerQuestion(ctx, view.id, 1, second.id, { skipped: true });
+  expect(await open()).toBe(0);
+});

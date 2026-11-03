@@ -14,7 +14,7 @@ test("sign up, verify by mail, log out and log back in", async ({ page }) => {
   await page.getByRole("link", { name: "로그인 화면으로" }).click();
   await logIn(page, email);
   await expect(page).toHaveURL(/\/manuals$/);
-  await expect(page.getByText("아직 매뉴얼이 없습니다.")).toBeVisible();
+  await expect(page.getByText("아직 등록한 업무가 없습니다.")).toBeVisible();
 });
 
 test("wrong password and unverified accounts get plain guidance", async ({ page }) => {

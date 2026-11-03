@@ -5,24 +5,26 @@ test.beforeEach(async ({ page }) => {
   await page.setExtraHTTPHeaders({ "CF-Connecting-IP": "198.51.100.30" });
 });
 
-test("title and review filters combine without hiding original sources", async ({ page }) => {
+test("search and status chips combine on the task cards", async ({ page }) => {
   await signUpAndVerify(page);
   await loadExample(page);
-  await page.getByLabel("매뉴얼 제목 검색").fill("없는문서");
-  await expect(page.getByText("검색·상태 조건에 맞는 매뉴얼이 없습니다.")).toBeVisible();
-  await expect(page.getByRole("heading", { name: /원본 자료/ })).toBeVisible();
-  await page.getByLabel("매뉴얼 제목 검색").fill("계정");
-  await page.getByLabel("검수 상태", { exact: true }).selectOption("published");
-  await expect(page.getByText("검색·상태 조건에 맞는 매뉴얼이 없습니다.")).toBeVisible();
-  await page.getByLabel("검수 상태", { exact: true }).selectOption("draft");
+  await page.getByLabel("업무 검색").fill("없는문서");
+  await expect(page.getByText("조건에 맞는 업무가 없습니다.")).toBeVisible();
+  await page.getByLabel("업무 검색").fill("계정");
+  await page.getByRole("button", { name: /^게시됨/ }).click();
+  await expect(page.getByText("조건에 맞는 업무가 없습니다.")).toBeVisible();
+  await page.getByRole("button", { name: /^할 일 있음/ }).click();
+  await expect(page.getByRole("link", { name: "검수하고 게시" })).toBeVisible();
   await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
   await page.getByLabel("원본과 업무 내용을 확인했습니다.").check();
   await page.getByLabel("미확인 항목이 남아 있음을 확인했습니다.").check();
   await page.getByRole("button", { name: "검수 완료·버전 게시" }).click();
   await expect(page.getByText("검수 완료 · 버전 1", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "문서함", exact: true }).click();
-  await page.getByLabel("검수 상태", { exact: true }).selectOption("published");
+  await page.getByRole("button", { name: /^게시됨/ }).click();
   await expect(page.getByRole("heading", { name: "신입 구성원 업무 계정 발급" })).toBeVisible();
+  await expect(page.getByText("게시됨 v1", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "매뉴얼 보기" })).toBeVisible();
 });
 test("publication comparison shows changed fields while a later draft remains private", async ({
   page,
@@ -66,4 +68,67 @@ test("publication comparison shows changed fields while a later draft remains pr
   await expect(rp.getByText("아직 게시하지 않은 목적", { exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await reader.close();
+});
+
+test("unpublished task changes stay actionable until republished", async ({ page }) => {
+  await signUpAndVerify(page);
+  await loadExample(page);
+  await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
+  async function publish(version: number) {
+    await page.getByLabel("원본과 업무 내용을 확인했습니다.").check();
+    await page.getByLabel("미확인 항목이 남아 있음을 확인했습니다.").check();
+    await page.getByRole("button", { name: "검수 완료·버전 게시" }).click();
+    await expect(page.getByText(`검수 완료 · 버전 ${version}`, { exact: true })).toBeVisible();
+  }
+  await publish(1);
+  await page.getByRole("link", { name: "초안 수정", exact: true }).click();
+  await page.getByLabel("업무 목적", { exact: true }).fill("게시 전에 다시 확인해야 할 새 목적");
+  await page.getByRole("button", { name: "초안 저장", exact: true }).click();
+  await expect(page.getByText("초안을 저장했습니다. 검수 후 게시할 수 있습니다.")).toBeVisible();
+  await page.getByRole("link", { name: "문서함", exact: true }).click();
+  await page.getByRole("button", { name: /^할 일 있음/ }).click();
+  const card = page.getByRole("listitem").filter({
+    has: page.getByRole("heading", { name: "신입 구성원 업무 계정 발급", exact: true }),
+  });
+  await expect(card.getByText("미게시 변경", { exact: true })).toBeVisible();
+  await expect(card.getByText("게시됨 v1", { exact: true })).toHaveCount(0);
+  await card.getByRole("link", { name: "검수하고 게시", exact: true }).click();
+  await expect(page.getByText("게시 전에 다시 확인해야 할 새 목적", { exact: true })).toBeVisible();
+  await publish(2);
+  await page.getByRole("link", { name: "문서함", exact: true }).click();
+  await page.getByRole("button", { name: /^할 일 있음/ }).click();
+  await expect(card).toHaveCount(0);
+  await page.getByRole("button", { name: /^게시됨/ }).click();
+  await expect(card.getByText("게시됨 v2", { exact: true })).toBeVisible();
+  await expect(card.getByRole("link", { name: "매뉴얼 보기", exact: true })).toBeVisible();
+});
+
+test("saving the same published content does not create a task", async ({ page }) => {
+  await signUpAndVerify(page);
+  await loadExample(page);
+  await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
+  await page.getByLabel("원본과 업무 내용을 확인했습니다.").check();
+  await page.getByLabel("미확인 항목이 남아 있음을 확인했습니다.").check();
+  await page.getByRole("button", { name: "검수 완료·버전 게시" }).click();
+  await expect(page.getByText("검수 완료 · 버전 1", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "초안 수정", exact: true }).click();
+  await page.getByRole("button", { name: "초안 저장", exact: true }).click();
+  await expect(page.getByText("초안을 저장했습니다. 검수 후 게시할 수 있습니다.")).toBeVisible();
+  await page.getByRole("link", { name: "문서함", exact: true }).click();
+  await expect(page.getByText("게시됨 v1", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /^할 일 있음/ }).click();
+  await expect(page.getByRole("heading", { name: "신입 구성원 업무 계정 발급" })).toHaveCount(0);
+  await page.getByRole("button", { name: /^게시됨/ }).click();
+  await expect(page.getByRole("heading", { name: "신입 구성원 업무 계정 발급" })).toBeVisible();
+});
+
+test("status chips retain the minimum touch target", async ({ page }) => {
+  await signUpAndVerify(page);
+  await loadExample(page);
+  const chips = page.getByRole("group", { name: "상태로 거르기" }).getByRole("button");
+  await expect(chips).toHaveCount(3);
+  for (const chip of await chips.all()) {
+    const height = await chip.evaluate((element) => element.getBoundingClientRect().height);
+    expect(height).toBeGreaterThanOrEqual(44);
+  }
 });
