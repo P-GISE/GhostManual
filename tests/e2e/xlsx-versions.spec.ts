@@ -128,8 +128,10 @@ test("demo: publish a manual from workbook versions and a successor sees the cha
   const { context, page: reader } = await openAsNewReader(browser, url, page.viewportSize());
   try {
     await expect(reader.getByRole("heading", { name: "파일 변경 이력" })).toBeVisible();
-    await expect(reader.getByText(/v2 · .* · 박효민/)).toBeVisible();
-    await expect(reader.getByText("A. 반품(음수)을 합계에서 빼야 해서 바꿨습니다.")).toBeVisible();
+    await expect(reader.getByText(/v2 · .* · 박효민/).filter({ visible: true })).toBeVisible();
+    await expect(
+      reader.getByText("A. 반품(음수)을 합계에서 빼야 해서 바꿨습니다.").filter({ visible: true }),
+    ).toBeVisible();
     await expect(reader.getByRole("link", { name: "정산_1030.xlsx 내려받기" })).toHaveAttribute(
       "href",
       /\/revisions\/2\/file\?view=shared$/,
