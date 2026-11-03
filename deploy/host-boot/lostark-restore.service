@@ -1,0 +1,14 @@
+[Unit]
+Description=Recover existing LostArk containers after the Tailscale bind address appears
+Wants=docker.service tailscaled.service
+After=docker.service tailscaled.service
+ConditionPathExists=!/etc/lostark-boot-recovery.hold
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I -B /usr/local/libexec/lostark-restore.py
+TimeoutStartSec=500s
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
