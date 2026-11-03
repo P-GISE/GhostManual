@@ -1,0 +1,12 @@
+[Unit]
+Description=Send GhostManual backup failure notification
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+LoadCredential=mail.json:/etc/ghostmanual-backup-mail.json
+ExecStart=/usr/bin/python3 -I -B /usr/local/libexec/ghostmanual-backup-notify.py
+UMask=0077
+TimeoutStartSec=45s

@@ -1,5 +1,6 @@
 [Unit]
 Description=Back up GhostManual PostgreSQL to the private S3 bucket
+OnFailure=ghostmanual-backup-notify.service
 After=docker.service network-online.target
 Requires=docker.service
 Wants=network-online.target

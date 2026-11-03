@@ -37,6 +37,34 @@ systemctl list-timers ghostmanual-backup.timer --all
 
 중단은 systemctl disable --now ghostmanual-backup.timer로 한다. 실행 중인 작업 종료 여부는 systemctl status ghostmanual-backup.service로 확인한다. 이미 업로드한 백업에는 버킷의 만료 규칙이 계속 적용된다.
 
+## 백업 실패 알림
+
+백업 서비스가 실패 상태에 들어가면 systemd가 알림 서비스를 한 번 시작한다. 알림은 호스트의 Python 표준 라이브러리로 Gmail SMTP(TLS, 465)에 접속해 승인된 한 주소로 보낸다. 메일 본문에는 UTC 알림 시각과 서버에서 확인할 서비스 이름만 담는다.
+
+root 전용 파일 `/etc/ghostmanual-backup-mail.json`을 소유자 root:root, 모드 0600으로 준비한다. JSON 문자열 필드는 `user`(Gmail 발신 주소), `password`(앱 비밀번호), `recipient`(승인된 수신 주소) 세 개다. 값을 명령 인자·Git·로그에 넣지 않는다. 계정·비밀번호가 바뀌면 이 파일도 갱신한다. systemd는 실행할 때 이 파일을 알림 전용 임시 사용자에게 읽기 자격 증명으로 전달한다.
+
+```sh
+install -D -o root -g root -m 0755 deploy/backup/notify.py /usr/local/libexec/ghostmanual-backup-notify.py
+install -o root -g root -m 0644 deploy/backup/ghostmanual-backup.service deploy/backup/ghostmanual-backup-notify.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl show ghostmanual-backup.service -p OnFailure
+```
+
+코드 검사는 `python3 -B -m unittest discover -s deploy/backup -p test_notify.py`로 실행한다. 수신자가 시험 발송에 동의했으면 다음 명령으로 운영 백업에 영향을 주지 않고 **시험 메일** 한 통을 전송한다. 종료 코드 0은 SMTP 서버의 접수 여부를 나타내며, 수신함 도착은 수신자가 확인한다.
+
+```sh
+systemd-run --wait --collect --service-type=oneshot -p DynamicUser=yes -p UMask=0077 -p TimeoutStartSec=45s \
+  -p LoadCredential=mail.json:/etc/ghostmanual-backup-mail.json \
+  /usr/bin/python3 -I -B /usr/local/libexec/ghostmanual-backup-notify.py --test
+```
+
+알림 서비스 상태는 `journalctl -u ghostmanual-backup-notify.service`로 확인한다. 호스트 정지나 타이머 비활성화로 백업이 시작되지 않으면 실패 이벤트도 발생하지 않는다. 네트워크·Gmail 장애 시 메일이 도달하지 않을 수 있다.
+
+### 실패 알림만 중단하기
+
+백업 타이머는 유지한다. 설치 전에 저장한 원본 backup.service와 현재 단위를 비교하고, 이 알림용 `OnFailure=ghostmanual-backup-notify.service` 연결만 제거한 단위를 복원한 뒤 `systemctl daemon-reload`를 실행한다. 이 설치 후 다른 단위 변경이 있었다면 옛 단위를 통째로 덮어쓰지 않고 알림 연결 행만 제거한다. `systemctl show ghostmanual-backup.service -p OnFailure`가 비었는지와 `systemctl is-active ghostmanual-backup.timer`가 active인지 확인한다. 독립 알림 단위를 disable하는 것만으로 OnFailure 호출을 차단한다고 가정하지 않는다. 자격 증명 파일과 알림 코드의 폐기는 별도 운영 변경으로 처리한다.
+
+
 ## 복구 범위
 
 DB 안의 스키마·데이터·ACL을 담는다. PostgreSQL 클러스터 역할과 비밀번호, 운영 .env, TLS 인증서, 앱 이미지, EC2 볼륨은 별도 관리 대상이다. 복원 시험은 원 소유자 ghostmanual과 권한 수신용 ghostmanual_app 역할을 격리 DB에 먼저 만든다. 실제 장애 복구에서는 동일 버전 PostgreSQL과 역할을 먼저 준비하고 서비스가 비어 있는 새 DB를 향하도록 전환하기 전 권한·앱 동작을 재검증한다. 운영 호스트가 없으면 POSTGRES_IMAGE에 확보된 동일 버전 이미지 digest를 지정해 격리 복원 시험을 할 수 있다. 호스트 journal을 잃으면 버킷 관리자가 해당 객체의 metadata.sha256을 조회해 검증값을 복구할 수 있다.
