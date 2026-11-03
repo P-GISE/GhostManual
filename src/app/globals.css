@@ -1047,3 +1047,35 @@ select {
   color: #ffffff;
   font-weight: 700;
 }
+.print-sheet {
+  display: none;
+}
+@media print {
+  .shell-header,
+  footer,
+  .skip,
+  .print-hide {
+    display: none !important;
+  }
+  .print-sheet {
+    display: block;
+    color: #000000;
+  }
+  .print-sheet .panel {
+    border: 0;
+    padding: 0;
+  }
+  .print-sheet a.button {
+    display: none;
+  }
+  .print-sheet h2,
+  .print-sheet h3 {
+    break-after: avoid;
+  }
+  .print-sheet .history-entry {
+    break-inside: avoid;
+  }
+  body {
+    background: #ffffff;
+  }
+}
