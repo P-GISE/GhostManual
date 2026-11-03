@@ -1,18 +1,54 @@
 # 공유 EC2 루트 볼륨 암호화 교체 계획
 
-**상태는 실행 승인 대기다.** 2026-11-02 시드니 콘솔에서 인스턴스 `i-0b4a251ecd2f5bd3e`의 루트 장치 `/dev/sda1`에 연결된 `vol-02e91bd89ed39c404`가 gp3 30 GiB, 미암호화로 확인됐다. 실행 당일 이 매핑을 다시 대조한다. 이 문서 작성 중 인스턴스 중지, 스냅샷 생성, 볼륨 교체는 실행하지 않았다. [운영 확인 기록](../../운영_DB권한_외부백업_2026-11-02.md)
+**최신 상태: 2026-11-03 전환·운영 재개 검증 완료.** [실행 결과·비용·잔여 위험](../2026-11-03/ebs-encryption-cutover.md)을 따른다. 아래는 사전 측정·계획 이력이다. 사용자는 11월 3일 시간·비용의 측정과 판단을 위임했다. AWS 로그인은 Aside에서 복구됐으며, 실제 중단 전에 공유 서비스 복구 조건과 비용·작업 창을 구체화한다. 2026-11-02 시드니 콘솔에서 인스턴스 `i-0b4a251ecd2f5bd3e`의 루트 장치 `/dev/sda1`에 연결된 `vol-02e91bd89ed39c404`가 gp3 30 GiB, 미암호화로 확인됐다. 실행 당일 이 매핑을 다시 대조한다. 초기 계획 작성 당시에는 변경을 실행하지 않았다. 11월 3일 사전 측정 스냅샷 1개가 생성됐으며 아래에 별도 기록한다. 당시 인스턴스 중지·재부팅·볼륨 교체는 미실행이었으며, 이후 실제 전환은 위 완료 기록을 따른다. [운영 확인 기록](../../운영_DB권한_외부백업_2026-11-02.md)
+
+## 11월 3일 AWS 콘솔 재확인
+
+Aside의 사용자 로그인 세션으로 읽기 전용 조회했다. 인스턴스는 running, AZ는 `ap-southeast-2a`, 루트 장치는 `/dev/sda1`이다. 원본 볼륨 `vol-02e91bd89ed39c404`는 동일 AZ의 gp3 30 GiB, 3,000 IOPS, 125 MiB/s, in-use/attached이며 상태 검사는 정상이다. 암호화는 비활성이고 KMS 키는 없다. 기존 루트의 `DeleteOnTermination`은 true다. 새 볼륨 생성 시 AZ와 성능을 유지하고 암호화를 명시해야 한다. 이 조회에서는 리소스 생성·중지·재부팅·연결 변경·권한 변경·삭제를 실행하지 않았다.
+
+[인스턴스](https://ap-southeast-2.console.aws.amazon.com/ec2/home?region=ap-southeast-2#InstanceDetails:instanceId=i-0b4a251ecd2f5bd3e) · [원본 볼륨](https://ap-southeast-2.console.aws.amazon.com/ec2/home?region=ap-southeast-2#VolumeDetails:volumeId=vol-02e91bd89ed39c404)
+
+## 사전 측정 스냅샷
+
+사용자의 시간·비용 측정 위임에 따라 운영 중 사전 측정 스냅샷 `snap-03bf4570b8d42da60` 1개가 생성됐다. AWS 표시 시작 시각은 2026-11-03 01:39:22 UTC(10:39:22 KST)이며 01:40:35 UTC 재조회 상태는 pending 0%다. 원본 볼륨과 30 GiB 크기를 대조했고, 비공개·공유 계정 0개·미암호화임을 확인했다. `RetainUntilReview=2026-11-10` 태그는 검토일일 뿐 자동 삭제 설정이 아니다. 미암호화 원본의 측정용 스냅샷이므로 암호화 적용 증거가 아니다. 인프라 채팅에서 전체 서비스의 부팅 자동 복구 점검을 시작해 추가 자원 변경을 중단했다. 이 스냅샷은 crash-consistent 시간 측정용으로, DB 정상 종료 후 전환용 최종 스냅샷이나 검증된 전체 서비스 백업을 대체하지 않는다. 삭제나 자동 만료는 적용하지 않았다. 최대 30 GiB 표준 스냅샷 월 USD 1.65를 별도 비용으로 추정한다.
+
+## 비용과 재기동 사전 조건
+
+11월 3일 Aside에서 [공식 EBS 요금](https://aws.amazon.com/ko/ebs/pricing/)의 시드니 선택 결과를 확인했다. gp3는 USD 0.096/GiB-month, 표준 스냅샷은 USD 0.055/GiB-month다. 기본 3,000 IOPS·125 MiB/s의 추가 성능 요금은 없다. 30일을 한 달로 단순 환산하고 스냅샷이 최대 30 GiB라고 가정하면, 추가 볼륨 1개와 스냅샷 1개는 1일 USD 0.151, 7일 USD 1.057, 30일 USD 4.53다. 세금·별도 KMS API 등의 비용은 제외하며 실제 청구는 사용 시간과 저장량에 따른다. 사전 측정용 스냅샷을 하나 더 보존하면 월 최대 USD 1.65가 추가된다. 자동 삭제는 설정하지 않는다.
+
+시드니 볼륨 생성 폼에 AWS 관리 `aws/ebs` 키가 표시됐으나 생성 권한은 실행으로 검증하지 않았다. 인스턴스에는 EIP가 연결돼 있고 중지 보호는 비활성이다. EIP 관련 기존 요금은 위 추가 디스크 비용에 포함하지 않는다.
+
+재부팅 준비 상태는 미완료다. Docker·tailscaled·cloudflared는 enabled이며 실행 중 컨테이너 10개의 restart policy는 모두 unless-stopped였다. 하지만 이 설정만으로 DB·앱·터널의 실제 복구 순서와 종단 정상 동작을 보장하지 않는다. 현재 ZRAM 512 MiB가 활성이고 약 462 MiB를 사용하지만 zram-tools·systemd-zram-generator·zram 구성 유닛과 점검한 부팅 설정 경로의 시작 참조는 확인되지 않았다. 현재 swap을 중지하거나 재설정하지 않았다. 인프라 채팅이 전체 서비스 자동 복구의 읽기 전용 점검을 맡고 있으며, 실제 중지·재부팅·볼륨 연결 변경 전에 그 결과와 롤백 조건을 대조한다.
+
+## 11월 3일 실측과 방식 결정
+
+11월 3일 10:20:56 KST에 호스트에서 읽기 전용으로 확인했다. `docker ps`에서 GhostManual 앱·DB 2개, LostArk Party 웹·worker·character-worker·DB 4개, EventOps 앱·터널·DB 3개, Chiikawa 웹 1개가 실행 중이었다. 호스트의 cloudflared·tailscaled도 실행 중이다. `lsblk`의 nvme0n1은 30 GiB이며 루트 p1(29 GiB ext4), EFI p15, /boot p16을 포함한다. 전체 디스크의 파티션과 부트로더까지 보존한다. 용량 변경과 캐시·이미지 정리는 이번 범위에서 제외한다.
+
+| 읽기 전용 측정 | 값과 해석 |
+| --- | --- |
+| `systemd-analyze time`, `journalctl -b {부트번호}`의 시스템 시작 기록 | 최근 4회 OS 기동은 오래된 순서로 16.829초, 17.116초, 12.477초, 25.463초였다. 마지막 부팅은 8월 2일이다. EC2 정지·시작과 DB·worker·외부 서비스가 요청을 받을 때까지의 시간은 제외된다. |
+| `systemd-analyze critical-chain docker.service` | 마지막 부팅에서 Docker 서비스 시작에 8.529초가 걸렸다. 위 기동 시간과 겹친다. |
+| 호스트 네임스페이스의 `ss -Hnt state established` | 표본 한 번에서 TCP 연결 5개, 이 중 로컬 3000·3100·3200 포트는 0개였다. UDP 터널·컨테이너 내부 연결·진행 중인 작업은 이 수치에 나타나지 않는다. 저이용 시간대는 확인되지 않았다. |
+
+**공식 기능 비교.** 실행 중 인스턴스의 `CreateReplaceRootVolumeTask`도 교체 도중 자동 재부팅하며 RAM과 연결 중 요청을 잃는다. 기존 볼륨을 지정하는 방식은 같은 AZ, 미연결·available 상태, 같은 부팅 모드와 호환되는 OS·부트로더를 요구한다. 원본이 미암호화일 때 명시적으로 암호화한 gp3 30 GiB를 사용할 수 있다. IOPS·처리량은 새 볼륨 생성 시 원래 값으로 지정한다. 종료 시 삭제 속성은 이 방식에서 승계되지 않으므로 교체 후 확인한다. 서버 AWS CLI 2.39.3의 오프라인 입력 모델에서 `VolumeId` 지원을 확인했다. 계정 권한이나 실제 전환 성공을 검증한 결과는 아니다. [AWS 루트 교체 조건·암호화 표](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/replace-root.html)
+
+스냅샷 ID를 직접 지정하는 방식은 현재 또는 과거 루트에서 직접 찍은 스냅샷만 허용하며 암호화 복사본은 입력할 수 없다. 미암호화 원본과 직접 스냅샷을 사용할 때 새 루트의 암호화 여부는 시드니 계정의 EBS 기본 암호화 설정에 따른다. 공용 계정 설정을 바꾸지 않는다. AMI나 최초 실행 상태에는 현재 공유 서비스의 최신 쓰기가 없다. 기존 볼륨 방식에서 암호화된 새 루트를 미암호화 원본으로 되돌리는 요청은 거부되므로, 되돌릴 때는 아래 수동 정지·재연결 절차를 사용한다. [AWS 소스별 교체 규칙](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/replace-root.html)
+
+**이 호스트의 기본 경로는 정상 정지 → 최종 스냅샷 1개 → 암호화 볼륨 직접 생성 → 수동 연결이다.** 같은 시점의 덤프·파일만 확보한 상태에서 미리 준비한 볼륨을 바로 연결하면 이후의 다른 서비스 DB와 호스트 설정 변경을 잃는다. 네 서비스 전체의 쓰기 재생·재동기화가 검증되지 않아 자동 재부팅의 시간만을 중단 시간으로 잡을 수 없다. 수동 경로는 최종 스냅샷에서 직접 암호화 볼륨을 만들어 중간 암호화 스냅샷의 생성 시간과 비용을 없앤다. 사전 적재한 볼륨을 대상으로 전체 쓰기 재동기화·부팅 검증과 새 볼륨의 원본 시점 검증까지 확보되면 기존 볼륨 지정 방식을 다시 비교한다. [AWS 기존 볼륨 암호화](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-encryption.html)
+
+**운영 창 산정.** 네 서비스 담당자의 작업 가능 시간, 요청·worker 집계의 시간대별 표본, 백업·배포·청소 예약을 겹쳐 후보를 고른다. 실제 중단은 마지막 쓰기 차단부터 네 서비스의 정상 재개까지다. 정지·최종 스냅샷 완료·볼륨 준비·EC2 기동·모든 서비스 검증과 수동 롤백 시간은 아직 실측하지 않았다. EC2에서 리소스를 만들기 전에는 결정 시각이나 최대 중단을 보장할 수 없다. 첫 단계는 운영 중지를 수반하지 않는 유료 사전 측정의 대상·비용·보존 기간을 좁히는 일이다. 승인된 경우에만 같은 크기·유형의 사전 스냅샷과 복원 볼륨으로 생성 시간을 측정한다. 이 표본은 최종 정합성 보장용 스냅샷을 대체하지 않는다. 전환 담당자는 단계별 측정과 복구 여유 시간을 기록해 실제 중단 창을 정한다. 창 안에서 원본 재기동과 서비스 확인까지 끝낼 여유가 없으면 분리 전에 중단하고 원래 루트로 서비스를 재개한다.
 
 ## 중단 전 확인과 승인
 
 - 박기성은 공유 호스트의 인프라 담당자와 GhostManual, LostArk Party, EventOps, Chiikawa 등 실제 가동 중인 모든 서비스 담당자를 확인한다. Docker 앱·DB·worker, 볼륨과 바인드 마운트, systemd 서비스·타이머·배포 잠금, 터널, VPN/SSM, DNS와 공개 엔드포인트의 정상 기준을 기록한다. 인스턴스 스토어, 자동 할당 공개 IPv4 의존성, Auto Scaling 자동 교체, 중지 보호가 있으면 대응책부터 정한다. [EC2 중지·시작 시 영향](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/how-ec2-instance-stop-start-works.html)
 - 각 서비스의 최신 DB·파일 백업과 복원 결과를 확보한다. GhostManual은 S3에서 최근 덤프를 다시 내려받아 SHA-256과 격리 PG18 복원을 확인한다. 서버 밖의 접근 통제된 복구 위치에서 Compose·환경 파일·DB 역할·배포 상태·터널 자격 증명의 복구 가능성을 별도로 확인한다. DB 덤프에는 이 설정이 없다. 비밀 값과 업무 데이터는 작업 기록에 복사하지 않는다. [백업·복원 절차](../../../deploy/backup/README.md)
-- AWS 실행 담당자는 호스트 외부에서 로그인·복구할 수 있어야 한다. 시드니에서 인스턴스·볼륨·스냅샷 조회, 스냅샷 생성·복사 및 태그, 볼륨 생성·연결·분리, 인스턴스 중지·시작과 블록 장치 속성 변경 권한을 확인한다. 사용할 시드니 KMS 키와 키 정책에서 DescribeKey, CreateGrant, Decrypt, GenerateDataKeyWithoutPlaintext, ReEncrypt 및 인스턴스 사용 허용을 확인한다. 앱·백업용 인스턴스 역할에 운영자 권한을 추가하지 않는다. [EBS 암호화 권한](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-encryption-requirements.html)
-- **승인 요청 항목**은 중단 시작 시각·최대 중단 시간·롤백 결정 시각(KST), 서비스별 검증 담당, 대상 키, 중복 스토리지 비용 한도, 원본 보존 재검토일이다. 시간은 미확정이다. 정지부터 스냅샷 완료·복사·볼륨 준비·재기동·검증까지 쓰기를 막는 시간을 확보한다. 원본과 새 gp3, 스냅샷 및 암호화 복사본에 비용이 발생할 수 있으므로 승인 후 생성한다. [EBS 요금](https://aws.amazon.com/ebs/pricing/)
+- AWS 실행 담당자는 호스트 외부에서 로그인·복구할 수 있어야 한다. 시드니에서 인스턴스·볼륨·스냅샷 조회, 스냅샷 생성 및 태그, 볼륨 생성·연결·분리, 인스턴스 중지·시작과 블록 장치 속성 변경 권한을 확인한다. 사용할 시드니 KMS 키와 키 정책에서 DescribeKey, CreateGrant, Decrypt, GenerateDataKeyWithoutPlaintext, ReEncrypt 및 인스턴스 사용 허용을 확인한다. 앱·백업용 인스턴스 역할에 운영자 권한을 추가하지 않는다. [EBS 암호화 권한](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-encryption-requirements.html)
+- **승인 요청 항목**은 중단 시작 시각·최대 중단 시간·롤백 결정 시각(KST), 서비스별 검증 담당, 대상 키, 중복 스토리지 비용 한도, 원본 보존 재검토일이다. 시간은 미확정이다. 정지부터 스냅샷 완료·볼륨 준비·재기동·검증까지 쓰기를 막는 시간을 확보한다. 원본과 새 gp3, 원본 스냅샷에 비용이 발생할 수 있으므로 승인 후 생성한다. [EBS 요금](https://aws.amazon.com/ebs/pricing/)
 
 ## 승인된 작업 창에서만 수행할 절차
 
 1. AWS 콘솔 EC2 → 인스턴스 → 스토리지에서 실제 AZ, 루트 장치 이름, 볼륨 ID·유형·크기·IOPS·처리량·태그·종료 시 삭제 속성, 추가 디스크 매핑을 저장한다. 서비스 쓰기와 자동 배포·worker·배치의 부팅 시 자동 재개까지 통제한다. 진행 중인 요청을 비우고 DB를 정상 종료한다. 기존 트래픽·작업 중단을 확인한 뒤 EC2를 정상 중지하고 `stopped`를 기다린다. [AWS 루트 스냅샷 권고](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-creating-snapshot.html)
-2. 중지된 원본에서 비공개 스냅샷을 만들고 `completed`를 확인한다. 시드니에서 지정한 키로 암호화 복사하고 복사본의 `completed`, `Encrypted=true`, 키 ID를 확인한다. 복사본에서 **기존 인스턴스와 같은 AZ**에 새 gp3 30 GiB를 만들고 기존 IOPS·처리량을 맞춘다. 새 볼륨의 `available`, 암호화, 키와 원본 스냅샷 ID를 확인한다. 실패하면 기존 루트 매핑을 보존한 채 복구 시각에 맞춰 기존 인스턴스를 다시 시작한다. [암호화 절차](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-encryption.html) · [볼륨 생성 조건](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-creating-volume.html)
+2. 중지된 원본에서 비공개 스냅샷을 만들고 `completed`를 확인한다. 이 스냅샷에서 **기존 인스턴스와 같은 AZ**에 암호화를 명시하고 승인한 시드니 KMS 키와 기존 IOPS·처리량을 지정해 새 gp3 30 GiB를 만든다. 새 볼륨의 `available`, 암호화, 키와 원본 스냅샷 ID를 확인한다. 실패하면 기존 루트 매핑을 보존한 채 복구 시각에 맞춰 기존 인스턴스를 다시 시작한다. [암호화 절차](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-encryption.html) · [볼륨 생성 조건](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-creating-volume.html)
 3. 인스턴스가 계속 `stopped`인지 확인하고 기존 루트만 정상 분리한다. 원본이 `available`이 되면 롤백용 보존 태그를 부여하고 자동 삭제 작업에서 제외한다. 새 볼륨은 EC2에서 확인한 동일한 루트 장치 이름으로 연결한다. OS가 표시하는 NVMe 장치 이름은 이 값의 대체물이 아니다. 새 루트 매핑과 종료 시 삭제 정책을 확인하고 검증 기간에는 `DeleteOnTermination=false`로 보존한다. 강제 분리와 인스턴스 종료는 사용하지 않는다. [루트 분리 조건](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-detaching-volume.html) · [종료 시 보존 설정](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configure-root-volume-delete-on-termination.html)
 4. 인스턴스를 시작하고 AWS 상태 검사, 루트 파일시스템·추가 마운트, VPN/SSM·터널을 확인한다. EC2에서 같은 인스턴스의 루트에 **새 볼륨 ID·Encrypted=true·승인 키 ID**가 표시되는지 확인한다. 일반 사용자·worker의 쓰기 차단을 유지하고 운영자의 합성 검증만 허용한 채 서비스별 컨테이너·worker·DB 상태와 변경 전 공개 경로(기존 3000·3100·3200 포함)를 대조한다. 세 포트의 HTTP 응답에 더해 서비스 담당자가 각 핵심 경로를 확인한다.
 5. GhostManual은 합성 계정 로그인·자료 CRUD·매뉴얼 게시·공유/회수·계정 삭제와 잔여물 정리를 검증한다. 앱 DB 사용자가 `ghostmanual_app`이고 관리자 역할 전환과 public DDL이 거부되는지 확인한다. 관리자 환경 파일의 root 소유·0600, 백업·배포 타이머의 이전 상태, S3 신규 백업과 격리 복원까지 확인한다. 결과를 ID·시각·상태만 기록하고 서비스 담당자 확인 후 사용자 쓰기와 배치를 재개한다.
