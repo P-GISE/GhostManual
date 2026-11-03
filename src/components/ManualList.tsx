@@ -22,14 +22,19 @@ export function ManualList() {
   // One card per task: a source with its manual (if any), its status and the next thing to do.
   const tasks = sources.map((s) => {
     const manual = manuals.find((m) => m.sourceId === s.id);
-    const published = !!manual?.publishedVersion && !manual.needsReview;
+    const unpublishedChanges =
+      !!manual?.published &&
+      JSON.stringify(manual.draft) !== JSON.stringify(manual.published.content);
+    const published = !!manual?.publishedVersion && !manual.needsReview && !unpublishedChanges;
     const status = !manual
       ? { label: "매뉴얼 없음", tone: "none" }
       : manual.needsReview
         ? { label: "재검토 필요", tone: "review" }
-        : published
-          ? { label: `게시됨 v${manual.publishedVersion}`, tone: "done" }
-          : { label: "검수 전", tone: "draft" };
+        : unpublishedChanges
+          ? { label: "미게시 변경", tone: "review" }
+          : published
+            ? { label: `게시됨 v${manual.publishedVersion}`, tone: "done" }
+            : { label: "검수 전", tone: "draft" };
     const action =
       s.openQuestions > 0
         ? { label: `답할 질문 ${s.openQuestions}개`, href: `/sources/${s.id}`, primary: true }

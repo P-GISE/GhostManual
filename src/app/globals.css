@@ -1124,7 +1124,7 @@ select {
   gap: 8px;
 }
 .task-chips button {
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 16px;
   border-radius: 999px;
   border: 1px solid #c9d2cb;
