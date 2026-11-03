@@ -45,6 +45,7 @@ jobs:
         run: |
           python3 scripts/test_deploy_poll.py
           python3 -I -B -m unittest discover -s deploy/event -p "test_*.py" -v
+          python3 -I -B -m unittest discover -s deploy/backup -p test_notify.py -v
       - run: npm run db:migrate
       - run: npm run test:integration
       - run: npm run build
