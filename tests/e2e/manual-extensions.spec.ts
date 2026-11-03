@@ -5,24 +5,26 @@ test.beforeEach(async ({ page }) => {
   await page.setExtraHTTPHeaders({ "CF-Connecting-IP": "198.51.100.30" });
 });
 
-test("title and review filters combine without hiding original sources", async ({ page }) => {
+test("search and status chips combine on the task cards", async ({ page }) => {
   await signUpAndVerify(page);
   await loadExample(page);
-  await page.getByLabel("매뉴얼 제목 검색").fill("없는문서");
-  await expect(page.getByText("검색·상태 조건에 맞는 매뉴얼이 없습니다.")).toBeVisible();
-  await expect(page.getByRole("heading", { name: /원본 자료/ })).toBeVisible();
-  await page.getByLabel("매뉴얼 제목 검색").fill("계정");
-  await page.getByLabel("검수 상태", { exact: true }).selectOption("published");
-  await expect(page.getByText("검색·상태 조건에 맞는 매뉴얼이 없습니다.")).toBeVisible();
-  await page.getByLabel("검수 상태", { exact: true }).selectOption("draft");
+  await page.getByLabel("업무 검색").fill("없는문서");
+  await expect(page.getByText("조건에 맞는 업무가 없습니다.")).toBeVisible();
+  await page.getByLabel("업무 검색").fill("계정");
+  await page.getByRole("button", { name: /^게시됨/ }).click();
+  await expect(page.getByText("조건에 맞는 업무가 없습니다.")).toBeVisible();
+  await page.getByRole("button", { name: /^할 일 있음/ }).click();
+  await expect(page.getByRole("link", { name: "검수하고 게시" })).toBeVisible();
   await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
   await page.getByLabel("원본과 업무 내용을 확인했습니다.").check();
   await page.getByLabel("미확인 항목이 남아 있음을 확인했습니다.").check();
   await page.getByRole("button", { name: "검수 완료·버전 게시" }).click();
   await expect(page.getByText("검수 완료 · 버전 1", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "문서함", exact: true }).click();
-  await page.getByLabel("검수 상태", { exact: true }).selectOption("published");
+  await page.getByRole("button", { name: /^게시됨/ }).click();
   await expect(page.getByRole("heading", { name: "신입 구성원 업무 계정 발급" })).toBeVisible();
+  await expect(page.getByText("게시됨 v1", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "매뉴얼 보기" })).toBeVisible();
 });
 test("publication comparison shows changed fields while a later draft remains private", async ({
   page,

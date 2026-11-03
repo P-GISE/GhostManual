@@ -103,7 +103,7 @@ for (const status of [401, 503]) {
     await fixture(page, 200, status);
     await page.goto("/manuals");
     await expect(page.locator("[role=alert].error")).toBeVisible();
-    await expect(page.getByText("아직 매뉴얼이 없습니다.")).toHaveCount(0);
+    await expect(page.getByText("아직 등록한 업무가 없습니다.")).toHaveCount(0);
     await expect(page.getByText("등록된 원본 자료가 없습니다.")).toHaveCount(0);
     await expect(page.getByText("계정과 문서 영구 삭제", { exact: true })).toHaveCount(0);
     if (status === 401) {
@@ -119,7 +119,7 @@ for (const status of [401, 503]) {
 test("authenticated empty list retains empty-state actions", async ({ page }) => {
   await fixture(page);
   await page.goto("/manuals");
-  await expect(page.getByText("아직 매뉴얼이 없습니다.")).toBeVisible();
+  await expect(page.getByText("아직 등록한 업무가 없습니다.")).toBeVisible();
   await expect(page.getByRole("link", { name: "첫 자료 등록하기" })).toBeVisible();
   await expect(page.getByRole("button", { name: "예제 불러오기" })).toBeVisible();
 });

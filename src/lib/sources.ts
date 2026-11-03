@@ -127,12 +127,18 @@ export async function updateSource(
 export async function listSources(ctx: SessionContext) {
   return transaction(async (db) => {
     await assertSession(db, ctx, true);
-    const rows = await db.query<Record<string, unknown>>(
-      "SELECT id FROM sources WHERE workspace_id=$1 ORDER BY created_at DESC",
+    // openQuestions: unanswered, unskipped questions across all versions, the library's "to do" count.
+    const rows = await db.query<{ id: string; open: number }>(
+      `SELECT s.id,(SELECT count(*)::int FROM revision_questions q JOIN source_revisions r ON r.id=q.revision_id
+         WHERE r.source_id=s.id AND q.answer IS NULL AND NOT q.skipped) AS open
+       FROM sources s WHERE s.workspace_id=$1 ORDER BY s.created_at DESC`,
       [ctx.workspaceId],
     );
     return Promise.all(
-      rows.rows.map((row) => sourceInTransaction(db, ctx, z.uuid().parse(row["id"]))),
+      rows.rows.map(async (row) => ({
+        ...(await sourceInTransaction(db, ctx, z.uuid().parse(row.id))),
+        openQuestions: row.open,
+      })),
     );
   });
 }

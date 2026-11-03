@@ -19,7 +19,7 @@ async function submitLogin(page: Page) {
     await page.getByRole("link", { name: "로그인 화면으로", exact: true }).click();
     await submitLogin(page);
     await expect(page).toHaveURL(/\/manuals$/);
-    await expect(page.getByText("아직 매뉴얼이 없습니다.")).toBeVisible();
+    await expect(page.getByText("아직 등록한 업무가 없습니다.")).toBeVisible();
     expect(
       (await context.cookies()).some(
         (cookie) => cookie.name === "gm_owner" && cookie.httpOnly && cookie.secure,
@@ -73,7 +73,7 @@ test("session200 then cookie loss is distinguished at document GET", async ({ pa
   await page.getByText("오류 진단", { exact: true }).click();
   await expect(page.getByTestId("request-diagnostics")).toContainText("session / 200 / success");
   await expect(page.getByTestId("request-diagnostics")).toContainText("manuals / 401 / http");
-  await expect(page.getByText("아직 매뉴얼이 없습니다.")).toHaveCount(0);
+  await expect(page.getByText("아직 등록한 업무가 없습니다.")).toHaveCount(0);
 });
 
 test("session503 is distinguished from lost credentials", async ({ page, context }) => {
