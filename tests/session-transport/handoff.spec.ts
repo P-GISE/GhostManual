@@ -98,7 +98,7 @@ test("session timeout preserves login success without another POST", async ({ pa
 
 test("a new login discards the previous request diagnostics", async ({ page, context }) => {
   await context.setExtraHTTPHeaders({ "x-fixture-scenario": "drop-after-session" });
-  await page.goto("/login");
+  await page.goto("/login?next=%2Fmanuals");
   await submitLogin(page);
   await expect(page.getByRole("link", { name: "로그인 화면으로", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "로그인 화면으로", exact: true }).click();
