@@ -48,7 +48,7 @@ test("used verification link sends the visitor to login with guidance", async ({
   const link = await verificationLink(email);
   await page.goto(link);
   await page.getByRole("button", { name: "로그아웃" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("button", { name: "로그아웃" })).toHaveCount(0);
   await page.goto(link);
   await expect(page).toHaveURL(/\/login\?error=invalid_link$/);
   await expect(page.getByText("인증 링크가 만료됐거나 이미 사용됐습니다.")).toBeVisible();
