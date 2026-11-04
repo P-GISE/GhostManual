@@ -127,12 +127,14 @@ function QuestionCard({
 export function FileVersions({
   id,
   reader,
+  startUploading,
   busy,
   onBusyChange,
   onUploaded,
 }: {
   readonly id: string;
   readonly reader: boolean;
+  readonly startUploading: boolean;
   readonly busy: boolean;
   readonly onBusyChange: (busy: boolean) => void;
   readonly onUploaded: (saved: FileRevision) => void;
@@ -140,7 +142,7 @@ export function FileVersions({
   const [list, setList] = useState<RevisionSummary[]>([]);
   const [selected, setSelected] = useState<FileRevision | null>(null);
   const [sheet, setSheet] = useState(0);
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploading] = useState(startUploading);
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");

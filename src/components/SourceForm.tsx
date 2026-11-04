@@ -106,8 +106,13 @@ export function SourceForm() {
   return (
     <section className="prose">
       <span className="eyebrow">원본 자료</span>
-      <h1>업무 자료 등록</h1>
+      <h1>새 업무 등록</h1>
       <p className="muted">업무 경험을 자유롭게 적어 주세요. 원본은 매뉴얼의 근거로 보존됩니다.</p>
+      <p className="notice">
+        <strong>처음 올리는 파일만 여기서 등록하세요.</strong> 이미 등록한 엑셀의 다음 파일이면
+        문서함에서 그 업무 카드의 <strong>새 버전 올리기</strong>를 누르세요. 여기서 다시 올리면
+        이전 버전과 비교되지 않는 별개의 업무가 됩니다.
+      </p>
       <div className="notice">
         자료는 내 문서함에 계정을 삭제할 때까지 보관됩니다. AI 기능이 활성화되면 필요한 원문이 외부
         AI 제공자에게 전송될 수 있습니다.

@@ -66,7 +66,7 @@ test("login 200 with no Set-Cookie stays on login and retry is GET only", async 
 
 test("session200 then cookie loss is distinguished at document GET", async ({ page, context }) => {
   await context.setExtraHTTPHeaders({ "x-fixture-scenario": "drop-after-session" });
-  await page.goto("/login");
+  await page.goto("/login?next=%2Fmanuals");
   await submitLogin(page);
   await expect(page).toHaveURL(/\/manuals$/);
   await expect(page.locator("[role=alert].error")).toBeVisible();

@@ -17,7 +17,7 @@ test("login: the SSR button cannot lose a click before hydration", async ({ page
   });
   const offset = (await (await context.request.get("/__fixture/observations")).json()).length;
   try {
-    await page.goto("/login", { waitUntil: "commit" });
+    await page.goto("/login?next=%2Fmanuals", { waitUntil: "commit" });
     const button = page.getByRole("button", { name: "로그인", exact: true });
     await expect(button).toBeVisible();
     await expect.poll(() => heldScripts).toBeGreaterThan(0);

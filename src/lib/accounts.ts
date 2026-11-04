@@ -56,7 +56,7 @@ async function issueVerification(db: DbClient, userId: string) {
 // A same-site destination (such as a shared manual) survives signup and verification.
 async function mailVerification(email: string, token: string, next: string | undefined) {
   const destination = safeNextPath(next);
-  const link = `${process.env["APP_ORIGIN"]}/api/auth/verify?token=${token}${destination === "/manuals" ? "" : `&next=${encodeURIComponent(destination)}`}`;
+  const link = `${process.env["APP_ORIGIN"]}/api/auth/verify?token=${token}${destination === "/" ? "" : `&next=${encodeURIComponent(destination)}`}`;
   await sendMail(
     email,
     "GhostManual 이메일 인증",

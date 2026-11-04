@@ -85,7 +85,7 @@ it("rejects unverified google email", async () => {
 });
 it("only keeps same-site next paths", async () => {
   const result = await finishGoogle(await stateFrom("//evil.example"), "code", as(profile()));
-  expect(result.nextPath).toBe("/manuals");
+  expect(result.nextPath).toBe("/");
 });
 it("callback refuses a state that this browser did not start", async () => {
   const { GET: start } = await import("../../src/app/api/auth/google/route.ts");

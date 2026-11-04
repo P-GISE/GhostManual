@@ -66,7 +66,9 @@ export async function signUp(page: Page, email = uniqueEmail(), name = "테스�
 export async function signUpAndVerify(page: Page, email = uniqueEmail(), name = "테스트 사용자") {
   await signUp(page, email, name);
   await page.goto(await verificationLink(email));
-  await expect(page).toHaveURL(/\/manuals$/);
+  // Signing in lands on the landing page; the tests continue from the library.
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/manuals");
   await expect(page.getByRole("heading", { name: "업무 문서함", level: 1 })).toBeVisible();
   return email;
 }

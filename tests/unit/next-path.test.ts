@@ -14,7 +14,7 @@ describe("same-site next paths", () => {
     null,
     {},
   ])("falls back for unsafe input %j", (value) => {
-    expect(safeNextPath(value)).toBe("/manuals");
+    expect(safeNextPath(value)).toBe("/");
   });
 
   it("rejects every raw ASCII control anywhere in the path", () => {
@@ -25,7 +25,7 @@ describe("same-site next paths", () => {
         `/manuals${control}`,
         `/manuals?q=${control}#part`,
       ]) {
-        expect(safeNextPath(value)).toBe("/manuals");
+        expect(safeNextPath(value)).toBe("/");
       }
     }
   });

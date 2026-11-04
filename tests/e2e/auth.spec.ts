@@ -32,7 +32,8 @@ test("wrong password and unverified accounts get plain guidance", async ({ page 
   await expect(page.getByText("인증 메일을 다시 보냈습니다.")).toBeVisible();
   await page.goto(await verificationLink(email));
   await page.getByRole("button", { name: "로그아웃" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  // Verification already lands on "/", so wait for the signed-out header instead of the URL.
+  await expect(page.getByRole("button", { name: "로그아웃" })).toHaveCount(0);
   await page.goto("/login");
   await page.getByLabel("이메일").fill(email);
   await page.getByLabel("비밀번호", { exact: true }).fill("wrong password 1");
@@ -109,7 +110,7 @@ test("a forgotten password is reset by mail and the new one works", async ({ pag
   await expect(page.locator("[role=alert].error")).toContainText("올바르지 않습니다");
   await page.getByLabel("비밀번호", { exact: true }).fill(fresh);
   await page.getByRole("button", { name: "로그인", exact: true }).click();
-  await expect(page).toHaveURL(/\/manuals$/);
+  await expect(page).toHaveURL(/\/$/);
 });
 
 test("signup cannot be sent without agreeing to the terms", async ({ page }) => {

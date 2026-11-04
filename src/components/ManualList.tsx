@@ -18,6 +18,8 @@ export function ManualList() {
   );
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "todo" | "published">("all");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   const normalize = (v: string) => v.trim().normalize("NFKC").toLocaleLowerCase("ko-KR");
   // One card per task: a source with its manual (if any), its status and the next thing to do.
   const tasks = sources.map((s) => {
@@ -101,6 +103,28 @@ export function ManualList() {
       mounted.current = false;
     };
   }, [load]);
+  function toggle(id: string, on: boolean) {
+    setSelected((ids) => (on ? [...ids, id] : ids.filter((x) => x !== id)));
+    setDeleteConfirmed(false);
+  }
+  // Deletes each chosen task with the same API as the source page; failures stay selected.
+  async function deleteSelected() {
+    setBusy(true);
+    setError("");
+    const failed: string[] = [];
+    for (const id of selected) {
+      try {
+        await http.delete(`/api/sources/${id}`);
+      } catch {
+        failed.push(id);
+      }
+    }
+    setSelected(failed);
+    setDeleteConfirmed(false);
+    if (failed.length)
+      setError(`${failed.length}개 업무를 삭제하지 못했습니다. 다시 시도해 주세요.`);
+    await load();
+  }
   async function loadExample() {
     setBusy(true);
     setError("");
@@ -151,9 +175,18 @@ export function ManualList() {
           </p>
         </div>
         <Link className="button" href="/sources/new">
-          새 자료 등록
+          새 업무 등록
         </Link>
       </div>
+      <ul className="upload-guide" aria-label="파일 올리는 곳">
+        <li>
+          <strong>처음 올리는 파일</strong>은 <strong>새 업무 등록</strong>을 누르세요.
+        </li>
+        <li>
+          <strong>이미 등록한 엑셀의 다음 파일</strong>은 그 업무 카드의{" "}
+          <strong>새 버전 올리기</strong>를 누르세요. 이전 버전과 비교해 바뀐 부분을 물어봅니다.
+        </li>
+      </ul>
       {busy && (
         <p className="loading" role="status">
           문서를 불러오고 있습니다.
@@ -217,10 +250,56 @@ export function ManualList() {
           <p className="help" role="status">
             전체 {tasks.length}개 중 {visible.length}개 표시
           </p>
+          {selected.length > 0 && (
+            <div className="panel task-delete">
+              <p>
+                <strong>{selected.length}개 업무 선택됨.</strong> 삭제하면 원본·매뉴얼·공유
+                링크·질문 기록이 함께 영구 삭제되며 되돌릴 수 없습니다.
+              </p>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={deleteConfirmed}
+                  disabled={busy}
+                  onChange={(e) => setDeleteConfirmed(e.target.checked)}
+                />
+                선택한 업무의 영구 삭제를 확인했습니다.
+              </label>
+              <div className="actions">
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={busy || !deleteConfirmed}
+                  onClick={deleteSelected}
+                >
+                  선택한 {selected.length}개 삭제
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => {
+                    setSelected([]);
+                    setDeleteConfirmed(false);
+                  }}
+                >
+                  선택 취소
+                </button>
+              </div>
+            </div>
+          )}
           {visible.length === 0 && <p className="muted">조건에 맞는 업무가 없습니다.</p>}
           <ul className="task-list">
             {visible.map((t) => (
               <li key={t.source.id} className="task-card">
+                <input
+                  type="checkbox"
+                  className="task-select"
+                  aria-label={`${t.manual?.draft.title ?? t.source.title} 선택`}
+                  checked={selected.includes(t.source.id)}
+                  disabled={busy}
+                  onChange={(e) => toggle(t.source.id, e.target.checked)}
+                />
                 <span className={`task-icon ${t.source.kind}`} aria-hidden="true">
                   {t.source.kind === "file" ? "XLSX" : "TXT"}
                 </span>
@@ -242,6 +321,14 @@ export function ManualList() {
                   </p>
                 </div>
                 <span className={`task-status ${t.status.tone}`}>{t.status.label}</span>
+                {t.source.kind === "file" && (
+                  <Link
+                    className="button secondary task-action"
+                    href={`/sources/${t.source.id}?upload=1`}
+                  >
+                    새 버전 올리기
+                  </Link>
+                )}
                 <Link
                   className={
                     t.action.primary ? "button task-action" : "button secondary task-action"

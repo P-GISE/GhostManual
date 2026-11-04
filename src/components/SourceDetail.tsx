@@ -8,7 +8,13 @@ import { type ManualDraft, SourceInputSchema } from "../lib/schemas";
 import { FileVersions } from "./FileVersions";
 import { SourceDelete } from "./SourceDelete";
 import { useUnsavedChanges } from "./useUnsavedChanges";
-export function SourceDetail({ id }: { readonly id: string }) {
+export function SourceDetail({
+  id,
+  upload = false,
+}: {
+  readonly id: string;
+  readonly upload?: boolean;
+}) {
   const router = useRouter();
   const [reader, setReader] = useState(false);
   const [source, setSource] = useState<Source | null>(null);
@@ -196,6 +202,7 @@ export function SourceDetail({ id }: { readonly id: string }) {
         <FileVersions
           id={id}
           reader={reader}
+          startUploading={upload}
           busy={busy}
           onBusyChange={setBusy}
           onUploaded={({ revision, revisionId }) =>
