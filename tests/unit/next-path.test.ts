@@ -20,7 +20,11 @@ describe("same-site next paths", () => {
   it("rejects every raw ASCII control anywhere in the path", () => {
     for (const code of [...Array.from({ length: 32 }, (_, index) => index), 127]) {
       const control = String.fromCharCode(code);
-      for (const value of [`${control}/manuals`, `/manuals${control}`, `/manuals?q=${control}#part`]) {
+      for (const value of [
+        `${control}/manuals`,
+        `/manuals${control}`,
+        `/manuals?q=${control}#part`,
+      ]) {
         expect(safeNextPath(value)).toBe("/manuals");
       }
     }
