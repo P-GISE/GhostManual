@@ -1267,3 +1267,102 @@ button.danger {
 button.danger:hover:not(:disabled) {
   background: #852a12;
 }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.admin-stats div {
+  display: grid;
+  gap: 4px;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.admin-stats span {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.admin-stats strong {
+  font-size: 1.375rem;
+}
+.admin-chart {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 160px;
+  border-bottom: 1px solid #c9d2cb;
+}
+.admin-chart-bar {
+  flex: 1;
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+  background: var(--accent);
+}
+.admin-chart-limit {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed #8d9891;
+}
+.admin-users-title {
+  flex: 1 1 200px;
+  margin: 0;
+}
+.admin-table table {
+  width: 100%;
+  min-width: 960px;
+}
+.admin-table th {
+  text-align: left;
+  padding: 10px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+.admin-table td {
+  padding: 10px;
+  white-space: normal;
+  vertical-align: middle;
+}
+.admin-table select {
+  min-height: 44px;
+}
+.admin-meter {
+  display: block;
+  width: 140px;
+  height: 6px;
+  margin-top: 4px;
+  border-radius: 3px;
+  background: #eef1ee;
+}
+.admin-meter span {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+.admin-meter span.admin-near {
+  background: #b4610a;
+}
+.admin-near-text {
+  color: #7a4300;
+  font-weight: 700;
+}
+.admin-events {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}

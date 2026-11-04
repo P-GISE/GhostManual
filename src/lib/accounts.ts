@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { adminSource } from "./admin.ts";
 import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
 import { sendMail } from "./mailer.ts";
@@ -150,7 +151,7 @@ export const FILE_QUOTA_BYTES = 104857600;
 async function profile(db: DbClient, ctx: SessionContext) {
   // Accounts older than an hour existed before terms consent; the welcome screen must not delete them.
   const result = await db.query<Record<string, unknown>>(
-    `SELECT u.name,u.email,u.department,u.password_hash IS NOT NULL AS password,u.google_sub IS NOT NULL AS google,
+    `SELECT u.name,u.email,u.department,u.is_admin,u.storage_limit_bytes,u.password_hash IS NOT NULL AS password,u.google_sub IS NOT NULL AS google,
       u.created_at>now()-interval '1 hour' AS "newAccount",
       (SELECT COALESCE(sum(size_bytes),0) FROM source_files WHERE workspace_id=s.workspace_id) AS bytes
       FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1`,
@@ -162,6 +163,8 @@ async function profile(db: DbClient, ctx: SessionContext) {
       name: z.string(),
       email: z.string(),
       department: z.string().nullable(),
+      is_admin: z.boolean(),
+      storage_limit_bytes: z.coerce.number().nullable(),
       password: z.boolean(),
       google: z.boolean(),
       newAccount: z.boolean(),
@@ -176,8 +179,9 @@ async function profile(db: DbClient, ctx: SessionContext) {
       ...(row.password ? ["password" as const] : []),
       ...(row.google ? ["google" as const] : []),
     ],
-    usage: { bytes: row.bytes, limitBytes: FILE_QUOTA_BYTES },
+    usage: { bytes: row.bytes, limitBytes: row.storage_limit_bytes ?? FILE_QUOTA_BYTES },
     newAccount: row.newAccount,
+    admin: adminSource(row.email, row.is_admin) !== null,
   };
 }
 export async function currentUser(ctx: SessionContext) {

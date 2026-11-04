@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { workspaceAiAllowed } from "./admin.ts";
 import { transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
 import { assertSession } from "./session.ts";
@@ -24,6 +25,12 @@ export async function reserveAiAttempt(
   return transaction(async (db) => {
     await db.query("SELECT pg_advisory_xact_lock(782402)");
     await assertSession(db, ctx, input.kind === "generate");
+    if (!(await workspaceAiAllowed(ctx.workspaceId, db)))
+      throw new AppError(
+        "ai_blocked",
+        403,
+        "관리자가 이 계정의 AI 기능을 꺼 두었습니다. 직접 작성은 계속할 수 있습니다.",
+      );
     await db.query(
       "UPDATE operation_requests SET status='failed',error_code='interrupted' WHERE status='processing' AND lease_until<=now()",
     );
@@ -101,6 +108,8 @@ export async function reserveChangeAi(ctx: SessionContext): Promise<boolean> {
   return transaction(async (db) => {
     await db.query("SELECT pg_advisory_xact_lock(782402)");
     await assertSession(db, ctx, true);
+    // Blocked accounts keep the rule-based questions; only the AI wording is skipped.
+    if (!(await workspaceAiAllowed(ctx.workspaceId, db))) return false;
     const day = "(now() AT TIME ZONE 'UTC')::date";
     const scopes = [
       { scope: "global", kind: "all", max: Number(process.env["AI_DAILY_LIMIT"] ?? 100) },

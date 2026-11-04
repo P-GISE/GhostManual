@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { workspaceAiAllowed } from "./admin.ts";
 import { generateAnswer } from "./ai.ts";
 import { EvidenceCandidateSchema } from "./ai-schemas.ts";
 import { type DbClient, transaction } from "./db.ts";
@@ -95,11 +96,14 @@ export async function ask(
     isOutdated: false,
   };
   if (candidates.length) {
-    if (process.env["AI_ENABLED"] !== "true" || !process.env["ANTHROPIC_API_KEY"]) {
+    const blocked = !(await workspaceAiAllowed(ctx.workspaceId));
+    if (process.env["AI_ENABLED"] !== "true" || !process.env["ANTHROPIC_API_KEY"] || blocked) {
       result = {
         ...result,
         status: "unavailable",
-        answer: "AI 답변을 사용할 수 없습니다. 검색된 자료를 직접 확인하세요.",
+        answer: blocked
+          ? "이 문서함은 관리자가 AI 답변을 꺼 두었습니다. 검색된 자료를 직접 확인하세요."
+          : "AI 답변을 사용할 수 없습니다. 검색된 자료를 직접 확인하세요.",
         confidence: null,
         insufficientEvidence: null,
         limitations: ["AI 연결이 필요합니다."],
