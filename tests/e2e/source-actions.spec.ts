@@ -25,7 +25,7 @@ test("direct writing opens an existing draft after source changes", async ({ pag
 test("confirmed source deletion preserves another source", async ({ page }) => {
   await signUpAndVerify(page);
   await loadExample(page);
-  await page.getByRole("link", { name: "새 자료 등록", exact: true }).click();
+  await page.getByRole("link", { name: "새 업무 등록", exact: true }).click();
   await page.getByLabel("자료 제목").fill("삭제할 자료");
   await page
     .getByLabel("업무 내용", { exact: true })

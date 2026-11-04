@@ -159,7 +159,7 @@ test("concurrent answers retain both results", async ({ page }) => {
   await page.getByLabel("자료 제목").fill("답변 경합 검증");
   await page.getByLabel(/엑셀·TXT·Markdown 파일/).setInputFiles(fixture("정산_1029.xlsx"));
   await page.getByRole("button", { name: "원본 등록" }).click();
-  const cards = page.getByRole("group");
+  const cards = page.locator("fieldset.question-card");
   await expect(cards).toHaveCount(2);
   let releaseFirst = () => {};
   const gate = new Promise<void>((resolve) => {
@@ -195,7 +195,7 @@ test("a failed answer keeps the draft editable and manual errors are visible", a
   await page.getByLabel("자료 제목").fill("실패 복구 검증");
   await page.getByLabel(/엑셀·TXT·Markdown 파일/).setInputFiles(fixture("정산_1029.xlsx"));
   await page.getByRole("button", { name: "원본 등록" }).click();
-  const card = page.getByRole("group").first();
+  const card = page.locator("fieldset.question-card").first();
   await card.getByLabel("답변").fill("실패해도 보존할 답변");
   await page.route("**/questions/*", (route) =>
     route.fulfill({
@@ -249,7 +249,7 @@ test("a delayed answer does not switch back to an older selection", async ({ pag
     await gate;
     await route.fulfill({ response });
   });
-  const card = page.getByRole("group").first();
+  const card = page.locator("fieldset.question-card").first();
   await card.getByLabel("답변").fill("늦게 도착하는 답변");
   await card.getByRole("button", { name: "답변 저장" }).click();
   await request;

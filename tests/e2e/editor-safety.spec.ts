@@ -30,7 +30,7 @@ test("owner can clear optional lists and cancel unsaved navigation", async ({ pa
 
 test("source registration preserves input when navigation is cancelled", async ({ page }) => {
   await signUpAndVerify(page);
-  await page.getByRole("link", { name: "새 자료 등록" }).click();
+  await page.getByRole("link", { name: "새 업무 등록" }).click();
   await page.getByLabel("자료 제목").fill("미저장 원본 제목");
   const sourceUrl = page.url();
   page.once("dialog", async (dialog) => {

@@ -5,5 +5,5 @@ const asciiControls = /[\x00-\x1f\x7f]/;
 export function safeNextPath(value: unknown): string {
   return typeof value === "string" && !asciiControls.test(value) && /^\/(?![/\\])/.test(value)
     ? value
-    : "/manuals";
+    : "/";
 }

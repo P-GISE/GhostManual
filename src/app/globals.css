@@ -1234,3 +1234,36 @@ select {
   background: #e3efe9;
   color: #1f5a45;
 }
+.upload-guide {
+  margin: 0 0 8px;
+  padding: 12px 16px 12px 34px;
+  border-radius: 10px;
+  background: var(--tint);
+  font-size: 0.875rem;
+}
+.task-select {
+  position: relative;
+  z-index: 1;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  flex: none;
+  accent-color: var(--accent);
+}
+.task-delete {
+  display: grid;
+  gap: 8px;
+  border-color: #e7b9a8;
+  background: #fff8f5;
+}
+.task-delete p {
+  margin: 0;
+}
+button.danger {
+  background: #a3361a;
+  border-color: #a3361a;
+  color: #ffffff;
+}
+button.danger:hover:not(:disabled) {
+  background: #852a12;
+}

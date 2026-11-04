@@ -49,7 +49,7 @@ test("prewritten example can be reviewed shared and searched without pretending 
 });
 test("source input remains available when AI is disabled", async ({ page }) => {
   await signUpAndVerify(page);
-  await page.getByRole("link", { name: "새 자료 등록" }).click();
+  await page.getByRole("link", { name: "새 업무 등록" }).click();
   await page.getByLabel("자료 제목").fill("HTML 원문 안전 표시");
   const text =
     "<script>window.injected=true</script>" + "승인을 확인하고 업무를 완료합니다. ".repeat(10);

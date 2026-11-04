@@ -38,7 +38,7 @@ test("login: session round-trip precedes document navigation", async ({ page }) 
   const calls = await fixture(page);
   await page.goto("/login");
   await submitLogin(page);
-  await expect(page).toHaveURL(/\/manuals$/);
+  await expect(page).toHaveURL(/\/$/);
   expect(calls.sessions).toBe(1);
   expect(calls.logins).toBe(1);
 });
@@ -50,7 +50,7 @@ test("login keeps a safe next path and ignores external ones", async ({ page }) 
   await expect(page).toHaveURL(/\/ask$/);
   await page.goto("/login?next=%2F%2Fevil.example");
   await submitLogin(page);
-  await expect(page).toHaveURL(/\/manuals$/);
+  await expect(page).toHaveURL(/\/$/);
 });
 
 test("login then missing session stays on login; retry checks session without another POST", async ({
@@ -72,7 +72,7 @@ test("login then missing session stays on login; retry checks session without an
     }),
   );
   await page.getByRole("button", { name: "세션 다시 확인" }).click();
-  await expect(page).toHaveURL(/\/manuals$/);
+  await expect(page).toHaveURL(/\/$/);
   expect(calls.logins).toBe(1);
 });
 
