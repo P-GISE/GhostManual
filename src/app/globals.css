@@ -1267,3 +1267,18 @@ button.danger {
 button.danger:hover:not(:disabled) {
   background: #852a12;
 }
+.file-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.file-pick input[type="file"] {
+  flex: 1;
+  min-width: 0;
+}
+.icon-button {
+  flex: none;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+}

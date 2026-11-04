@@ -30,6 +30,7 @@ export function SourceForm() {
   const [submitted, setSubmitted] = useState(false);
   const [similar, setSimilar] = useState<Similar | null>(null);
   const lookup = useRef(0);
+  const fileInput = useRef<HTMLInputElement>(null);
   function invalidateLookup() {
     lookup.current++;
     setSimilar(null);
@@ -133,16 +134,47 @@ export function SourceForm() {
         <label htmlFor="source-file">
           엑셀·TXT·Markdown 파일 <span className="help">선택 사항</span>
         </label>
-        <input
-          id="source-file"
-          type="file"
-          accept=".xlsx,.txt,.md,.markdown"
-          onChange={(e) => {
-            setFile(e.target.files?.[0] ?? null);
-            invalidateLookup();
-          }}
-          aria-describedby="file-help"
-        />
+        <div className="file-pick">
+          <input
+            id="source-file"
+            ref={fileInput}
+            type="file"
+            accept=".xlsx,.txt,.md,.markdown"
+            onChange={(e) => {
+              setFile(e.target.files?.[0] ?? null);
+              invalidateLookup();
+            }}
+            aria-describedby="file-help"
+          />
+          {file && (
+            <button
+              type="button"
+              className="secondary icon-button"
+              aria-label="선택한 파일 지우기"
+              title="선택한 파일 지우기"
+              disabled={busy}
+              onClick={() => {
+                if (fileInput.current) fileInput.current.value = "";
+                setFile(null);
+                invalidateLookup();
+              }}
+            >
+              <svg
+                aria-hidden="true"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" />
+              </svg>
+            </button>
+          )}
+        </div>
         <p id="file-help" className="help">
           엑셀(.xlsx, 최대 5 MB)은 원본 파일을 버전으로 보관하고 새 버전을 올릴 때마다 바뀐 부분을
           비교해 질문합니다. 매크로·암호 파일은 올릴 수 없습니다. TXT·Markdown(UTF-8, 최대 256
