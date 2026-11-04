@@ -54,3 +54,33 @@ test("an unchecked task stays when the selection is cancelled", async ({ page })
   await expect(page.getByRole("button", { name: /^선택한 \d+개 삭제$/ })).toHaveCount(0);
   await expect(page.getByLabel("신입 구성원 업무 계정 발급 선택")).not.toBeChecked();
 });
+
+test("choosing a file replaces the text field with plain guidance", async ({ page }) => {
+  await signUpAndVerify(page);
+  await page.getByRole("link", { name: "새 업무 등록" }).click();
+  await page.getByLabel("업무 내용", { exact: true }).fill("파일을 고르기 전에 쓴 글");
+  await page
+    .getByLabel(/엑셀·TXT·Markdown 파일/)
+    .setInputFiles("tests/fixtures/xlsx/정산_1029.xlsx");
+  await expect(page.getByLabel("업무 내용", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/엑셀은 등록한 뒤 원본 화면의 질문에 답하며/)).toBeVisible();
+  await expect(page.getByText(/입력한 업무 내용은 저장되지 않습니다/)).toBeVisible();
+});
+
+test("changes come before questions and the sheet preview starts folded", async ({ page }) => {
+  await signUpAndVerify(page);
+  await registerWorkbook(page, "월간 정산");
+  await page.getByRole("link", { name: "새 버전 올리기" }).click();
+  await page.getByLabel("새 버전 엑셀 파일").setInputFiles("tests/fixtures/xlsx/정산_1030.xlsx");
+  await page.getByRole("button", { name: "올리고 비교하기" }).click();
+  const changes = page.getByRole("heading", { name: /v1과 비교해 바뀐 부분/ });
+  const questions = page.getByRole("heading", { name: "이번 버전 질문" });
+  await expect(changes).toBeVisible();
+  const [changesBox, questionsBox] = [await changes.boundingBox(), await questions.boundingBox()];
+  expect(changesBox && questionsBox && changesBox.y < questionsBox.y).toBe(true);
+  await expect(page.getByRole("heading", { name: "시트 미리보기" })).toBeVisible();
+  const preview = page.getByRole("region", { name: "시트 미리보기" });
+  await expect(preview.getByRole("table")).toBeHidden();
+  await preview.getByText(/펼쳐서 보기 · 시트/).click();
+  await expect(preview.getByRole("table")).toBeVisible();
+});

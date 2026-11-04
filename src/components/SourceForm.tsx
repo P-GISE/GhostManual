@@ -148,22 +148,33 @@ export function SourceForm() {
           비교해 질문합니다. 매크로·암호 파일은 올릴 수 없습니다. TXT·Markdown(UTF-8, 최대 256
           KiB)은 파일 내용을 텍스트로 등록합니다.
         </p>
-        <label htmlFor="text">업무 내용</label>
-        <textarea
-          id="text"
-          rows={14}
-          disabled={!!file}
-          minLength={100}
-          maxLength={20000}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          aria-describedby="source-help source-error"
-          placeholder="언제 시작하나요? 누가 담당하나요? 어떤 순서로 진행하나요? 주의할 점과 완료 기준을 적어 주세요."
-        />
-        <p id="source-help" className="help">
-          100~20,000자 · 현재 {text.length.toLocaleString()}자. 개인정보와 회사 기밀을 제외해
-          주세요.
-        </p>
+        {file ? (
+          <p className="notice" role="status">
+            파일을 올리면 업무 내용은 따로 쓰지 않습니다.{" "}
+            {/\.xlsx$/i.test(file.name)
+              ? "엑셀은 등록한 뒤 원본 화면의 질문에 답하며 설명을 남깁니다."
+              : "파일 안의 글이 업무 내용으로 등록됩니다."}
+            {text && " 입력한 업무 내용은 저장되지 않습니다. 쓰려면 파일 선택을 지우세요."}
+          </p>
+        ) : (
+          <>
+            <label htmlFor="text">업무 내용</label>
+            <textarea
+              id="text"
+              rows={14}
+              minLength={100}
+              maxLength={20000}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              aria-describedby="source-help source-error"
+              placeholder="언제 시작하나요? 누가 담당하나요? 어떤 순서로 진행하나요? 주의할 점과 완료 기준을 적어 주세요."
+            />
+            <p id="source-help" className="help">
+              100~20,000자 · 현재 {text.length.toLocaleString()}자. 개인정보와 회사 기밀을 제외해
+              주세요.
+            </p>
+          </>
+        )}
         {similar && file && (
           <fieldset className="panel" aria-label="기존 자료의 새 버전인가요?">
             <h2>기존 자료의 새 버전인가요?</h2>

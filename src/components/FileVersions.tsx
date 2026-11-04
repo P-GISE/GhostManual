@@ -376,6 +376,27 @@ export function FileVersions({
                 v{selected.revision} 원본 내려받기
               </a>
             </section>
+            {selected.revision > 1 && (
+              <section className="panel" aria-labelledby="changes-title">
+                <h2 id="changes-title">
+                  v{selected.revision - 1}과 비교해 바뀐 부분 {selected.changes.length}건
+                </h2>
+                <ul className="change-list">
+                  {selected.changes.map((c) => (
+                    <li key={c.position}>
+                      <strong>{changeLabels[c.kind] ?? c.kind}</strong>
+                      <span>
+                        {c.sheet ? `'${c.sheet}'` : ""} {c.range ?? ""}
+                        {typeof c.summary["count"] === "number" ? ` · ${c.summary["count"]}칸` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {!reader && (
+                  <CellChanges key={selected.revision} sourceId={id} revision={selected.revision} />
+                )}
+              </section>
+            )}
             <section className="panel" aria-labelledby="questions-title">
               <h2 id="questions-title">이번 버전 질문</h2>
               {selected.questions.length ? (
@@ -399,61 +420,43 @@ export function FileVersions({
                 <p className="help">질문이 없습니다.</p>
               )}
             </section>
-            {selected.revision > 1 && (
-              <section className="panel" aria-labelledby="changes-title">
-                <h2 id="changes-title">
-                  v{selected.revision - 1}과 비교해 바뀐 부분 {selected.changes.length}건
-                </h2>
-                <ul className="change-list">
-                  {selected.changes.map((c) => (
-                    <li key={c.position}>
-                      <strong>{changeLabels[c.kind] ?? c.kind}</strong>
-                      <span>
-                        {c.sheet ? `'${c.sheet}'` : ""} {c.range ?? ""}
-                        {typeof c.summary["count"] === "number" ? ` · ${c.summary["count"]}칸` : ""}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                {!reader && (
-                  <CellChanges key={selected.revision} sourceId={id} revision={selected.revision} />
-                )}
-              </section>
-            )}
             {shown && (
               <section className="panel" aria-labelledby="preview-title">
                 <h2 id="preview-title">시트 미리보기</h2>
-                <div className="actions">
-                  {selected.preview.map((p, index) => (
-                    <button
-                      key={p.sheet}
-                      type="button"
-                      className={index === sheet ? "" : "secondary"}
-                      aria-pressed={index === sheet}
-                      onClick={() => setSheet(index)}
-                    >
-                      {p.sheet}
-                    </button>
-                  ))}
-                </div>
-                <div className="table-scroll">
-                  <table>
-                    <caption className="help">
-                      '{shown.sheet}' 앞쪽 20행 × 12열 · 전체 {shown.rows}행 × {shown.cols}열
-                    </caption>
-                    <tbody>
-                      {shown.cells.map((row, r) => (
-                        // biome-ignore lint/suspicious/noArrayIndexKey: preview rows have no identity
-                        <tr key={r}>
-                          {row.map((cell, c) => (
-                            // biome-ignore lint/suspicious/noArrayIndexKey: preview cells have no identity
-                            <td key={c}>{cell === null ? "" : String(cell)}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <details>
+                  <summary>펼쳐서 보기 · 시트 {selected.preview.length}개</summary>
+                  <div className="actions">
+                    {selected.preview.map((p, index) => (
+                      <button
+                        key={p.sheet}
+                        type="button"
+                        className={index === sheet ? "" : "secondary"}
+                        aria-pressed={index === sheet}
+                        onClick={() => setSheet(index)}
+                      >
+                        {p.sheet}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="table-scroll">
+                    <table>
+                      <caption className="help">
+                        '{shown.sheet}' 앞쪽 20행 × 12열 · 전체 {shown.rows}행 × {shown.cols}열
+                      </caption>
+                      <tbody>
+                        {shown.cells.map((row, r) => (
+                          // biome-ignore lint/suspicious/noArrayIndexKey: preview rows have no identity
+                          <tr key={r}>
+                            {row.map((cell, c) => (
+                              // biome-ignore lint/suspicious/noArrayIndexKey: preview cells have no identity
+                              <td key={c}>{cell === null ? "" : String(cell)}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
                 <p className="help">원본은 브라우저에서 열지 않고 내려받기만 합니다.</p>
               </section>
             )}
