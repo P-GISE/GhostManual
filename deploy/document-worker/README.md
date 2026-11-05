@@ -53,4 +53,4 @@ worker stop helper는 own0700 state의 CID 파일 owner/mode/단일 link/64hex�
 
 장애 시 worker와 extractor socket/service만 중지한다. persisted queue/버전과 DB/볼륨/백업은 보존하며 migration007 down이나 데이터 삭제를 하지 않는다. 앱은 확인된 종전 image와 검증된 배포 절차로 복귀한다. gateway key와 worker client key는 서로 별개다. 이미지/rootfs는 검토를 위해 보존하고 전역 prune이나 다른 서비스 restart는 하지 않는다.
 
-아직 이 소스의 운영 설치·실제 credential 전달·socket activation·상속 BPF·DB 작업·일반 사용자 업로드는 검증되지 않았다. 소스 테스트/순수 loader 시험과 실제 운영 성공을 구분한다.
+2026-11-05 합성 credential의 실제 전달·socket activation·최종 이미지 격리5/5/추출10/10·mTLS 거부/성공·실제 worker Docker scope BPF 사전 검사를 통과했다([근거와 범위](../../docs/qa/2026-11-05/pr55-runtime-readiness.md)). 실제 운영 PKI·queue worker DB 작업·일반 사용자 업로드 완료는 별도 검증해야 한다. staged 성공과 운영 활성화를 구분한다.

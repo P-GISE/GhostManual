@@ -1,5 +1,9 @@
 # GhostManual 프로젝트 가이드
 
+## 2026-11-05 PR #55 병합 전 검증
+
+최신 코드386069e의 전체 CI와 최종 extractor의 실제 격리5/5·추출10/10, mTLS 거부/성공·Node transport10건·worker Docker scope BPF 사전 검사를 통과했다. systemd credential은 root ACL 계약으로 보완했다. [검증 근거·남은 운영 단계](docs/qa/2026-11-05/pr55-runtime-readiness.md). 병합·문서007·운영 앱/실제 queue worker 활성화는 아직 후속이며 아래 검증 당시 미완료 문구와 구분한다.
+
 ## 2026-11-05 PR #53 관리자 DB 준비
 
 사용자 지시로 PR #53의 정확한006_admin.sql을 검토·격리 검사·신규 S3 백업 후09:33 KST 운영에 적용했다. 기존 사용자·앱 권한·200/401 응답을 보존했으며 관리자 승격/계정 생성·ADMIN_EMAILS·PR #53 병합·앱 배포는 하지 않았다. [실행 근거와 경계](docs/qa/2026-11-05/pr53-admin-migration.md). 문서 엔진은007로 번호를 분리하고 PR #55에서 최신 기본 통합·CI와 운영 실행 구성을 준비 중이다.
