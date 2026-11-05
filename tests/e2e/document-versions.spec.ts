@@ -83,8 +83,12 @@ test("published document Reader cannot request owner-only previous content", asy
     mimeType: "application/octet-stream",
     buffer: Buffer.from(bytes("docx", false)),
   });
+  const registered = page.waitForResponse(
+    (response) => response.request().method() === "POST" && /\/api\/sources$/.test(response.url()),
+  );
   await page.getByRole("button", { name: "원본 등록", exact: true }).click();
-  await expect(page).toHaveURL(/\/sources\/[\w-]+$/);
+  expect((await registered).status()).toBe(202);
+  await expect(page).toHaveURL(/\/sources\/[0-9a-f-]{36}$/);
   const sourceId = page.url().split("/").pop();
   await processQueue();
   await expect(page.getByRole("button", { name: "직접 작성하기", exact: true })).toBeEnabled({

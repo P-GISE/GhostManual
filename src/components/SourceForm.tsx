@@ -184,9 +184,11 @@ export function SourceForm() {
         {file ? (
           <p className="notice" role="status">
             파일을 올리면 업무 내용은 따로 쓰지 않습니다.{" "}
-            {versionedFilePattern.test(file.name)
-              ? "업무 파일은 처리 후 원본 화면의 질문에 답하며 설명을 남깁니다."
-              : "파일 안의 글이 업무 내용으로 등록됩니다."}
+            {/\.xlsx$/i.test(file.name)
+              ? "엑셀은 등록한 뒤 원본 화면의 질문에 답하며 설명을 남깁니다."
+              : versionedFilePattern.test(file.name)
+                ? "업무 파일은 처리 후 원본 화면의 질문에 답하며 설명을 남깁니다."
+                : "파일 안의 글이 업무 내용으로 등록됩니다."}
             {text && " 입력한 업무 내용은 저장되지 않습니다. 쓰려면 파일 선택을 지우세요."}
           </p>
         ) : (
