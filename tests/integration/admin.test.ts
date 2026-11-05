@@ -88,6 +88,11 @@ it("promotes, limits and blocks AI with a change log", async () => {
     httpStatus: 422,
   });
   expect(() => assertFileQuota(0, 2097153, 2097152)).toThrow(/2 MB/);
+  await updateUser(admin, t.id, { storageLimitBytes: 1048576 });
+  const csv = new TextEncoder().encode("a,b\n".repeat(300000));
+  await expect(
+    registerDocument(target.ctx, { title: "큰 표", fileName: "big.csv", bytes: csv }),
+  ).rejects.toMatchObject({ code: "storage_quota" });
 
   expect((await updateUser(admin, t.id, { aiAllowed: false })).aiAllowed).toBe(false);
   expect(await workspaceAiAllowed(target.ctx.workspaceId)).toBe(false);

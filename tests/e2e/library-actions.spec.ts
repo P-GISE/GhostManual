@@ -23,7 +23,7 @@ test("signing in returns to the landing page with a way into the library", async
 test("a workbook card opens the new version form directly", async ({ page }) => {
   await signUpAndVerify(page);
   await registerWorkbook(page, "월간 정산");
-  await expect(page.getByText("이미 등록한 엑셀의 다음 파일")).toBeVisible();
+  await expect(page.getByText("이미 등록한 파일의 다음 버전")).toBeVisible();
   await page.getByRole("link", { name: "새 버전 올리기" }).click();
   await expect(page.getByRole("heading", { name: "월간 정산", level: 1 })).toBeVisible();
   await expect(page.getByLabel("새 버전 엑셀 파일")).toBeVisible();
