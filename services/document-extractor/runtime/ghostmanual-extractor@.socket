@@ -1,0 +1,15 @@
+[Unit]
+Description=GhostManual private extractor activation socket (%i)
+
+[Socket]
+ListenStream=127.0.0.1:18443
+Accept=no
+FileDescriptorName=ghostmanual-extractor
+Service=ghostmanual-extractor@%i.service
+Backlog=16
+NoDelay=yes
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+[Install]
+WantedBy=sockets.target

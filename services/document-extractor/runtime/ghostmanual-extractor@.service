@@ -1,0 +1,62 @@
+[Unit]
+Description=GhostManual private extractor gateway (%i)
+Requires=ghostmanual-extractor@%i.socket
+After=ghostmanual-extractor@%i.socket
+ConditionPathIsDirectory=/opt/ghostmanual-extractor/%i/rootfs
+
+[Service]
+Type=exec
+Sockets=ghostmanual-extractor@%i.socket
+User=1000
+Group=1000
+Slice=system.slice
+RootDirectory=/opt/ghostmanual-extractor/%i/rootfs
+WorkingDirectory=/service
+MountAPIVFS=yes
+BindPaths=/sys/fs/cgroup/system.slice/%n:/sys/fs/cgroup
+LoadCredential=client-ca.pem:/etc/ghostmanual-extractor/client-ca.pem
+LoadCredential=server-cert.pem:/etc/ghostmanual-extractor/server-cert.pem
+LoadCredential=server-key.pem:/etc/ghostmanual-extractor/server-key.pem
+Delegate=cpu memory pids
+DelegateSubgroup=gateway
+MemoryMax=512M
+MemorySwapMax=0
+CPUQuota=50%
+CPUQuotaPeriodSec=100ms
+TasksMax=128
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID
+AmbientCapabilities=CAP_SETUID CAP_SETGID
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+IPAddressDeny=any
+IPAddressAllow=localhost
+PrivateTmp=yes
+TemporaryFileSystem=/tmp:rw,nosuid,nodev,size=128M,mode=1777
+ReadWritePaths=/sys/fs/cgroup
+ReadOnlyPaths=/sys/fs/cgroup/memory.max /sys/fs/cgroup/memory.swap.max /sys/fs/cgroup/cpu.max /sys/fs/cgroup/pids.max
+# Locked proc overmounts prevent bwrap from creating its fresh user/PID-namespace proc.
+ProtectKernelTunables=no
+ProtectKernelModules=yes
+ProtectKernelLogs=no
+ProtectHostname=no
+ProtectClock=yes
+ProtectProc=invisible
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+AppArmorProfile=ghostmanual-extractor-production
+UMask=0077
+LimitCORE=0
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 -u -B /service/runtime/production.py
+TimeoutStartSec=300
+TimeoutStopSec=5
+KillMode=control-group
+Restart=on-failure
+RestartSec=5
+StandardOutput=null
+StandardError=null

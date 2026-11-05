@@ -1,0 +1,45 @@
+[Unit]
+Description=GhostManual document extraction queue worker
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=exec
+User=1000
+Group=1000
+SupplementaryGroups=docker
+Slice=ghostmanual-document-worker.slice
+EnvironmentFile=/etc/ghostmanual-document-worker-image.env
+LoadCredential=worker-env:/etc/ghostmanual-document-worker.env
+RuntimeDirectory=ghostmanual-document-worker-state
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+UMask=0077
+LimitCORE=0
+ExecStartPre=/usr/bin/python3 -I -B /usr/local/lib/ghostmanual-document-worker/stop-worker.py --check-image
+ExecStart=/usr/bin/docker run --rm --pull=never --init --name=ghostmanual-document-worker --label=ghostmanual.role=document-worker --cidfile=/run/ghostmanual-document-worker-state/container.cid --network=host --cgroupns=private --cgroup-parent=ghostmanual-document-worker.slice --user=1000:1000 --read-only --cap-drop=ALL --security-opt=no-new-privileges:true --memory=192m --memory-swap=192m --cpus=0.25 --pids-limit=64 --log-driver=none --ulimit=core=0 --env-file=%d/worker-env --env=NODE_OPTIONS=--max-old-space-size=128 --mount=type=bind,src=/usr/local/lib/ghostmanual-document-worker/worker-entry.mjs,dst=/run/worker-entry.mjs,readonly --mount=type=bind,src=/run/ghostmanual-document-worker/secrets/server-ca.pem,dst=/run/secrets/server-ca.pem,readonly --mount=type=bind,src=/run/ghostmanual-document-worker/secrets/client-cert.pem,dst=/run/secrets/client-cert.pem,readonly --mount=type=bind,src=/run/ghostmanual-document-worker/secrets/client-key.pem,dst=/run/secrets/client-key.pem,readonly --entrypoint=node ${GHOSTMANUAL_WORKER_IMAGE} /run/worker-entry.mjs
+ExecStop=/usr/bin/python3 -I -B /usr/local/lib/ghostmanual-document-worker/stop-worker.py
+TimeoutStopSec=150
+Restart=on-failure
+RestartSec=10
+MemoryMax=64M
+MemorySwapMax=0
+CPUQuota=25%
+TasksMax=32
+CapabilityBoundingSet=
+AmbientCapabilities=
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target
