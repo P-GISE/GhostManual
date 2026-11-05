@@ -8,6 +8,7 @@ import { http } from "../lib/client";
 // Remounted per path (key) so the name refreshes after login or logout.
 function AccountMenu() {
   const [name, setName] = useState<string | null>(null);
+  const [admin, setAdmin] = useState(false);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     let active = true;
@@ -15,8 +16,10 @@ function AccountMenu() {
       .get("/api/me", { cache: "no-store" })
       .json()
       .then((body) => {
-        const user = z.object({ name: z.string() }).safeParse(body);
-        if (active) setName(user.success ? user.data.name : null);
+        const user = z.object({ name: z.string(), admin: z.boolean().optional() }).safeParse(body);
+        if (!active) return;
+        setName(user.success ? user.data.name : null);
+        setAdmin(user.success && user.data.admin === true);
       })
       .catch(() => {
         if (active) setName(null);
@@ -32,6 +35,7 @@ function AccountMenu() {
   }
   return name ? (
     <span className="account">
+      {admin && <Link href="/admin">관리자</Link>}
       <Link className="account-name" href="/account">
         {name}
       </Link>

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { workspaceStorageLimit } from "./admin.ts";
 import { type DbClient, transaction } from "./db.ts";
 import { reviewOcrDocuments } from "./documents/compare.ts";
 import { detectDocumentFormat } from "./documents/read.ts";
@@ -68,7 +69,11 @@ export async function registerDocument(
       .parse(old?.title ?? input.title);
     const text = `${title}\n${format.toUpperCase()} 업무 파일 (추출 본문은 비공개)`;
     await assertSourceWrite(db, ctx, { title, text }, !old);
-    assertFileQuota(await usedFileBytes(db, ctx.workspaceId), input.bytes.length);
+    assertFileQuota(
+      await usedFileBytes(db, ctx.workspaceId),
+      input.bytes.length,
+      await workspaceStorageLimit(db, ctx.workspaceId),
+    );
     const id = old?.id ?? newId(),
       revision = (old?.revision ?? 0) + 1,
       revisionId = newId();

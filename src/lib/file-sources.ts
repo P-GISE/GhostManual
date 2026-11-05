@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { FILE_QUOTA_BYTES } from "./accounts.ts";
+import { workspaceStorageLimit } from "./admin.ts";
 import { generateFileManual } from "./ai.ts";
 import { type CellChange, diffCells } from "./cell-diff.ts";
 import { changePrompt, changeQuestions } from "./change-ai.ts";
@@ -59,12 +60,16 @@ export type FileRevisionView = Omit<SourceView, "kind" | "fileType" | "text"> & 
   usage: { bytes: number; limitBytes: number };
 };
 
-export function assertFileQuota(usedBytes: number, incomingBytes: number): void {
-  if (usedBytes + incomingBytes > FILE_QUOTA_BYTES)
+export function assertFileQuota(
+  usedBytes: number,
+  incomingBytes: number,
+  limitBytes = FILE_QUOTA_BYTES,
+): void {
+  if (usedBytes + incomingBytes > limitBytes)
     throw new AppError(
       "storage_quota",
       429,
-      "저장 공간(100 MB)이 가득 찼습니다. 오래된 자료를 지운 뒤 다시 올리세요.",
+      `저장 공간(${Math.round(limitBytes / 1048576)} MB)이 가득 찼습니다. 오래된 자료를 지운 뒤 다시 올리거나 관리자에게 한도를 늘려 달라고 요청하세요.`,
     );
 }
 export function readUpload(bytes: Uint8Array): ReadResult {
@@ -263,7 +268,10 @@ export async function fileRevisionInTransaction(
     aiSummary: row.aiSummary,
     changes,
     questions,
-    usage: { bytes: await usedFileBytes(db, ctx.workspaceId), limitBytes: FILE_QUOTA_BYTES },
+    usage: {
+      bytes: await usedFileBytes(db, ctx.workspaceId),
+      limitBytes: await workspaceStorageLimit(db, ctx.workspaceId),
+    },
   };
 }
 export async function createFileSource(
@@ -283,7 +291,11 @@ export async function createFileSource(
       { title: title.data, text: fileText(title.data, result) },
       true,
     );
-    assertFileQuota(await usedFileBytes(db, ctx.workspaceId), input.bytes.length);
+    assertFileQuota(
+      await usedFileBytes(db, ctx.workspaceId),
+      input.bytes.length,
+      await workspaceStorageLimit(db, ctx.workspaceId),
+    );
     const id = newId();
     await db.query(
       "INSERT INTO sources(id,workspace_id,revision,kind,file_type) VALUES($1,$2,1,'file','xlsx')",
@@ -440,7 +452,11 @@ export async function addFileRevision(
       { title: previous.title, text: fileText(previous.title, result) },
       false,
     );
-    assertFileQuota(await usedFileBytes(db, ctx.workspaceId), input.bytes.length);
+    assertFileQuota(
+      await usedFileBytes(db, ctx.workspaceId),
+      input.bytes.length,
+      await workspaceStorageLimit(db, ctx.workspaceId),
+    );
     await db.query("UPDATE sources SET revision=$1 WHERE id=$2", [revision, id]);
     const revisionId = await insertFileRevision(db, ctx, {
       sourceId: id,
