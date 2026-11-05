@@ -1,0 +1,11 @@
+[Unit]
+Description=GhostManual document worker aggregate boundary
+
+[Slice]
+MemoryMax=256M
+MemorySwapMax=0
+CPUQuota=25%
+TasksMax=96
+IPAddressDeny=any
+IPAddressAllow=localhost
+# A reviewed root-only drop-in adds only the freshly verified DB IPv4 /32.

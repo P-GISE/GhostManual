@@ -1,8 +1,8 @@
-import { unsafeFile } from "./archive";
-import { parseAddress } from "./coordinates";
-import { shiftFormula } from "./formula";
-import type { Cell, SheetSnapshot } from "./types";
-import { attribute, node, nodes, richText, type XmlNode, xmlText } from "./xml";
+import { unsafeFile } from "./archive.ts";
+import { parseAddress } from "./coordinates.ts";
+import { shiftFormula } from "./formula.ts";
+import type { Cell, SheetSnapshot } from "./types.ts";
+import { attribute, node, nodes, richText, type XmlNode, xmlText } from "./xml.ts";
 
 type SharedFormula = { address: string; formula: string; range: string };
 

@@ -15,6 +15,7 @@ import {
   revisionSummarySchema,
 } from "../lib/client";
 import { CellChanges } from "./CellChanges";
+import { DocumentChanges } from "./DocumentChanges";
 
 export const changeLabels: Record<string, string> = {
   sheet_added: "시트 추가",
@@ -26,6 +27,9 @@ export const changeLabels: Record<string, string> = {
   names_changed: "이름 정의 변경",
   size_changed: "행·열 수 변경",
   values_changed: "값 변경",
+  block_added: "내용 추가",
+  block_removed: "내용 삭제",
+  block_modified: "내용 수정",
 };
 const questionLabels: Record<string, string> = {
   purpose: "업무 목적",
@@ -36,7 +40,10 @@ const statusText: Record<FileRevision["compareStatus"], string> = {
   first: "처음 올린 버전",
   compared: "직전 버전과 비교함",
   no_changes: "직전 버전과 내용이 같습니다",
-  limit_exceeded: "시트·셀이 많아 내용 비교를 하지 않았습니다",
+  limit_exceeded: "내용 비교에 제한이 있어 원본 확인이 필요합니다",
+  pending: "문서 내용을 확인하고 있습니다. 완료 후 질문과 비교 결과를 표시합니다",
+  failed: "문서를 처리하지 못했습니다. 원인을 확인하고 새 버전으로 다시 시도하세요",
+  rejected: "안전 검사에서 거절된 파일입니다. 암호·매크로·손상 여부를 확인하세요",
 };
 export const who = (r: { uploadedByName: string | null; uploadedByDepartment: string | null }) =>
   r.uploadedByName
@@ -150,8 +157,16 @@ export function FileVersions({
   const listRequest = useRef(0);
   const query = reader ? "?view=shared" : "";
   const readDetail = useCallback(
-    (revision: number) =>
-      read(`/api/sources/${id}/revisions/${revision}${query}`, fileRevisionSchema, reader),
+    async (revision: number, signal?: AbortSignal) =>
+      fileRevisionSchema.parse(
+        await http
+          .get(`/api/sources/${id}/revisions/${revision}${query}`, {
+            signal: signal ?? null,
+            timeout: 15000,
+            headers: reader ? { "x-ghost-role": "reader" } : {},
+          })
+          .json(),
+      ),
     [id, query, reader],
   );
   const open = useCallback(
@@ -160,10 +175,11 @@ export function FileVersions({
       const detail = await readDetail(revision);
       if (request !== selectionRequest.current) return;
       setSelected(detail);
+      onUploaded(detail);
       setSheet(0);
       setError("");
     },
-    [readDetail],
+    [readDetail, onUploaded],
   );
   const refresh = useCallback(async () => {
     const request = ++listRequest.current;
@@ -181,6 +197,66 @@ export function FileVersions({
       .then((revisions) => (revisions[0] ? open(revisions[0].revision) : undefined))
       .catch(async (e) => setError(await message(e)));
   }, [refresh, open]);
+  useEffect(() => {
+    if (
+      reader ||
+      !selected ||
+      !["queued", "processing"].includes(selected.extraction?.status ?? "")
+    )
+      return;
+    let stopped = false;
+    let inFlight = false;
+    const controller = new AbortController();
+    const timer = setInterval(() => {
+      if (inFlight) return;
+      inFlight = true;
+      void readDetail(selected.revision, controller.signal)
+        .then((detail) => {
+          if (stopped) return;
+          setSelected((current) => (current?.revisionId === detail.revisionId ? detail : current));
+          if (!["queued", "processing"].includes(detail.extraction?.status ?? "")) {
+            setStatus(`v${detail.revision}: ${statusText[detail.compareStatus]}.`);
+            onUploaded(detail);
+            void refresh().catch(async (e) => {
+              if (!stopped) setError(await message(e));
+            });
+          }
+        })
+        .catch(async (e) => {
+          if (!stopped) setError(await message(e));
+        })
+        .finally(() => {
+          inFlight = false;
+        });
+    }, 2000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      controller.abort();
+    };
+  }, [reader, selected, readDetail, refresh, onUploaded]);
+  async function retryExtraction() {
+    if (!selected || busy || reader) return;
+    onBusyChange(true);
+    setError("");
+    try {
+      const saved = fileRevisionSchema.parse(
+        await http
+          .post(`/api/sources/${id}/revisions/${selected.revision}/retry`, {
+            json: { expectedRevision: list[0]?.revision },
+          })
+          .json(),
+      );
+      onUploaded(saved);
+      setSelected(saved);
+      setStatus(`v${saved.revision}를 저장했습니다. 문서 확인이 끝날 때까지 기다려 주세요.`);
+      await refresh();
+    } catch (e) {
+      setError(await message(e));
+    } finally {
+      onBusyChange(false);
+    }
+  }
   async function upload(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || !file || !list[0]) return;
@@ -265,6 +341,10 @@ export function FileVersions({
     questionLabels[q.kind] ??
     q.groupPositions.map((p) => changeLabels[selected?.changes[p]?.kind ?? ""] ?? "").join(" · ");
   const shown = selected?.preview[sheet];
+  const document = !!selected && selected.fileType !== "xlsx";
+  const extractionAllowed =
+    !selected?.extraction || ["ready", "limited"].includes(selected.extraction.status);
+  const uploadingType = selected?.fileType ?? "xlsx";
   return (
     <div className="file-versions">
       {error && (
@@ -281,19 +361,22 @@ export function FileVersions({
         (uploading ? (
           <form className="panel" onSubmit={upload}>
             <h2>새 버전 올리기</h2>
-            <label htmlFor="revision-file">새 버전 엑셀 파일</label>
+            <label htmlFor="revision-file">
+              새 버전 {uploadingType === "xlsx" ? "엑셀" : "업무"} 파일
+            </label>
             <input
               id="revision-file"
               type="file"
-              accept=".xlsx"
+              accept={`.${uploadingType}`}
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               aria-describedby="revision-help"
             />
             <p id="revision-help" className="help">
-              .xlsx, 5 MB까지. 직전 버전과 비교해 바뀐 부분을 질문합니다. AI가 켜져 있으면 자료
-              제목·시트 이름·수식·변경 위치와 개수가 AI(Anthropic Claude)로 전송됩니다. 첫 행을
-              포함한 셀 값과 원본 파일은 보내지 않습니다. 제목·시트 이름·수식에 개인정보나 기밀이
-              들어 있지 않은지 확인하세요.
+              .{uploadingType}, 5 MB까지. 직전 버전과 비교해 바뀐 부분을 질문합니다.
+              {uploadingType === "xlsx"
+                ? " AI가 켜져 있으면 자료 제목·시트 이름·수식·변경 위치와 개수가 AI(Anthropic Claude)로 전송됩니다. 첫 행을 포함한 셀 값과 원본 파일은 보내지 않습니다."
+                : " 원본·추출 본문·표 값·OCR 결과는 자동으로 AI에 보내지 않습니다. 글꼴·배치·이미지는 비교하지 않습니다."}
+              제목·설명·답변에 개인정보나 기밀이 없는지 확인하세요.
             </p>
             <div className="actions">
               <button type="submit" disabled={busy || !file || !list[0]}>
@@ -364,38 +447,92 @@ export function FileVersions({
                 {kst(selected.createdAt)} · {who(selected)} · {selected.file.name} (
                 {fileSize(selected.file.sizeBytes)}) · {statusText[selected.compareStatus]}
               </p>
+              {document && !!selected.extraction?.coverage.length && (
+                <details>
+                  <summary>이 형식의 추출·비교 범위</summary>
+                  <ul>
+                    {selected.extraction.coverage.map((scope) => (
+                      <li key={scope}>
+                        {scope
+                          .replace("spine", "문서 지정")
+                          .replace("presentation", "슬라이드 지정")}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
               {selected.aiSummary && (
                 <p>
                   <span className="badge">AI 요약</span> {selected.aiSummary}
                 </p>
               )}
-              <a
-                className="button secondary"
-                href={`/api/sources/${id}/revisions/${selected.revision}/file${query}`}
-              >
-                v{selected.revision} 원본 내려받기
-              </a>
-            </section>
-            {selected.revision > 1 && (
-              <section className="panel" aria-labelledby="changes-title">
-                <h2 id="changes-title">
-                  v{selected.revision - 1}과 비교해 바뀐 부분 {selected.changes.length}건
-                </h2>
-                <ul className="change-list">
-                  {selected.changes.map((c) => (
-                    <li key={c.position}>
-                      <strong>{changeLabels[c.kind] ?? c.kind}</strong>
-                      <span>
-                        {c.sheet ? `'${c.sheet}'` : ""} {c.range ?? ""}
-                        {typeof c.summary["count"] === "number" ? ` · ${c.summary["count"]}칸` : ""}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                {!reader && (
-                  <CellChanges key={selected.revision} sourceId={id} revision={selected.revision} />
+              {extractionAllowed ? (
+                <a
+                  className="button secondary"
+                  href={`/api/sources/${id}/revisions/${selected.revision}/file${query}`}
+                >
+                  v{selected.revision} 원본 내려받기
+                </a>
+              ) : (
+                <p role="status">
+                  {statusText[selected.compareStatus]}
+                  {selected.extraction?.reason ? ` · ${selected.extraction.reason}` : ""}
+                </p>
+              )}
+              {document && selected.extraction?.status === "limited" && (
+                <p className="notice">
+                  일부 내용만 처리돼 자동 비교를 완료하지 못했습니다. 원본을 직접 검토하고 제한
+                  사항을 확인한 뒤 게시하세요.
+                </p>
+              )}
+              {document &&
+                !reader &&
+                ["failed", "limited"].includes(selected.extraction?.status ?? "") && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy}
+                    onClick={retryExtraction}
+                  >
+                    새 버전으로 다시 처리
+                  </button>
                 )}
-              </section>
+            </section>
+            {selected.revision > 1 &&
+              extractionAllowed &&
+              selected.compareStatus !== "limit_exceeded" && (
+                <section className="panel" aria-labelledby="changes-title">
+                  <h2 id="changes-title">
+                    v{selected.revision - 1}과 비교해 바뀐 부분 {selected.changes.length}건
+                  </h2>
+                  <ul className="change-list">
+                    {selected.changes.map((c) => (
+                      <li key={c.position}>
+                        <strong>{changeLabels[c.kind] ?? c.kind}</strong>
+                        <span>
+                          {c.sheet ? `'${c.sheet}'` : ""} {c.range ?? ""}
+                          {typeof c.summary["count"] === "number"
+                            ? ` · ${c.summary["count"]}칸`
+                            : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {!reader && !document && (
+                    <CellChanges
+                      key={selected.revision}
+                      sourceId={id}
+                      revision={selected.revision}
+                    />
+                  )}
+                </section>
+              )}
+            {document && !reader && extractionAllowed && (
+              <DocumentChanges
+                key={selected.revisionId}
+                sourceId={id}
+                revision={selected.revision}
+              />
             )}
             <section className="panel" aria-labelledby="questions-title">
               <h2 id="questions-title">이번 버전 질문</h2>

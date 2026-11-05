@@ -22,14 +22,14 @@ export async function POST(request: Request) {
         title = form.get("title");
       if (!(file instanceof File) || typeof title !== "string")
         throw new AppError("invalid_input", 422, "파일과 제목이 필요합니다.");
-      if (/\.xlsx$/i.test(file.name))
+      if (/\.(xlsx|docx|hwpx|pptx|csv|hwp|doc|ppt|pdf)$/i.test(file.name))
         return json(
           await createFileSource(ctx, {
             title,
             fileName: file.name,
             bytes: new Uint8Array(await file.arrayBuffer()),
           }),
-          201,
+          /\.xlsx$/i.test(file.name) ? 201 : 202,
         );
       input = await parseTextUpload(file, title);
     } else input = SourceInputSchema.parse(await readJson(request));

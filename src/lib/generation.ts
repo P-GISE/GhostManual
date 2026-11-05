@@ -11,6 +11,12 @@ export async function generateDraft(
 ) {
   if (ctx.role !== "owner") throw new AppError("forbidden", 403, "소유자만 생성할 수 있습니다.");
   const source = await getSource(ctx, input.sourceId);
+  if (source.extraction && source.extraction.status !== "ready")
+    throw new AppError(
+      "document_not_ready",
+      409,
+      "파일 추출이 완료된 뒤 생성하세요. 제한 상태에서는 직접 작성하세요.",
+    );
   if (process.env["AI_ENABLED"] !== "true" || !process.env["ANTHROPIC_API_KEY"])
     throw new AppError(
       "ai_disabled",

@@ -1,0 +1,31 @@
+{
+  "status": "limited",
+  "reason": "ocr_uncertain",
+  "coverage": [
+    "본문 텍스트",
+    "서식·이미지·표 구조 비교 제외",
+    "PDF 읽기 순서 추정",
+    "PPT 발표자 노트·숨김 슬라이드 제외"
+  ],
+  "snapshot": {
+    "v": 1,
+    "format": "pdf",
+    "parserVersion": "tika-4.2.0-gm1",
+    "normalizationVersion": 1,
+    "extractionMode": "ocr",
+    "blocks": [
+      {
+        "kind": "page",
+        "path": "page/1",
+        "text": "a4\n한글 합성\n\n성 문서\n\nGhostManual version 1\n"
+      }
+    ],
+    "coverage": [
+      "본문 텍스트",
+      "서식·이미지·표 구조 비교 제외",
+      "PDF 읽기 순서 추정",
+      "PPT 발표자 노트·숨김 슬라이드 제외"
+    ],
+    "warnings": ["OCR 결과 원본 대조 필요"]
+  }
+}

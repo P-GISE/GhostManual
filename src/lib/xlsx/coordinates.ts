@@ -1,4 +1,4 @@
-import { unsafeFile } from "./archive";
+import { unsafeFile } from "./archive.ts";
 
 export function parseAddress(address: string): { row: number; col: number } {
   const match = /^\$?([A-Z]{1,3})\$?([1-9][0-9]{0,6})$/.exec(address);

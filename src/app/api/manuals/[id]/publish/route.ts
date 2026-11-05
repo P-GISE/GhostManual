@@ -4,6 +4,7 @@ import { publishManual } from "../../../../../lib/manuals.ts";
 
 type Context = { readonly params: Promise<{ id: string }> };
 const inputSchema = z.strictObject({
+  limitedAcknowledged: z.boolean().optional(),
   expectedRevision: z.number().int().positive(),
   acknowledgedUnknowns: z.array(z.string().min(1).max(500)).max(30),
 });
@@ -17,6 +18,7 @@ export async function POST(request: Request, context: Context) {
         z.uuid().parse((await context.params).id),
         input.expectedRevision,
         input.acknowledgedUnknowns,
+        input.limitedAcknowledged,
       ),
       201,
     );
