@@ -1320,6 +1320,10 @@ button.danger:hover:not(:disabled) {
   flex: 1 1 200px;
   margin: 0;
 }
+/* Keep absolute screen-reader labels inside the table scrollport. */
+.admin-table {
+  position: relative;
+}
 .admin-table table {
   width: 100%;
   min-width: 960px;
@@ -1408,4 +1412,12 @@ button.danger:hover:not(:disabled) {
 .help-formats p {
   margin: 4px 0 0;
   font-size: 0.875rem;
+}
+
+.admin-table label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
 }

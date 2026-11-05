@@ -1,7 +1,7 @@
 "use client";
 import { HTTPError } from "ky";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { http, kst, message } from "../lib/client";
 
@@ -13,6 +13,7 @@ const userSchema = z.object({
   createdAt: z.string(),
   admin: z.boolean(),
   adminSource: z.enum(["env", "db"]).nullable(),
+  self: z.boolean(),
   aiAllowed: z.boolean(),
   sources: z.number(),
   manuals: z.number(),
@@ -67,7 +68,17 @@ export function AdminPage() {
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
   // Demotion and AI blocking are confirmed inside the page, never with a browser dialog.
+  const confirmCancel = useRef<HTMLButtonElement>(null);
+  const confirmTrigger = useRef<HTMLElement | null>(null);
   const [confirm, setConfirm] = useState<{ user: AdminUser; change: Change } | null>(null);
+
+  useEffect(() => {
+    if (confirm) confirmCancel.current?.focus();
+    else if (!busy) {
+      confirmTrigger.current?.focus();
+      confirmTrigger.current = null;
+    }
+  }, [confirm, busy]);
 
   const load = useCallback(async () => {
     try {
@@ -103,8 +114,14 @@ export function AdminPage() {
         await http.patch(`/api/admin/users/${user.id}`, { json: change }).json(),
       );
       setUsers((list) => list.map((u) => (u.id === updated.id ? updated : u)));
-      setEvents(z.array(eventSchema).parse(await http.get("/api/admin/events?limit=20").json()));
       setNotice(`${updated.name}의 권한을 바꿨습니다. 변경 기록에 남겼습니다.`);
+      try {
+        setEvents(z.array(eventSchema).parse(await http.get("/api/admin/events?limit=20").json()));
+      } catch {
+        setError(
+          "권한은 저장됐지만 변경 기록을 불러오지 못했습니다. 새로고침해 기록을 확인하세요.",
+        );
+      }
     } catch (failure) {
       setError(await message(failure));
     } finally {
@@ -112,6 +129,8 @@ export function AdminPage() {
     }
   }
   function request(user: AdminUser, change: Change) {
+    confirmTrigger.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (change.admin === false || change.aiAllowed === false) setConfirm({ user, change });
     else void save(user, change);
   }
@@ -260,7 +279,16 @@ export function AdminPage() {
               >
                 {confirm.change.admin === false ? "관리자 해제" : "AI 차단"}
               </button>
-              <button type="button" className="secondary" onClick={() => setConfirm(null)}>
+              <button
+                ref={confirmCancel}
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setConfirm(null);
+                  confirmTrigger.current?.focus();
+                  confirmTrigger.current = null;
+                }}
+              >
                 취소
               </button>
             </div>
@@ -282,7 +310,7 @@ export function AdminPage() {
             <tbody>
               {shown.map((u) => {
                 const ratio = u.usage.bytes / u.usage.limitBytes;
-                const locked = u.adminSource === "env";
+                const locked = u.adminSource === "env" || u.self;
                 const current = u.customLimit ? u.usage.limitBytes : null;
                 const options = limitOptions.some((o) => o.value === current)
                   ? limitOptions
@@ -313,7 +341,9 @@ export function AdminPage() {
                     <td>{u.aiToday}</td>
                     <td>
                       {locked ? (
-                        <span className="badge">서버 설정 관리자</span>
+                        <span className="badge">
+                          {u.adminSource === "env" ? "서버 설정 관리자" : "내 관리자 계정"}
+                        </span>
                       ) : (
                         <label>
                           <input

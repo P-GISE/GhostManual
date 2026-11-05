@@ -43,7 +43,7 @@ const userSelect = `SELECT u.id,u.name,u.email,u.department,u.created_at,u.email
   (SELECT COALESCE(sum(size_bytes),0) FROM source_files f WHERE f.workspace_id=w.id) AS bytes,
   (SELECT COALESCE(sum(attempts),0) FROM usage_counters c WHERE c.scope=w.id::text AND c.day=${day}) AS ai_today
   FROM users u LEFT JOIN workspaces w ON w.user_id=u.id`;
-function view(row: unknown) {
+function view(row: unknown, actorId: string) {
   const r = userRow.parse(row);
   const source = adminSource(r.email, r.is_admin);
   return {
@@ -55,6 +55,7 @@ function view(row: unknown) {
     verified: r.verified,
     admin: source !== null,
     adminSource: source,
+    self: r.id === actorId,
     aiAllowed: r.ai_allowed,
     sources: r.sources,
     manuals: r.manuals,
@@ -80,8 +81,10 @@ async function requireAdmin(db: DbClient, ctx: SessionContext): Promise<string> 
 }
 export async function listUsers(ctx: SessionContext): Promise<AdminUser[]> {
   return transaction(async (db) => {
-    await requireAdmin(db, ctx);
-    return (await db.query(`${userSelect} ORDER BY u.created_at DESC`)).rows.map(view);
+    const actorId = await requireAdmin(db, ctx);
+    return (await db.query(`${userSelect} ORDER BY u.created_at DESC`)).rows.map((row) =>
+      view(row, actorId),
+    );
   });
 }
 const UpdateSchema = z
@@ -100,6 +103,8 @@ export async function updateUser(
   if (!parsed.success) throw new AppError("invalid_input", 422, "바꿀 권한 값을 확인하세요.");
   const change = parsed.data;
   return transaction(async (db) => {
+    // Serialize authority changes before checking the actor and locking the target.
+    await db.query("SELECT pg_advisory_xact_lock(782403)");
     const adminId = await requireAdmin(db, ctx);
     const found = await db.query<{
       email: string;
@@ -149,7 +154,7 @@ export async function updateUser(
         ],
       );
     }
-    return view((await db.query(`${userSelect} WHERE u.id=$1`, [targetId])).rows[0]);
+    return view((await db.query(`${userSelect} WHERE u.id=$1`, [targetId])).rows[0], adminId);
   });
 }
 export async function aiUsage(ctx: SessionContext, days: number) {
