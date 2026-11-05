@@ -84,3 +84,20 @@ test("changes come before questions and the sheet preview starts folded", async 
   await preview.getByText(/펼쳐서 보기 · 시트/).click();
   await expect(preview.getByRole("table")).toBeVisible();
 });
+
+test("a wrongly chosen file can be removed before registering", async ({ page }) => {
+  await signUpAndVerify(page);
+  await page.getByRole("link", { name: "새 업무 등록" }).click();
+  const picker = page.getByLabel(/엑셀·TXT·Markdown 파일/);
+  await expect(page.getByRole("button", { name: "선택한 파일 지우기" })).toHaveCount(0);
+  await picker.setInputFiles("tests/fixtures/xlsx/정산_1029.xlsx");
+  await expect(page.getByLabel("업무 내용", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "선택한 파일 지우기" }).click();
+  await expect(picker).toHaveValue("");
+  await expect(page.getByRole("button", { name: "선택한 파일 지우기" })).toHaveCount(0);
+  await expect(page.getByLabel("업무 내용", { exact: true })).toBeVisible();
+  await picker.setInputFiles("tests/fixtures/xlsx/정산_1030.xlsx");
+  await page.getByLabel("자료 제목").fill("다시 고른 정산");
+  await page.getByRole("button", { name: "원본 등록" }).click();
+  await expect(page.getByRole("heading", { name: "다시 고른 정산", level: 1 })).toBeVisible();
+});
