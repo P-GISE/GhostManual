@@ -5,6 +5,12 @@ import { defineConfig, devices } from "@playwright/test";
 // The deployment image builds without tests/, so the mail folder is defined here and handed to workers.
 const e2eMailDir = join(tmpdir(), "ghostmanual-e2e-mail");
 process.env["E2E_MAIL_DIR"] = e2eMailDir;
+// One admin address per run and project; workers inherit the value set by the main process.
+process.env["E2E_ADMIN_TAG"] ??= String(Date.now());
+const adminEmail = (project: string) =>
+  `e2e-admin-${process.env["E2E_ADMIN_TAG"]}-${project}@example.com`;
+process.env["E2E_ADMIN_DESKTOP"] = adminEmail("desktop");
+process.env["E2E_ADMIN_MOBILE"] = adminEmail("mobile");
 export default defineConfig({
   testDir: "./tests/e2e",
   globalSetup: "./tests/reset-db.ts",
@@ -45,6 +51,7 @@ export default defineConfig({
     env: {
       APP_ORIGIN: "http://localhost:3200",
       AI_ENABLED: "false",
+      ADMIN_EMAILS: `${adminEmail("desktop")},${adminEmail("mobile")}`,
       MAIL_DRIVER: "file",
       MAIL_DIR: e2eMailDir,
       TRUST_CLOUDFLARE: "true",
