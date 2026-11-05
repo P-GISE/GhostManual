@@ -2,6 +2,35 @@ import ky, { HTTPError } from "ky";
 import { z } from "zod";
 import { ManualDraftSchema } from "./schemas";
 
+export const fileTypeSchema = z.enum([
+  "xlsx",
+  "docx",
+  "hwpx",
+  "pptx",
+  "csv",
+  "hwp",
+  "doc",
+  "ppt",
+  "pdf",
+]);
+export const extractionSchema = z.object({
+  status: z.enum(["queued", "processing", "ready", "limited", "failed", "rejected"]),
+  reason: z.string().nullable(),
+  coverage: z.array(z.string()),
+  resultId: z.string().nullable(),
+});
+export const versionedFilePattern = /\.(xlsx|docx|hwpx|pptx|csv|hwp|doc|ppt|pdf)$/i;
+export const fileTypeLabels: Record<string, string> = {
+  xlsx: "엑셀",
+  docx: "워드",
+  hwpx: "한글",
+  pptx: "프레젠테이션",
+  csv: "CSV",
+  hwp: "한글",
+  doc: "워드",
+  ppt: "프레젠테이션",
+  pdf: "PDF",
+};
 export const sourceSchema = z.object({
   id: z.uuid(),
   revisionId: z.uuid(),
@@ -10,6 +39,8 @@ export const sourceSchema = z.object({
   text: z.string(),
   createdAt: z.string(),
   kind: z.enum(["text", "file"]).default("text"),
+  fileType: fileTypeSchema.nullable().default(null),
+  extraction: extractionSchema.optional(),
   openQuestions: z.number().default(0),
 });
 const questionSchema = z.object({
@@ -23,13 +54,23 @@ const questionSchema = z.object({
 });
 export type Question = z.infer<typeof questionSchema>;
 const fileBase = {
+  fileType: fileTypeSchema.default("xlsx"),
+  extraction: extractionSchema.optional(),
   revision: z.number(),
   revisionId: z.uuid(),
   createdAt: z.string(),
   uploadedByName: z.string().nullable(),
   uploadedByDepartment: z.string().nullable(),
   file: z.object({ name: z.string(), sizeBytes: z.number() }),
-  compareStatus: z.enum(["first", "compared", "no_changes", "limit_exceeded"]),
+  compareStatus: z.enum([
+    "first",
+    "compared",
+    "no_changes",
+    "limit_exceeded",
+    "pending",
+    "failed",
+    "rejected",
+  ]),
 };
 export const revisionSummarySchema = z.object({
   ...fileBase,

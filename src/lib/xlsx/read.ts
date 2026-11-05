@@ -1,8 +1,8 @@
-import { AppError } from "../errors";
-import { readArchive, unsafeFile } from "./archive";
-import type { ReadResult, SheetSnapshot } from "./types";
-import { readWorksheet, SnapshotLimitReached } from "./worksheet";
-import { attribute, node, nodes, parseXml, richText, type XmlNode, xmlText } from "./xml";
+import { AppError } from "../errors.ts";
+import { readArchive, unsafeFile } from "./archive.ts";
+import type { ReadResult, SheetSnapshot } from "./types.ts";
+import { readWorksheet, SnapshotLimitReached } from "./worksheet.ts";
+import { attribute, node, nodes, parseXml, richText, type XmlNode, xmlText } from "./xml.ts";
 
 const WORKBOOK_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
 

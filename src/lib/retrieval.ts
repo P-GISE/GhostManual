@@ -60,7 +60,7 @@ export async function retrieve(
     const rows = await db.query<Record<string, unknown>>(
       `WITH eligible AS (
  SELECT m.id AS manual_id,v.id AS version_id,m.source_id,v.source_revision_id,v.version,v.content,r.title,
- CASE WHEN s.kind='file' THEN left(r.title || chr(10) || coalesce((
+ CASE WHEN s.kind='file' AND s.file_type='xlsx' THEN left(r.title || chr(10) || coalesce((
    SELECT string_agg(format('시트 %s (%s행 × %s열)',sheet->>'name',sheet->>'rows',sheet->>'cols'),
      chr(10) ORDER BY pos)
    FROM jsonb_array_elements(f.snapshot->'sheets') WITH ORDINALITY sheets(sheet,pos)

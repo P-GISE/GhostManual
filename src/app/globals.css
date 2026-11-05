@@ -1267,3 +1267,8 @@ button.danger {
 button.danger:hover:not(:disabled) {
   background: #852a12;
 }
+
+.document-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

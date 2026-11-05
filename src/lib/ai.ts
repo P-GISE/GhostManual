@@ -127,7 +127,7 @@ export async function generateFileManual(input: unknown): Promise<ManualDraft> {
     45000,
     16000,
     instructions +
-      " 엑셀 업무 파일의 시트 구조, 버전별 변경, 작성자의 질문·답변으로 인수인계 매뉴얼 초안을 작성하세요. 답변에 없는 절차나 규칙은 지어내지 말고 unknowns에 확인할 점으로 적으세요. references는 빈 배열로 두세요.",
+      " 업무 파일의 형식·구조, 버전별 변경 위치·종류, 작성자의 질문·답변으로 인수인계 매뉴얼 초안을 작성하세요. 답변에 없는 절차나 규칙은 지어내지 말고 unknowns에 확인할 점으로 적으세요. references는 빈 배열로 두세요.",
   );
   return { ...draft, references: [] };
 }

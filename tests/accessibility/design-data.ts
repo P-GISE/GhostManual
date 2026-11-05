@@ -8,6 +8,7 @@ export const source: Source = {
   revision: 1,
   createdAt: "2026-10-18T00:00:00.000Z",
   kind: "text",
+  fileType: null,
   openQuestions: 0,
 };
 export const manual: Manual = {

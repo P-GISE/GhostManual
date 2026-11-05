@@ -1,5 +1,5 @@
 import { crc32, inflateRawSync } from "node:zlib";
-import { AppError } from "../errors";
+import { AppError } from "../errors.ts";
 
 const MAX_EXPANDED = 20 * 1024 * 1024;
 const MAX_XML = 10 * 1024 * 1024;

@@ -2,7 +2,16 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { z } from "zod";
-import { http, kst, type Manual, manualSchema, message, read } from "../lib/client";
+import {
+  http,
+  kst,
+  type Manual,
+  manualSchema,
+  message,
+  read,
+  type Source,
+  sourceSchema,
+} from "../lib/client";
 import { FileHistory } from "./FileHistory";
 import { ManualContent } from "./ManualContent";
 import { ManualVersionComparison } from "./ManualVersionComparison";
@@ -25,6 +34,8 @@ export function ManualDetail({
   const [busy, setBusy] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [unknowns, setUnknowns] = useState(false);
+  const [source, setSource] = useState<Source | null>(null);
+  const [limitedAcknowledged, setLimitedAcknowledged] = useState(false);
   const [sharing, setSharing] = useState<Sharing | null>(null);
   // The radio reflects the choice immediately; the link appears when the server confirms.
   const [sharingMode, setSharingMode] = useState<Sharing["mode"] | null>(null);
@@ -40,7 +51,13 @@ export function ManualDetail({
         .catch(async (e) => setError(await message(e)));
     }
     read(`/api/manuals/${id}`, manualSchema, reader)
-      .then(setManual)
+      .then((current) => {
+        setManual(current);
+        if (!reader)
+          void read(`/api/sources/${current.sourceId}`, sourceSchema)
+            .then(setSource)
+            .catch(async (e) => setError(await message(e)));
+      })
       .catch(async (e) => setError(await message(e)));
   }, [id, reader]);
   async function publish() {
@@ -53,11 +70,13 @@ export function ManualDetail({
           json: {
             expectedRevision: manual.draftRevision,
             acknowledgedUnknowns: unknowns ? manual.draft.unknowns : [],
+            limitedAcknowledged,
           },
         })
         .json();
       setManual(await read(`/api/manuals/${id}`, manualSchema));
       setConfirmed(false);
+      setLimitedAcknowledged(false);
     } catch (e) {
       setError(await message(e));
     } finally {
@@ -90,6 +109,10 @@ export function ManualDetail({
       </p>
     );
   const published = manual.published;
+  const sourceBlocked =
+    !reader &&
+    (!source || (!!source.extraction && !["ready", "limited"].includes(source.extraction.status)));
+  const limitedSource = source?.extraction?.status === "limited";
   return (
     <>
       {/* Print/PDF: only the published, reviewed version and its frozen change history. */}
@@ -178,9 +201,30 @@ export function ManualDetail({
                   />
                   미확인 항목이 남아 있음을 확인했습니다.
                 </label>
+                {sourceBlocked && (
+                  <p className="notice" role="status">
+                    원본 확인이 완료되기 전에는 게시할 수 없습니다.
+                  </p>
+                )}
+                {limitedSource && (
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      checked={limitedAcknowledged}
+                      onChange={(e) => setLimitedAcknowledged(e.target.checked)}
+                    />
+                    내용 비교가 제한돼 원본을 직접 확인했습니다.
+                  </label>
+                )}
                 <button
                   type="button"
-                  disabled={busy || !confirmed || (content.unknowns.length > 0 && !unknowns)}
+                  disabled={
+                    busy ||
+                    sourceBlocked ||
+                    (limitedSource && !limitedAcknowledged) ||
+                    !confirmed ||
+                    (content.unknowns.length > 0 && !unknowns)
+                  }
                   onClick={publish}
                 >
                   검수 완료·버전 게시

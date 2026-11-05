@@ -1,6 +1,6 @@
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 import { z } from "zod";
-import { unsafeFile } from "./archive";
+import { unsafeFile } from "./archive.ts";
 
 export type XmlNode = Record<string, unknown>;
 const record = z.record(z.string(), z.unknown());

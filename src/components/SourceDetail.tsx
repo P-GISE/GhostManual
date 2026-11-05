@@ -1,9 +1,18 @@
 "use client";
 import { HTTPError } from "ky";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
-import { http, manualSchema, message, read, type Source, sourceSchema } from "../lib/client";
+import {
+  type FileRevision,
+  fileTypeLabels,
+  http,
+  manualSchema,
+  message,
+  read,
+  type Source,
+  sourceSchema,
+} from "../lib/client";
 import { type ManualDraft, SourceInputSchema } from "../lib/schemas";
 import { FileVersions } from "./FileVersions";
 import { SourceDelete } from "./SourceDelete";
@@ -24,6 +33,15 @@ export function SourceDetail({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
+  const updateFile = useCallback(
+    ({ revision, revisionId, fileType, extraction }: FileRevision) =>
+      setSource((current) =>
+        current?.id === id && revision >= current.revision
+          ? { ...current, revision, revisionId, fileType, extraction }
+          : current,
+      ),
+    [id],
+  );
   useUnsavedChanges(editing && !!source && (title !== source.title || text !== source.text));
   useEffect(() => {
     async function load() {
@@ -153,28 +171,42 @@ export function SourceDetail({
         )}
       </>
     );
+  const sourceBlocked =
+    !!source.extraction && !["ready", "limited"].includes(source.extraction.status);
+  const sourceLabel = fileTypeLabels[source.fileType ?? "xlsx"] ?? "업무 파일";
   const manualPanel = reader ? null : (
     <aside className="panel">
       <h2>매뉴얼 만들기</h2>
       <p>업무 목적과 순서, 주의 사항을 정리한 다음 직접 검수합니다.</p>
       <div className="actions">
-        <button type="button" onClick={() => create(false)} disabled={busy || editing}>
+        <button
+          type="button"
+          onClick={() => create(false)}
+          disabled={busy || editing || sourceBlocked}
+        >
           직접 작성하기
         </button>
         <button
           type="button"
           className="secondary"
           onClick={() => create(true)}
-          disabled={busy || editing}
+          disabled={busy || editing || sourceBlocked || source.extraction?.status === "limited"}
         >
           AI 초안 요청
         </button>
       </div>
       <p className="help">
-        {source.kind === "file"
-          ? "자료 제목·시트 구조·변경 수식·버전별 질문과 답변을 AI에 보내 초안을 만듭니다. 제목·시트 이름·수식·답변에 개인정보나 기밀이 없는지 확인하세요. 첫 행을 포함한 셀 값과 원본 파일은 보내지 않습니다. 답하지 않은 질문은 확인 필요 항목으로 남습니다."
-          : "AI가 비활성화됐거나 연결할 수 없으면 생성 불가 안내를 표시합니다. 합성 예제는 미리 작성된 문서입니다."}
+        {source.kind === "file" && source.fileType !== "xlsx" && source.fileType !== null
+          ? "문서 원본·추출 본문·표 값·OCR 결과는 자동으로 AI에 보내지 않습니다. 자료 제목·구조·변경 위치와 작성한 답변으로 초안을 만듭니다. 설명·답변에 개인정보나 기밀이 없는지 확인하세요."
+          : source.kind === "file"
+            ? "자료 제목·시트 구조·변경 수식·버전별 질문과 답변을 AI에 보내 초안을 만듭니다. 제목·시트 이름·수식·답변에 개인정보나 기밀이 없는지 확인하세요. 첫 행을 포함한 셀 값과 원본 파일은 보내지 않습니다. 답하지 않은 질문은 확인 필요 항목으로 남습니다."
+            : "AI가 비활성화됐거나 연결할 수 없으면 생성 불가 안내를 표시합니다. 합성 예제는 미리 작성된 문서입니다."}
       </p>
+      {sourceBlocked && (
+        <p className="notice" role="status">
+          문서 확인이 완료되기 전에는 매뉴얼을 만들거나 게시할 수 없습니다.
+        </p>
+      )}
       {busy && <p role="status">요청을 처리하고 있습니다.</p>}
       <SourceDelete
         confirmed={deleteConfirmed}
@@ -187,12 +219,14 @@ export function SourceDetail({
   if (source.kind === "file")
     return (
       <>
-        <span className="eyebrow">엑셀 자료 · 버전 {source.revision}개</span>
+        <span className="eyebrow">
+          {sourceLabel} 자료 · 버전 {source.revision}개
+        </span>
         <h1>{source.title}</h1>
         <p className="muted">
           {reader
-            ? "공유 매뉴얼에 연결된 엑셀 버전입니다. 읽기 전용으로 확인할 수 있습니다."
-            : "작업을 마친 엑셀을 새 버전으로 올리면 바뀐 부분을 질문합니다. 새 버전은 연결된 매뉴얼의 재검토가 필요합니다."}
+            ? "공유 매뉴얼에 연결된 파일 버전입니다. 읽기 전용으로 확인할 수 있습니다."
+            : "작업을 마친 파일을 새 버전으로 올리면 바뀐 부분을 질문합니다. 새 버전은 연결된 매뉴얼의 재검토가 필요합니다."}
         </p>
         {error && (
           <p className="error" role="alert">
@@ -205,11 +239,7 @@ export function SourceDetail({
           startUploading={upload}
           busy={busy}
           onBusyChange={setBusy}
-          onUploaded={({ revision, revisionId }) =>
-            setSource((current) =>
-              current?.id === id ? { ...current, revision, revisionId } : current,
-            )
-          }
+          onUploaded={updateFile}
         />
         {manualPanel}
       </>
