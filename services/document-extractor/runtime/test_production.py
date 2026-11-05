@@ -1,5 +1,6 @@
 """Offline production startup/activation contract; no host policy or credential use."""
 import configparser
+from contextlib import ExitStack, contextmanager
 import importlib.util
 import os
 from pathlib import Path
@@ -68,25 +69,100 @@ class ProductionTests(unittest.TestCase):
         self.assertEqual(production.replace(additions, ""), base.replace("ghostmanual-extractor-runtime", "ghostmanual-extractor-production"))
         self.assertNotRegex(production, r"flags=\([^)]*unconfined")
 
-    def test_tls_context_keeps_client_auth_tls13_and_fixed_private_files(self):
+    def credential_fixture(self):
         import stat
+        import struct
         from types import SimpleNamespace
-        module = load(); directory = Path("/run/credentials/ghostmanual-extractor@" + "a" * 64 + ".service")
-        info = SimpleNamespace(st_mode=stat.S_IFREG | 0o400, st_uid=os.getuid(), st_size=100)
+        directory = Path("/run/credentials/ghostmanual-extractor@" + "a" * 64 + ".service")
+        metadata = {7: SimpleNamespace(st_mode=stat.S_IFDIR | 0o550, st_uid=0, st_gid=0, st_size=100, st_nlink=2)}
+        metadata.update({fd: SimpleNamespace(st_mode=stat.S_IFREG | 0o440, st_uid=0, st_gid=0, st_size=100, st_nlink=1) for fd in (9, 10, 11)})
+        # Exact metadata from the real systemd255 credential mount, not key bytes.
+        acl = {}
+        for fd in metadata:
+            permission = 5 if fd == 7 else 4
+            rows = [(1, permission, 0xFFFFFFFF), (2, permission, 1000), (4, 0, 0xFFFFFFFF), (16, permission, 0xFFFFFFFF), (32, 0, 0xFFFFFFFF)]
+            acl[fd] = struct.pack("<I", 2) + b"".join(struct.pack("<HHI", *row) for row in rows)
+        return directory, metadata, acl
+
+    @contextmanager
+    def mock_credentials(self, module, directory, metadata, acl, readonly=None):
+        from types import SimpleNamespace
         context = Mock()
-        with patch.object(module, "credential_directory", return_value=directory), patch.object(module.os, "open", return_value=9) as opened, patch.object(module.os, "fstat", return_value=info), patch.object(module.os, "close"), patch.object(module.ssl, "SSLContext", return_value=context):
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(module, "credential_directory", return_value=directory))
+            stack.enter_context(patch.object(module.os, "getuid", return_value=1000))
+            stack.enter_context(patch.object(module.os, "getgid", return_value=1000))
+            opened = stack.enter_context(patch.object(module.os, "open", side_effect=[7, 9, 10, 11]))
+            stack.enter_context(patch.object(module.os, "fstat", side_effect=lambda fd: metadata[fd]))
+            stack.enter_context(patch.object(module.os, "fstatvfs", side_effect=lambda fd: SimpleNamespace(f_flag=(readonly or {}).get(fd, os.ST_RDONLY))))
+            stack.enter_context(patch.object(module.os, "getxattr", side_effect=lambda fd, name: acl[fd] if name == "system.posix_acl_access" else (_ for _ in ()).throw(AssertionError("unexpected metadata"))))
+            closed = stack.enter_context(patch.object(module.os, "close"))
+            stack.enter_context(patch.object(module.ssl, "SSLContext", return_value=context))
+            yield context, opened, closed
+
+    def test_tls_context_accepts_actual_root_owned_readonly_acl_and_fixed_files(self):
+        module = load(); directory, metadata, acl = self.credential_fixture()
+        with self.mock_credentials(module, directory, metadata, acl) as (context, opened, closed):
             self.assertIs(module.tls_context(), context)
         self.assertEqual(context.minimum_version, module.ssl.TLSVersion.TLSv1_3)
         self.assertEqual(context.verify_mode, module.ssl.CERT_REQUIRED)
-        self.assertEqual([args.args[0] for args in opened.call_args_list], [directory / name for name in ("client-ca.pem", "server-cert.pem", "server-key.pem")])
+        self.assertEqual(opened.call_args_list[0].args[0], directory)
+        self.assertTrue(opened.call_args_list[0].args[1] & os.O_DIRECTORY)
+        self.assertEqual([args.args[0] for args in opened.call_args_list[1:]], ["client-ca.pem", "server-cert.pem", "server-key.pem"])
+        self.assertTrue(all(args.kwargs == {"dir_fd": 7} for args in opened.call_args_list[1:]))
         self.assertTrue(all(args.args[1] & os.O_NOFOLLOW and args.args[1] & os.O_CLOEXEC for args in opened.call_args_list))
+        self.assertEqual([args.args[0] for args in closed.call_args_list], [9, 10, 11, 7])
         context.load_verify_locations.assert_called_once_with(directory / "client-ca.pem")
         context.load_cert_chain.assert_called_once_with(directory / "server-cert.pem", directory / "server-key.pem")
-        for mode, size, uid in [(0o444, 100, os.getuid()), (0o400, 65537, os.getuid()), (0o400, 100, os.getuid() + 1)]:
-            bad = SimpleNamespace(st_mode=stat.S_IFREG | mode, st_uid=uid, st_size=size)
-            with patch.object(module, "credential_directory", return_value=directory), patch.object(module.os, "open", return_value=9), patch.object(module.os, "fstat", return_value=bad), patch.object(module.os, "close") as closed, self.assertRaises(RuntimeError):
+
+    def test_tls_context_rejects_writable_wrong_owner_mode_size_or_hardlink(self):
+        import stat
+        cases = [(7, "st_uid", 1000), (7, "st_gid", 1000), (7, "st_mode", stat.S_IFDIR | 0o555),
+                 (9, "st_uid", 1000), (9, "st_gid", 1000), (9, "st_mode", stat.S_IFREG | 0o444),
+                 (9, "st_mode", stat.S_IFREG | 0o640), (9, "st_size", 0), (9, "st_size", 65537),
+                 (9, "st_nlink", 2), (9, "st_mode", stat.S_IFLNK | 0o440)]
+        for fd, field, value in cases:
+            module = load(); directory, metadata, acl = self.credential_fixture(); setattr(metadata[fd], field, value)
+            with self.subTest(fd=fd, field=field, value=value), self.mock_credentials(module, directory, metadata, acl) as (context, opened, closed), self.assertRaises(RuntimeError):
                 module.tls_context()
-            closed.assert_called_once_with(9)
+            context.load_cert_chain.assert_not_called()
+            self.assertIn(7, [args.args[0] for args in closed.call_args_list])
+        for fd in (7, 9):
+            module = load(); directory, metadata, acl = self.credential_fixture()
+            with self.subTest(writable_fd=fd), self.mock_credentials(module, directory, metadata, acl, {fd: 0}) as (context, opened, closed), self.assertRaises(RuntimeError):
+                module.tls_context()
+            context.load_cert_chain.assert_not_called()
+
+    def test_tls_context_rejects_wrong_process_identity_and_missing_acl(self):
+        import errno
+        for uid, gid in [(0, 1000), (1000, 0), (1001, 1000)]:
+            module = load(); directory, metadata, acl = self.credential_fixture()
+            with self.subTest(uid=uid, gid=gid), self.mock_credentials(module, directory, metadata, acl) as (context, opened, closed), patch.object(module.os, "getuid", return_value=uid), patch.object(module.os, "getgid", return_value=gid), self.assertRaises(RuntimeError):
+                module.tls_context()
+            opened.assert_not_called()
+            context.load_cert_chain.assert_not_called()
+        module = load(); directory, metadata, acl = self.credential_fixture()
+        with self.mock_credentials(module, directory, metadata, acl) as (context, opened, closed), patch.object(module.os, "getxattr", side_effect=OSError(errno.ENODATA, "metadata absent")), self.assertRaises(OSError):
+            module.tls_context()
+        closed.assert_called_once_with(7)
+        context.load_cert_chain.assert_not_called()
+
+    def test_tls_context_rejects_non_exact_acl_version_mask_extra_access_or_truncation(self):
+        import struct
+        for fd in (7, 9):
+            for label in ["wrong-version", "truncated", "other-user", "extra-user", "extra-group", "group-read", "other-read", "write-mask"]:
+                module = load(); directory, metadata, acl = self.credential_fixture(); original = acl[fd]
+                if label == "wrong-version": acl[fd] = struct.pack("<I", 3) + original[4:]
+                elif label == "truncated": acl[fd] = original[:-1]
+                elif label == "other-user": acl[fd] = original[:16] + struct.pack("<I", 1001) + original[20:]
+                elif label == "extra-user": acl[fd] += struct.pack("<HHI", 2, 4, 1001)
+                elif label == "extra-group": acl[fd] += struct.pack("<HHI", 8, 4, 1000)
+                elif label == "group-read": acl[fd] = original[:22] + struct.pack("<H", 4) + original[24:]
+                elif label == "other-read": acl[fd] = original[:38] + struct.pack("<H", 4) + original[40:]
+                elif label == "write-mask": acl[fd] = original[:30] + struct.pack("<H", 6) + original[32:]
+                with self.subTest(fd=fd, acl=label), self.mock_credentials(module, directory, metadata, acl) as (context, opened, closed), self.assertRaises(RuntimeError):
+                    module.tls_context()
+                context.load_cert_chain.assert_not_called()
 
     def test_compiled_credential_paths_do_not_match_other_keys(self):
         import shutil

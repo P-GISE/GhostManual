@@ -5,6 +5,7 @@ import re
 import socket
 import ssl
 import stat
+import struct
 import sys
 import unittest
 
@@ -40,17 +41,39 @@ def credential_directory():
     return Path(value)
 
 
+def require_credential_metadata(descriptor, directory=False):
+    info = os.fstat(descriptor)
+    permission = 5 if directory else 4
+    expected_mode = 0o550 if directory else 0o440
+    expected_type = stat.S_IFDIR if directory else stat.S_IFREG
+    if not (stat.S_IFMT(info.st_mode) == expected_type and info.st_uid == info.st_gid == 0
+            and stat.S_IMODE(info.st_mode) == expected_mode
+            and os.fstatvfs(descriptor).f_flag & os.ST_RDONLY
+            and (directory or (info.st_nlink == 1 and 0 < info.st_size <= 65536))):
+        raise RuntimeError("unsafe credential metadata")
+    # systemd255 keeps root ownership and adds only the service UID's read/search ACL.
+    entries = ((1, permission, 0xFFFFFFFF), (2, permission, 1000), (4, 0, 0xFFFFFFFF),
+               (16, permission, 0xFFFFFFFF), (32, 0, 0xFFFFFFFF))
+    expected_acl = struct.pack("<I", 2) + b"".join(struct.pack("<HHI", *entry) for entry in entries)
+    if os.getxattr(descriptor, "system.posix_acl_access") != expected_acl:
+        raise RuntimeError("unsafe credential ACL")
+
+
 def tls_context():
+    if os.getuid() != 1000 or os.getgid() != 1000:
+        raise RuntimeError("incorrect credential identity")
     directory = credential_directory()
-    for name in ("client-ca.pem", "server-cert.pem", "server-key.pem"):
-        descriptor = os.open(directory / name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
-        try:
-            info = os.fstat(descriptor)
-            if not (stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
-                    and stat.S_IMODE(info.st_mode) == 0o400 and 0 < info.st_size <= 65536):
-                raise RuntimeError("unsafe credential")
-        finally:
-            os.close(descriptor)
+    directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        require_credential_metadata(directory_fd, directory=True)
+        for name in ("client-ca.pem", "server-cert.pem", "server-key.pem"):
+            descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory_fd)
+            try:
+                require_credential_metadata(descriptor)
+            finally:
+                os.close(descriptor)
+    finally:
+        os.close(directory_fd)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_3
     context.verify_mode = ssl.CERT_REQUIRED

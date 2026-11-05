@@ -23,7 +23,7 @@
 ## 인증서·설정 파일
 
 1. 전용 서버 CA와 worker client CA를 만들고 다른 회사/공개 CA를 client 신뢰 목록에 넣지 않는다. 서버 SAN은 localhost, EKU는 serverAuth, worker EKU는 clientAuth다. CA private key는 런타임에 주지 않는다. 원본과 CA private key는 root0700 폴더·root0600 파일에 보관한다. 공개 fingerprint·만료일만 기록한다.
-2. gateway root0600 source3개는 `/etc/ghostmanual-extractor/{client-ca,server-cert,server-key}.pem`이다. systemd LoadCredential이 자기 service의 `/run/credentials/ghostmanual-extractor@<64hex>.service/`에 UID1000·0400·read-only로 제공해야 한다. production.py는 정확한 경로/owner/mode/size를 검사한다. 읽히지 않는다고 world/group read나 profile 전체 허용을 추가하지 않는다. RootDirectory 안 credential 노출은 합성 키로 먼저 실측한다.
+2. gateway root0600 source3개는 `/etc/ghostmanual-extractor/{client-ca,server-cert,server-key}.pem`이다. systemd255 LoadCredential은 자기 service의 `/run/credentials/ghostmanual-extractor@<64hex>.service/`에 root:root 디렉터리0550·파일0440으로 제공하며, ACL의 named UID1000에만 디렉터리 읽기/탐색·파일 읽기를 부여한다. group_obj/other 권한은 없고 group mode 비트는 ACL mask다. production.py는 정확한 자기 경로·root 소유·읽기 전용 filesystem·단일 link/크기와 버전2의 정확한5-entry ACL을 함께 검사한다. 다른 사용자/그룹이나 writable mount·추가 ACL은 거부한다. 읽히지 않는다고 world/group read나 profile 전체 허용을 추가하지 않는다. RootDirectory 안 credential 노출은 합성 키로 먼저 실측한다.
 3. worker TLS 원본도 root0600으로 두며 `/run/ghostmanual-document-worker/secrets/`를 root0700으로 만든다. daemon이 bind할 runtime 사본3개 `{server-ca,client-cert,client-key}.pem`만 UID1000·0400으로 복사하고 원본과 해시를 대조한다. root700 부모를 컨테이너에 통째로 mount하지 않는다. systemd `%d`는 private mount namespace일 수 있어 Docker daemon bind 원본으로 사용하지 않는다.
 4. `/etc/ghostmanual-document-worker.env`는 root0600이며 **제한 앱 계정 DATABASE_URL과 `DOCUMENT_EXTRACTOR_URL=https://localhost:18443/`만** 넣는다. DB URL의 host는 방금 확인한 단일 DB IP이고 비밀번호를 인자나 로그에 넣지 않는다. 관리자용 migration env는 worker에 주지 않는다. PEM multiline을 Docker env-file에 직접 쓰지 않는다.
 5. unit의 LoadCredential=worker-env는 trusted CLI가 `%d/worker-env`를 읽게 한다. worker-entry.mjs는 개별 read-only mount3개를 읽고 기존 DOCUMENT_EXTRACTOR_CA/CERT/KEY 환경으로 넣은 뒤 기존 worker를 import한다. 최초 Docker 환경에 PEM이 들어 있거나 key 파일이 없거나 group/world에 읽히면 시작을 거부하며 값·stack은 출력하지 않는다.
@@ -43,7 +43,7 @@
 
 migration007과 새 scripts/deploy 파일은 고정 SSM/event 실행기의 protected_tree를 바꾼다. 현재 고정 실행기, config model, receipt/fence/lock을 보존하고 검토된 보호-tree 갱신 절차를 적용한다. `install.py`와 `prepare-review.py`는 wrapper가 없는 최초 설치를 가정하므로 기존 설치에 그대로 재실행하지 않는다. 기존 review 원문을 root 전용으로 백업하고 정확한 성공 SHA/run/artifact/module/config/현재 운영 신원을 재검토한 승인 사본만 사용한다. 보호 검사·SSM 권한을 끄거나 receipt/fence를 고쳐 맞추지 않는다.
 
-DB 백업 후 검토된007을 먼저 적용하고 기존 앱 호환성을 확인한다. PR53의 미병합 admin006을 임의 적용하지 않는다. 기존 event app 배포는 원래 app/db Compose로만 한다. worker를 그 Compose에 넣으면 정확히 app/db만 허용하는 guard를 깨므로 별도 서비스로 유지한다. 새 worker container는 event 배포의 다른 컨테이너 fingerprint 전후에 추가/제거하지 않고 앱 승격 성공 후 시작한다.
+DB 백업 후 검토된007을 먼저 적용하고 기존 앱 호환성을 확인한다. 관리자006은 별도 사용자 지시로 검토·백업 후 이미 적용했다([기록](../../docs/qa/2026-11-05/pr53-admin-migration.md)). 이 엔진 배포 절차에서 추가 적용할 대상은007이다. 기존 event app 배포는 원래 app/db Compose로만 한다. worker를 그 Compose에 넣으면 정확히 app/db만 허용하는 guard를 깨므로 별도 서비스로 유지한다. 새 worker container는 event 배포의 다른 컨테이너 fingerprint 전후에 추가/제거하지 않고 앱 승격 성공 후 시작한다.
 
 **worker 이미지 갱신 순서:** 기존 image env를 그대로 둔 채 worker service를 STOP → helper가 CID/role/기존 immutable image를 대조해 정확한 container만 stop/제거 확인 → CID 정리가 성공한 뒤 root image env를 새 검증 digest로 교체 → START. image env를 먼저 바꾸면 ExecStop이 옛 container 이미지 불일치로 안전 거부하므로 순서를 바꾸지 않는다. 자동 앱 배포와 worker의 pinned image 갱신은 별도 작업이다.
 
