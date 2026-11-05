@@ -1282,3 +1282,8 @@ button.danger:hover:not(:disabled) {
   min-height: 44px;
   padding: 0;
 }
+
+.document-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

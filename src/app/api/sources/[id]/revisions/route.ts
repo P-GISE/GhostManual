@@ -36,7 +36,7 @@ export async function POST(request: Request, context: Context) {
       .safeParse(form.get("expectedRevision"));
     if (!(file instanceof File) || !expectedRevision.success)
       throw new AppError("invalid_input", 422, "파일과 버전 번호가 필요합니다.");
-    if (!/\.xlsx$/i.test(file.name))
+    if (!/\.(xlsx|docx|hwpx|pptx|csv|hwp|doc|ppt|pdf)$/i.test(file.name))
       throw new AppError(
         "file_type_mismatch",
         422,
@@ -48,7 +48,7 @@ export async function POST(request: Request, context: Context) {
         bytes: new Uint8Array(await file.arrayBuffer()),
         expectedRevision: expectedRevision.data,
       }),
-      201,
+      /\.xlsx$/i.test(file.name) ? 201 : 202,
     );
   });
 }

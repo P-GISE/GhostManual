@@ -1,5 +1,21 @@
 # GhostManual 프로젝트 가이드
 
+## 2026-11-05 PR #55 병합 전 검증
+
+최신 코드386069e의 전체 CI와 최종 extractor의 실제 격리5/5·추출10/10, mTLS 거부/성공·Node transport10건·worker Docker scope BPF 사전 검사를 통과했다. systemd credential은 root ACL 계약으로 보완했다. [검증 근거·남은 운영 단계](docs/qa/2026-11-05/pr55-runtime-readiness.md). 병합·문서007·운영 앱/실제 queue worker 활성화는 아직 후속이며 아래 검증 당시 미완료 문구와 구분한다.
+
+## 2026-11-05 PR #53 관리자 DB 준비
+
+사용자 지시로 PR #53의 정확한006_admin.sql을 검토·격리 검사·신규 S3 백업 후09:33 KST 운영에 적용했다. 기존 사용자·앱 권한·200/401 응답을 보존했으며 관리자 승격/계정 생성·ADMIN_EMAILS·PR #53 병합·앱 배포는 하지 않았다. [실행 근거와 경계](docs/qa/2026-11-05/pr53-admin-migration.md). 문서 엔진은007로 번호를 분리하고 PR #55에서 최신 기본 통합·CI와 운영 실행 구성을 준비 중이다.
+
+## 2026-11-05 외부 엔진 격리 보완·50GiB 확장
+
+사용자 승인으로 암호화 EBS와 ext4를40→50GiB 온라인 확장했다. 재부팅·기존 이미지/백업 삭제 없이 컨테이너와 앱 응답을 보존했다. 외부 엔진은 최종 무캐시 이미지 `bec10606…`·새 rootfs·오버레이 없는 전용 RootDirectory/cgroup/AppArmor 실행에서 격리5/5·추출10/10을 통과했다. **격리 검증 종료 당시 운영 앱·문서 migration·gateway/worker 활성화·커밋/PR은 미실행이었다. 이후 최신 기본 통합·커밋·PR #55 작성은 완료했으며 현재 진행 상태는 위 항목을 따른다.** [현재 실행·검증 경계](docs/qa/2026-11-05/external-engine-runtime.md)를 우선한다.
+
+## 2026-11-04 다중 형식 엔진 구현·검증 중
+
+사용자 승인 설계로 DOCX·HWPX·PPTX·CSV 직접 추출, HWP v5·구형 DOC/PPT·PDF/스캔 PDF 외부 변환·OCR, 비동기 작업·소유자 전용 비교·검사 전 게시 차단을 별도 작업 트리에 구현했다. **11/4 당시 미커밋 검토 단계였고 운영 배포·문서 migration·외부 엔진 활성화는 미실행이었다. 현재 커밋·PR #55와 문서 migration007 상태는 위11/5 기록을 따른다.** 11/4 당시 외부 실제 파서 회귀20/20 통과·격리5건 FAIL/BLOCKED였으며, 이 차단은 위11/5 검증으로 해소했다. 합성 4형식 각각 2버전·390px·DOCX 검수/게시·별도 Reader 권한을 실제 확인했다. 부모 revision/최신 선택 동기화의 단일 수정과 범위 재검토 승인을 마쳤고, 최신 단위 232/232·DB 통합 146/146을 통과했다. 최종 타입 검사도 통과했다. 최신 lint·분리 빌드와 두 대기 버전의 실제 처리 순서/최신 재선택·최신 원본 작성 회귀도 통과했으며 아래 과거의 형식 확장 미구현 기록과 구분한다. [구현 범위·검증과 남은 조건](docs/qa/2026-11-04/multi-format-engines-implementation.md), [승인 설계](docs/superpowers/specs/2026-11-04-multi-format-engines-design.md), [실행 계획](docs/superpowers/plans/2026-11-04-multi-format-engines.md).
+
 > 11/4 후속: 문서 PR #47 병합·자동 배포 완료(현재 `6b5406f`/image `0096babc…`). [최신 확인·남은 작업](docs/qa/2026-11-04/park-gise-followup.md)을 우선하며, 아래 PR #46 운영 식별은 11/3 당시 기록이다. 03:20 정규 백업은 확인 시각 기준 실행 전이다.
 
 ## 2026-11-03 현재 기준과 박기성 남은 일정

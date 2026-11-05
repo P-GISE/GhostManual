@@ -14,7 +14,17 @@ export async function GET(request: Request, context: Context) {
     // Always a download: the browser must never render an uploaded workbook.
     return new Response(Buffer.from(file.bytes), {
       headers: {
-        "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "content-type": {
+          xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          hwpx: "application/hwp+zip",
+          hwp: "application/x-hwp",
+          doc: "application/msword",
+          ppt: "application/vnd.ms-powerpoint",
+          csv: "text/csv; charset=utf-8",
+          pdf: "application/pdf",
+        }[file.fileType],
         "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
         "x-content-type-options": "nosniff",
         "cache-control": "private, no-store",

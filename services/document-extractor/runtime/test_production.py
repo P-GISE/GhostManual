@@ -1,0 +1,289 @@
+"""Offline production startup/activation contract; no host policy or credential use."""
+import configparser
+from contextlib import ExitStack, contextmanager
+import importlib.util
+import os
+from pathlib import Path
+import re
+import socket
+import sys
+import unittest
+from unittest.mock import Mock, patch
+
+HERE = Path(__file__).parent
+
+def load():
+    spec = importlib.util.spec_from_file_location("extractor_production", HERE / "production.py")
+    module = importlib.util.module_from_spec(spec)
+    with patch.dict(sys.modules, {"bootstrap": Mock(), "gateway": Mock(Gateway=type("Gateway", (), {}), Handler=Mock())}):
+        spec.loader.exec_module(module)
+    return module
+
+class ProductionTests(unittest.TestCase):
+    def environment(self):
+        return {"LISTEN_PID": str(os.getpid()), "LISTEN_FDS": "1", "LISTEN_FDNAMES": "ghostmanual-extractor"}
+
+    def listener(self):
+        value = Mock(family=socket.AF_INET)
+        value.getsockopt.side_effect = lambda level, option: {socket.SO_TYPE: socket.SOCK_STREAM, socket.SO_ACCEPTCONN: 1}[option]
+        value.getsockname.return_value = ("127.0.0.1", 18443)
+        return value
+
+    def test_exact_activation_fd_is_cloexec_and_environment_is_cleared(self):
+        module = load(); listener = self.listener()
+        with patch.dict(os.environ, self.environment(), clear=True), patch.object(module.socket, "socket", return_value=listener) as opened:
+            self.assertIs(module.activation_socket(), listener)
+            opened.assert_called_once_with(fileno=3)
+            listener.set_inheritable.assert_called_once_with(False)
+            self.assertFalse(any(name.startswith("LISTEN_") for name in os.environ))
+
+    def test_wrong_pid_count_or_name_is_rejected_before_socket_access(self):
+        module = load()
+        for name, value in [("LISTEN_PID", "0"), ("LISTEN_FDS", "2"), ("LISTEN_FDS", "01"), ("LISTEN_FDNAMES", "other")]:
+            env = self.environment(); env[name] = value
+            with self.subTest(name=name, value=value), patch.dict(os.environ, env, clear=True), patch.object(module.socket, "socket") as opened, self.assertRaises(RuntimeError):
+                module.activation_socket()
+            opened.assert_not_called()
+
+    def test_non_loopback_or_non_listening_socket_is_closed_and_rejected(self):
+        module = load()
+        for address, listening in [(("0.0.0.0", 18443), 1), (("127.0.0.1", 8443), 1), (("127.0.0.1", 18443), 0)]:
+            listener = self.listener(); listener.getsockname.return_value = address
+            listener.getsockopt.side_effect = lambda level, option: socket.SOCK_STREAM if option == socket.SO_TYPE else listening
+            with self.subTest(address=address, listening=listening), patch.dict(os.environ, self.environment(), clear=True), patch.object(module.socket, "socket", return_value=listener), self.assertRaises(RuntimeError):
+                module.activation_socket()
+            listener.close.assert_called_once_with()
+
+    def test_credential_directory_is_exact_own_systemd_unit(self):
+        module = load(); expected = "/run/credentials/ghostmanual-extractor@" + "a" * 64 + ".service"
+        with patch.dict(os.environ, {"CREDENTIALS_DIRECTORY": expected}, clear=True):
+            self.assertEqual(module.credential_directory(), Path(expected))
+        for path in ["/tmp/keys", expected + "/../other", expected.replace("a" * 64, "a" * 63), expected.replace("extractor@", "other@")]:
+            with patch.dict(os.environ, {"CREDENTIALS_DIRECTORY": path}, clear=True), self.assertRaises(RuntimeError):
+                module.credential_directory()
+
+    def test_production_policy_is_base_with_own_peers_and_three_credentials_only(self):
+        base = (HERE / "ghostmanual-extractor-runtime.apparmor").read_text()
+        production = (HERE / "ghostmanual-extractor-production.apparmor").read_text()
+        additions = "  /run/credentials/ r,\n  /run/credentials/ghostmanual-extractor@*.service/ r,\n  /run/credentials/ghostmanual-extractor@*.service/{client-ca,server-cert,server-key}.pem r,\n"
+        self.assertEqual(production.replace(additions, ""), base.replace("ghostmanual-extractor-runtime", "ghostmanual-extractor-production"))
+        self.assertNotRegex(production, r"flags=\([^)]*unconfined")
+
+    def credential_fixture(self):
+        import stat
+        import struct
+        from types import SimpleNamespace
+        directory = Path("/run/credentials/ghostmanual-extractor@" + "a" * 64 + ".service")
+        metadata = {7: SimpleNamespace(st_mode=stat.S_IFDIR | 0o550, st_uid=0, st_gid=0, st_size=100, st_nlink=2)}
+        metadata.update({fd: SimpleNamespace(st_mode=stat.S_IFREG | 0o440, st_uid=0, st_gid=0, st_size=100, st_nlink=1) for fd in (9, 10, 11)})
+        # Exact metadata from the real systemd255 credential mount, not key bytes.
+        acl = {}
+        for fd in metadata:
+            permission = 5 if fd == 7 else 4
+            rows = [(1, permission, 0xFFFFFFFF), (2, permission, 1000), (4, 0, 0xFFFFFFFF), (16, permission, 0xFFFFFFFF), (32, 0, 0xFFFFFFFF)]
+            acl[fd] = struct.pack("<I", 2) + b"".join(struct.pack("<HHI", *row) for row in rows)
+        return directory, metadata, acl
+
+    @contextmanager
+    def mock_credentials(self, module, directory, metadata, acl, readonly=None):
+        from types import SimpleNamespace
+        context = Mock()
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(module, "credential_directory", return_value=directory))
+            stack.enter_context(patch.object(module.os, "getuid", return_value=1000))
+            stack.enter_context(patch.object(module.os, "getgid", return_value=1000))
+            opened = stack.enter_context(patch.object(module.os, "open", side_effect=[7, 9, 10, 11]))
+            stack.enter_context(patch.object(module.os, "fstat", side_effect=lambda fd: metadata[fd]))
+            stack.enter_context(patch.object(module.os, "fstatvfs", side_effect=lambda fd: SimpleNamespace(f_flag=(readonly or {}).get(fd, os.ST_RDONLY))))
+            stack.enter_context(patch.object(module.os, "getxattr", side_effect=lambda fd, name: acl[fd] if name == "system.posix_acl_access" else (_ for _ in ()).throw(AssertionError("unexpected metadata"))))
+            closed = stack.enter_context(patch.object(module.os, "close"))
+            stack.enter_context(patch.object(module.ssl, "SSLContext", return_value=context))
+            yield context, opened, closed
+
+    def test_tls_context_accepts_actual_root_owned_readonly_acl_and_fixed_files(self):
+        module = load(); directory, metadata, acl = self.credential_fixture()
+        with self.mock_credentials(module, directory, metadata, acl) as (context, opened, closed):
+            self.assertIs(module.tls_context(), context)
+        self.assertEqual(context.minimum_version, module.ssl.TLSVersion.TLSv1_3)
+        self.assertEqual(context.verify_mode, module.ssl.CERT_REQUIRED)
+        self.assertEqual(opened.call_args_list[0].args[0], directory)
+        self.assertTrue(opened.call_args_list[0].args[1] & os.O_DIRECTORY)
+        self.assertEqual([args.args[0] for args in opened.call_args_list[1:]], ["client-ca.pem", "server-cert.pem", "server-key.pem"])
+        self.assertTrue(all(args.kwargs == {"dir_fd": 7} for args in opened.call_args_list[1:]))
+        self.assertTrue(all(args.args[1] & os.O_NOFOLLOW and args.args[1] & os.O_CLOEXEC for args in opened.call_args_list))
+        self.assertEqual([args.args[0] for args in closed.call_args_list], [9, 10, 11, 7])
+        context.load_verify_locations.assert_called_once_with(directory / "client-ca.pem")
+        context.load_cert_chain.assert_called_once_with(directory / "server-cert.pem", directory / "server-key.pem")
+
+    def test_tls_context_rejects_writable_wrong_owner_mode_size_or_hardlink(self):
+        import stat
+        cases = [(7, "st_uid", 1000), (7, "st_gid", 1000), (7, "st_mode", stat.S_IFDIR | 0o555),
+                 (9, "st_uid", 1000), (9, "st_gid", 1000), (9, "st_mode", stat.S_IFREG | 0o444),
+                 (9, "st_mode", stat.S_IFREG | 0o640), (9, "st_size", 0), (9, "st_size", 65537),
+                 (9, "st_nlink", 2), (9, "st_mode", stat.S_IFLNK | 0o440)]
+        for fd, field, value in cases:
+            module = load(); directory, metadata, acl = self.credential_fixture(); setattr(metadata[fd], field, value)
+            with self.subTest(fd=fd, field=field, value=value), self.mock_credentials(module, directory, metadata, acl) as (context, opened, closed), self.assertRaises(RuntimeError):
+                module.tls_context()
+            context.load_cert_chain.assert_not_called()
+            self.assertIn(7, [args.args[0] for args in closed.call_args_list])
+        for fd in (7, 9):
+            module = load(); directory, metadata, acl = self.credential_fixture()
+            with self.subTest(writable_fd=fd), self.mock_credentials(module, directory, metadata, acl, {fd: 0}) as (context, opened, closed), self.assertRaises(RuntimeError):
+                module.tls_context()
+            context.load_cert_chain.assert_not_called()
+
+    def test_tls_context_rejects_wrong_process_identity_and_missing_acl(self):
+        import errno
+        for uid, gid in [(0, 1000), (1000, 0), (1001, 1000)]:
+            module = load(); directory, metadata, acl = self.credential_fixture()
+            with self.subTest(uid=uid, gid=gid), self.mock_credentials(module, directory, metadata, acl) as (context, opened, closed), patch.object(module.os, "getuid", return_value=uid), patch.object(module.os, "getgid", return_value=gid), self.assertRaises(RuntimeError):
+                module.tls_context()
+            opened.assert_not_called()
+            context.load_cert_chain.assert_not_called()
+        module = load(); directory, metadata, acl = self.credential_fixture()
+        with self.mock_credentials(module, directory, metadata, acl) as (context, opened, closed), patch.object(module.os, "getxattr", side_effect=OSError(errno.ENODATA, "metadata absent")), self.assertRaises(OSError):
+            module.tls_context()
+        closed.assert_called_once_with(7)
+        context.load_cert_chain.assert_not_called()
+
+    def test_tls_context_rejects_non_exact_acl_version_mask_extra_access_or_truncation(self):
+        import struct
+        for fd in (7, 9):
+            for label in ["wrong-version", "truncated", "other-user", "extra-user", "extra-group", "group-read", "other-read", "write-mask"]:
+                module = load(); directory, metadata, acl = self.credential_fixture(); original = acl[fd]
+                if label == "wrong-version": acl[fd] = struct.pack("<I", 3) + original[4:]
+                elif label == "truncated": acl[fd] = original[:-1]
+                elif label == "other-user": acl[fd] = original[:16] + struct.pack("<I", 1001) + original[20:]
+                elif label == "extra-user": acl[fd] += struct.pack("<HHI", 2, 4, 1001)
+                elif label == "extra-group": acl[fd] += struct.pack("<HHI", 8, 4, 1000)
+                elif label == "group-read": acl[fd] = original[:22] + struct.pack("<H", 4) + original[24:]
+                elif label == "other-read": acl[fd] = original[:38] + struct.pack("<H", 4) + original[40:]
+                elif label == "write-mask": acl[fd] = original[:30] + struct.pack("<H", 6) + original[32:]
+                with self.subTest(fd=fd, acl=label), self.mock_credentials(module, directory, metadata, acl) as (context, opened, closed), self.assertRaises(RuntimeError):
+                    module.tls_context()
+                context.load_cert_chain.assert_not_called()
+
+    def test_compiled_credential_paths_do_not_match_other_keys(self):
+        import shutil
+        import subprocess
+        if not shutil.which("apparmor_parser"):
+            self.skipTest("requires offline AppArmor compiler")
+        result = subprocess.run(["apparmor_parser", "-Q", "-K", "-D", "rule-exprs", str(HERE / "ghostmanual-extractor-production.apparmor")], capture_output=True, text=True, check=True)
+        expressions = []
+        for line in (result.stdout + result.stderr).splitlines():
+            if line.startswith("aare: "):
+                path, expression = line[6:].split("   ->   ", 1)
+                if path.startswith("/run/credentials/"):
+                    expressions.append(re.compile(expression))
+        prefix = "/run/credentials/ghostmanual-extractor@" + "a" * 64 + ".service/"
+        for name in ["client-ca.pem", "server-cert.pem", "server-key.pem"]:
+            self.assertTrue(any(expression.fullmatch(prefix + name) for expression in expressions))
+        for path in [prefix + "other-key.pem", prefix + "server-key.pem.bak", prefix + "server-key.pem/child", prefix.replace("extractor@", "other@") + "server-key.pem", "/etc/ssl/private/server-key.pem"]:
+            self.assertFalse(any(expression.fullmatch(path) for expression in expressions))
+
+    def test_units_preserve_network_capability_and_resource_boundary(self):
+        unit = configparser.ConfigParser(interpolation=None, strict=False)
+        unit.read(HERE / "ghostmanual-extractor@.service"); service = unit["Service"]
+        for name in ["PrivateNetwork", "NoNewPrivileges", "PrivateDevices", "PrivateTmp", "ProtectKernelModules", "ProtectClock"]:
+            self.assertTrue(service.getboolean(name))
+        for name in ["CapabilityBoundingSet", "AmbientCapabilities"]:
+            self.assertEqual(set(service[name].split()), {"CAP_SETUID", "CAP_SETGID"})
+        self.assertEqual(service["MemoryMax"], "512M")
+        self.assertEqual(service["LimitCORE"], "0")
+        self.assertEqual(service["IPAddressDeny"], "any")
+        self.assertEqual(service["IPAddressAllow"], "localhost")
+        self.assertEqual(service["DelegateSubgroup"], "gateway")
+        self.assertEqual(service["AppArmorProfile"], "ghostmanual-extractor-production")
+        self.assertEqual(service["ReadOnlyPaths"], "/sys/fs/cgroup/memory.max /sys/fs/cgroup/memory.swap.max /sys/fs/cgroup/cpu.max /sys/fs/cgroup/pids.max")
+        socket_unit = configparser.ConfigParser(interpolation=None)
+        socket_unit.read(HERE / "ghostmanual-extractor@.socket")
+        self.assertEqual(socket_unit["Socket"]["ListenStream"], "127.0.0.1:18443")
+        self.assertFalse(socket_unit["Socket"].getboolean("Accept"))
+        self.assertEqual(socket_unit["Socket"]["IPAddressDeny"], "any")
+        self.assertEqual(socket_unit["Socket"]["IPAddressAllow"], "localhost")
+
+    def test_worker_uses_slice_parent_and_no_daemon_or_public_mounts(self):
+        root = HERE.parents[2] / "deploy/document-worker"
+        unit = configparser.ConfigParser(interpolation=None, strict=False); unit.read(root / "ghostmanual-document-worker.service")
+        service = unit["Service"]; command = service["ExecStart"]
+        self.assertEqual(service["User"], "1000")
+        self.assertEqual(service["Slice"], "ghostmanual-document-worker.slice")
+        self.assertIn("--cgroup-parent=ghostmanual-document-worker.slice", command)
+        self.assertIn("--user=1000:1000", command)
+        self.assertIn("--cap-drop=ALL", command)
+        self.assertIn("--read-only", command)
+        self.assertIn("--ulimit=core=0", command)
+        self.assertEqual(service["LimitCORE"], "0")
+        self.assertTrue(service["ExecStartPre"].endswith("stop-worker.py --check-image"))
+        self.assertNotIn("/var/run/docker.sock,target", command)
+        self.assertNotRegex(command, r"(?:^| )--(?:publish|privileged|cap-add)")
+        slice_unit = configparser.ConfigParser(interpolation=None)
+        slice_unit.read(root / "ghostmanual-document-worker.slice")
+        self.assertEqual(slice_unit["Slice"]["MemoryMax"], "256M")
+        self.assertEqual(slice_unit["Slice"]["IPAddressDeny"], "any")
+        self.assertEqual(slice_unit["Slice"]["IPAddressAllow"], "localhost")
+
+class WorkerStopTests(unittest.TestCase):
+    def load_stop(self):
+        spec = importlib.util.spec_from_file_location("document_worker_stop", HERE.parents[2] / "deploy/document-worker/stop-worker.py")
+        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        return module
+
+    def receipt(self):
+        import stat
+        from types import SimpleNamespace
+        value = Mock()
+        value.exists.return_value = True
+        value.lstat.return_value = SimpleNamespace(st_mode=stat.S_IFREG | 0o600, st_uid=1000, st_nlink=1, st_dev=1, st_ino=2)
+        value.read_text.return_value = "a" * 64 + "\n"
+        return value
+
+    def response(self, code, stdout=""):
+        from types import SimpleNamespace
+        return SimpleNamespace(returncode=code, stdout=stdout)
+
+    def test_image_guard_rejects_mutable_or_invalid_values(self):
+        module = self.load_stop()
+        for image in ["", "ghostmanual:latest", "sha256:" + "b" * 63]:
+            with patch.dict(os.environ, {"GHOSTMANUAL_WORKER_IMAGE": image}), self.assertRaises(RuntimeError):
+                module.image_identity()
+
+    def test_verified_exact_id_is_stopped_then_own_receipt_removed(self):
+        module = self.load_stop(); receipt = self.receipt(); identifier = "a" * 64; image = "sha256:" + "b" * 64
+        with patch.object(module, "CIDFILE", receipt), patch.object(module.os, "getuid", return_value=1000), patch.dict(os.environ, {"GHOSTMANUAL_WORKER_IMAGE": image}), patch.object(module, "command", side_effect=[self.response(0, f"{identifier} document-worker {image}"), self.response(0, identifier), self.response(0)]) as command:
+            module.stop()
+        self.assertEqual(command.call_args_list[1].args, ("stop", "--time=130", identifier))
+        receipt.unlink.assert_called_once_with()
+
+    def test_auto_remove_can_finish_after_stop_returns(self):
+        module = self.load_stop(); receipt = self.receipt(); identifier = "a" * 64; image = "sha256:" + "b" * 64
+        results = [self.response(0, f"{identifier} document-worker {image}"), self.response(0, identifier), self.response(0, identifier), self.response(0)]
+        with patch.object(module, "CIDFILE", receipt), patch.object(module.os, "getuid", return_value=1000), patch.dict(os.environ, {"GHOSTMANUAL_WORKER_IMAGE": image}), patch.object(module, "command", side_effect=results), patch("time.sleep"):
+            module.stop()
+        receipt.unlink.assert_called_once_with()
+
+    def test_incomplete_auto_remove_keeps_receipt_after_bounded_wait(self):
+        module = self.load_stop(); receipt = self.receipt(); identifier = "a" * 64; image = "sha256:" + "b" * 64
+        results = [self.response(0, f"{identifier} document-worker {image}"), self.response(0, identifier), self.response(0, identifier)]
+        with patch.object(module, "CIDFILE", receipt), patch.object(module.os, "getuid", return_value=1000), patch.dict(os.environ, {"GHOSTMANUAL_WORKER_IMAGE": image}), patch.object(module, "command", side_effect=results), patch("time.monotonic", side_effect=[0, 6]), self.assertRaisesRegex(RuntimeError, "removal incomplete"):
+            module.stop()
+        receipt.unlink.assert_not_called()
+
+    def test_wrong_owner_or_image_and_unknown_daemon_never_stop_or_unlink(self):
+        for output in ["a" * 64 + " other-role sha256:" + "b" * 64, "a" * 64 + " document-worker sha256:" + "c" * 64, None]:
+            module = self.load_stop(); receipt = self.receipt()
+            results = [self.response(0, output)] if output else [self.response(1), self.response(1)]
+            with self.subTest(output=output), patch.object(module, "CIDFILE", receipt), patch.object(module.os, "getuid", return_value=1000), patch.dict(os.environ, {"GHOSTMANUAL_WORKER_IMAGE": "sha256:" + "b" * 64}), patch.object(module, "command", side_effect=results) as command, self.assertRaises(RuntimeError):
+                module.stop()
+            self.assertFalse(any(call.args[0] == "stop" for call in command.call_args_list))
+            receipt.unlink.assert_not_called()
+
+    def test_already_removed_owned_id_can_clear_receipt_without_stopping(self):
+        module = self.load_stop(); receipt = self.receipt()
+        with patch.object(module, "CIDFILE", receipt), patch.object(module.os, "getuid", return_value=1000), patch.dict(os.environ, {"GHOSTMANUAL_WORKER_IMAGE": "sha256:" + "b" * 64}), patch.object(module, "command", side_effect=[self.response(1), self.response(0)]) as command:
+            module.stop()
+        self.assertFalse(any(call.args[0] == "stop" for call in command.call_args_list))
+        receipt.unlink.assert_called_once_with()
+
+if __name__ == "__main__": unittest.main()

@@ -47,6 +47,9 @@ jobs:
           python3 -I -B -m unittest discover -s deploy/event -p "test_*.py" -v
           python3 -I -B -m unittest discover -s deploy/backup -p test_notify.py -v
           python3 -I -B -m unittest discover -s deploy/host-boot -p "test_*.py" -v
+          python3 -I -B -m unittest discover -s services/document-extractor/runtime -p test_runtime.py -v
+          python3 -I -B -m unittest discover -s services/document-extractor/runtime -p test_production.py -v
+          node --check deploy/document-worker/worker-entry.mjs
       - run: npm run db:migrate
       - run: npm run test:integration
       - run: npm run build

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { type DbClient, transaction } from "./db.ts";
+import { assertDocumentReady } from "./document-sources.ts";
 import { AppError } from "./errors.ts";
 import { FileHistorySchema, fileHistory, reconcileFileUnknowns } from "./file-sources.ts";
 import { type ManualDraft, ManualDraftSchema } from "./schemas.ts";
@@ -133,6 +134,7 @@ export async function saveDraft(
       })
       .parse(raw);
     if (source.revision !== source.current) throw conflict();
+    await assertDocumentReady(db, sourceRevisionId, origin === "human");
     validateReferences(parsed, source.text);
     const reconciled = {
       ...parsed,
@@ -168,6 +170,7 @@ export async function publishManual(
   id: string,
   expectedRevision: number,
   acknowledgedUnknowns: readonly string[],
+  limitedAcknowledged = false,
 ): Promise<ManualVersionView> {
   return transaction(async (db) => {
     await assertSession(db, ctx, true);
@@ -181,6 +184,13 @@ export async function publishManual(
       .object({ text: z.string(), revision: z.number(), current: z.number(), sourceId: z.uuid() })
       .parse(source.rows[0]);
     if (row.revision !== row.current) throw conflict();
+    const status = await assertDocumentReady(db, current.sourceRevisionId);
+    if (status === "limited" && (!limitedAcknowledged || current.provenance !== "human"))
+      throw new AppError(
+        "review_required",
+        422,
+        "추출 한계를 확인하고 직접 작성한 내용을 검수하세요.",
+      );
     const draft = current.draft;
     validateReferences(draft, row.text);
     const acknowledgements = z.array(z.string()).parse(acknowledgedUnknowns);

@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { z } from "zod";
-import { http, message, read } from "../lib/client";
+import { http, message, read, versionedFilePattern } from "../lib/client";
 import { SourceInputSchema } from "../lib/schemas";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 
@@ -40,7 +40,7 @@ export function SourceForm() {
     event.preventDefault();
     await register(false);
   }
-  // Asks first when an .xlsx looks like the next version of a workbook already in the library.
+  // Suggest a new version only among sources with the same file format.
   async function register(asNewSource: boolean) {
     if (busy) return;
     const request = ++lookup.current;
@@ -51,7 +51,7 @@ export function SourceForm() {
     }
     setBusy(true);
     try {
-      if (file && /\.xlsx$/i.test(file.name) && !asNewSource) {
+      if (file && versionedFilePattern.test(file.name) && !asNewSource) {
         const digest = await sha256(file);
         if (request !== lookup.current) {
           setBusy(false);
@@ -110,7 +110,7 @@ export function SourceForm() {
       <h1>새 업무 등록</h1>
       <p className="muted">업무 경험을 자유롭게 적어 주세요. 원본은 매뉴얼의 근거로 보존됩니다.</p>
       <p className="notice">
-        <strong>처음 올리는 파일만 여기서 등록하세요.</strong> 이미 등록한 엑셀의 다음 파일이면
+        <strong>처음 올리는 파일만 여기서 등록하세요.</strong> 이미 등록한 업무 파일의 다음 버전이면
         문서함에서 그 업무 카드의 <strong>새 버전 올리기</strong>를 누르세요. 여기서 다시 올리면
         이전 버전과 비교되지 않는 별개의 업무가 됩니다.
       </p>
@@ -132,14 +132,14 @@ export function SourceForm() {
           placeholder="예: 월말 정산 업무 인수인계"
         />
         <label htmlFor="source-file">
-          엑셀·TXT·Markdown 파일 <span className="help">선택 사항</span>
+          엑셀·TXT·Markdown 파일, 한글·워드·PPT·PDF·CSV <span className="help">선택 사항</span>
         </label>
         <div className="file-pick">
           <input
             id="source-file"
             ref={fileInput}
             type="file"
-            accept=".xlsx,.txt,.md,.markdown"
+            accept=".xlsx,.docx,.hwpx,.pptx,.csv,.hwp,.doc,.ppt,.pdf,.txt,.md,.markdown"
             onChange={(e) => {
               setFile(e.target.files?.[0] ?? null);
               invalidateLookup();
@@ -176,16 +176,19 @@ export function SourceForm() {
           )}
         </div>
         <p id="file-help" className="help">
-          엑셀(.xlsx, 최대 5 MB)은 원본 파일을 버전으로 보관하고 새 버전을 올릴 때마다 바뀐 부분을
-          비교해 질문합니다. 매크로·암호 파일은 올릴 수 없습니다. TXT·Markdown(UTF-8, 최대 256
-          KiB)은 파일 내용을 텍스트로 등록합니다.
+          엑셀·DOCX·HWPX·PPTX·CSV·HWP(v5)·DOC·PPT·PDF(최대 5 MB)는 원본과 버전을 보관하고 추출한
+          내용을 비교합니다. 변환·OCR은 처리 시간이 걸리며 완료 전에는 다운로드·게시할 수 없습니다.
+          매크로·암호 파일은 올릴 수 없습니다. CSV는 UTF-8 파일을 사용하세요. TXT·Markdown(UTF-8,
+          최대 256 KiB)은 텍스트로 등록합니다.
         </p>
         {file ? (
           <p className="notice" role="status">
             파일을 올리면 업무 내용은 따로 쓰지 않습니다.{" "}
             {/\.xlsx$/i.test(file.name)
               ? "엑셀은 등록한 뒤 원본 화면의 질문에 답하며 설명을 남깁니다."
-              : "파일 안의 글이 업무 내용으로 등록됩니다."}
+              : versionedFilePattern.test(file.name)
+                ? "업무 파일은 처리 후 원본 화면의 질문에 답하며 설명을 남깁니다."
+                : "파일 안의 글이 업무 내용으로 등록됩니다."}
             {text && " 입력한 업무 내용은 저장되지 않습니다. 쓰려면 파일 선택을 지우세요."}
           </p>
         ) : (
@@ -211,8 +214,9 @@ export function SourceForm() {
           <fieldset className="panel" aria-label="기존 자료의 새 버전인가요?">
             <h2>기존 자료의 새 버전인가요?</h2>
             <p>
-              <strong>{file.name}</strong>은 이미 올린 엑셀과 이름이나 내용이 비슷합니다. 같은
-              파일의 다음 버전이라면 새 버전으로 올려야 이전 버전과 비교해 바뀐 부분을 묻습니다.
+              <strong>{file.name}</strong>은 이미 올린 같은 형식의 자료와 이름이나 내용이
+              비슷합니다. 같은 파일의 다음 버전이라면 새 버전으로 올려야 이전 버전과 비교해 바뀐
+              부분을 묻습니다.
             </p>
             {similar.map((s) => (
               <div key={s.id} className="actions">

@@ -13,7 +13,15 @@ const SourceViewSchema = z.object({
   text: z.string(),
   createdAt: z.date(),
   kind: z.enum(["text", "file"]),
-  fileType: z.literal("xlsx").nullable(),
+  fileType: z.enum(["xlsx", "docx", "hwpx", "pptx", "csv", "hwp", "doc", "ppt", "pdf"]).nullable(),
+  extraction: z
+    .object({
+      status: z.enum(["queued", "processing", "ready", "limited", "failed", "rejected"]),
+      reason: z.string().nullable(),
+      coverage: z.array(z.string()),
+      resultId: z.string().nullable(),
+    })
+    .optional(),
   uploadedByName: z.string().nullable(),
   uploadedByDepartment: z.string().nullable(),
 });
@@ -76,7 +84,17 @@ export async function sourceInTransaction(
     [id, ctx.workspaceId, revision ?? null, ctx.manualId],
   );
   if (!found.rows[0]) throw new AppError("not_found", 404, "자료를 찾을 수 없습니다.");
-  return SourceViewSchema.parse(found.rows[0]);
+  const source = SourceViewSchema.parse(found.rows[0]);
+  if (source.kind === "file" && source.fileType !== "xlsx") {
+    const state = await db.query(
+      `SELECT j.status, r.reason, COALESCE(r.coverage,'[]'::jsonb) AS coverage,r.id AS "resultId" FROM document_jobs j LEFT JOIN document_results r ON r.revision_id=j.revision_id WHERE j.revision_id=$1`,
+      [source.revisionId],
+    );
+    source.extraction = SourceViewSchema.shape.extraction.parse(state.rows[0]);
+    if (ctx.role === "reader" && !["ready", "limited"].includes(source.extraction?.status ?? ""))
+      throw new AppError("not_found", 404, "자료를 찾을 수 없습니다.");
+  }
+  return source;
 }
 export async function createSource(ctx: SessionContext, input: SourceInput): Promise<SourceView> {
   const parsed = SourceInputSchema.parse(input);
