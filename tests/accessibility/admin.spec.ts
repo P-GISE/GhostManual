@@ -6,7 +6,7 @@ for (const failEvents of [false, true]) {
   }) => {
     const self = {
       id: "10000000-0000-4000-8000-000000000001",
-      name: "관리자",
+      name: "GhostManual 관리자",
       email: "admin@example.com",
       department: null,
       createdAt: "2026-11-05T00:00:00.000Z",
@@ -74,9 +74,21 @@ for (const failEvents of [false, true]) {
     await expect(row.getByLabel("대상 AI 차단됨")).toBeVisible();
     await expect(row.getByLabel("대상 AI 차단됨")).not.toBeChecked();
     await expect(row.getByLabel("대상 AI 차단됨")).toBeFocused();
-    if (failEvents) await expect(page.getByRole("alert")).toContainText("권한은 저장됐지만");
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true,
-    );
+    if (failEvents)
+      await expect(page.getByRole("main").getByRole("alert")).toContainText("권한은 저장됐지만");
+    const overflow = await page.evaluate(() => ({
+      viewport: innerWidth,
+      width: document.documentElement.scrollWidth,
+      outside: [...document.querySelectorAll("body *")]
+        .map((element) => ({
+          tag: element.tagName,
+          className: element.className,
+          right: element.getBoundingClientRect().right,
+          width: element.getBoundingClientRect().width,
+        }))
+        .filter((element) => element.right > innerWidth + 1)
+        .slice(0, 12),
+    }));
+    expect(overflow.width, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.viewport);
   });
 }

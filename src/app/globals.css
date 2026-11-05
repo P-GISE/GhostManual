@@ -1320,6 +1320,10 @@ button.danger:hover:not(:disabled) {
   flex: 1 1 200px;
   margin: 0;
 }
+/* Keep absolute screen-reader labels inside the table scrollport. */
+.admin-table {
+  position: relative;
+}
 .admin-table table {
   width: 100%;
   min-width: 960px;
