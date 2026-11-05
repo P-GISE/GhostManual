@@ -3,7 +3,15 @@ import { HTTPError } from "ky";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { http, type Manual, manualSchema, message, type Source, sourceSchema } from "../lib/client";
+import {
+  fileTypeLabels,
+  http,
+  type Manual,
+  manualSchema,
+  message,
+  type Source,
+  sourceSchema,
+} from "../lib/client";
 import { type RequestStage, requestDiagnostic } from "../lib/request-diagnostic";
 import { RequestDiagnostics, useRequestDiagnostics } from "./RequestDiagnostics";
 export function ManualList() {
@@ -183,7 +191,7 @@ export function ManualList() {
           <strong>처음 올리는 파일</strong>은 <strong>새 업무 등록</strong>을 누르세요.
         </li>
         <li>
-          <strong>이미 등록한 엑셀의 다음 파일</strong>은 그 업무 카드의{" "}
+          <strong>이미 등록한 파일의 다음 버전</strong>은 그 업무 카드의{" "}
           <strong>새 버전 올리기</strong>를 누르세요. 이전 버전과 비교해 바뀐 부분을 물어봅니다.
         </li>
       </ul>
@@ -301,7 +309,7 @@ export function ManualList() {
                   onChange={(e) => toggle(t.source.id, e.target.checked)}
                 />
                 <span className={`task-icon ${t.source.kind}`} aria-hidden="true">
-                  {t.source.kind === "file" ? "XLSX" : "TXT"}
+                  {t.source.kind === "file" ? (t.source.fileType ?? "xlsx").toUpperCase() : "TXT"}
                 </span>
                 <div className="task-main">
                   <h2>
@@ -314,7 +322,10 @@ export function ManualList() {
                   </h2>
                   <p className="task-meta">
                     <span>
-                      {t.source.kind === "file" ? "엑셀" : "텍스트"} · 버전 {t.source.revision}개
+                      {t.source.kind === "file"
+                        ? fileTypeLabels[t.source.fileType ?? "xlsx"]
+                        : "텍스트"}{" "}
+                      · 버전 {t.source.revision}개
                     </span>
                     <Link href={`/sources/${t.source.id}`}>원본 보기</Link>
                     {t.manual?.provenance === "example" && <span>합성 예제</span>}

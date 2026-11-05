@@ -6,6 +6,7 @@ import { generateFileManual } from "./ai.ts";
 import { type CellChange, diffCells } from "./cell-diff.ts";
 import { changePrompt, changeQuestions } from "./change-ai.ts";
 import { type DbClient, transaction } from "./db.ts";
+import { assertDocumentReady, registerDocument } from "./document-sources.ts";
 import { AppError } from "./errors.ts";
 import { fileStem } from "./file-stem.ts";
 import { type ManualDraft, ManualDraftSchema } from "./schemas.ts";
@@ -40,10 +41,17 @@ const ChangeRow = z.object({
 });
 export type QuestionView = z.infer<typeof QuestionRow>;
 export type ChangeView = z.infer<typeof ChangeRow>;
-export type CompareStatus = "first" | "compared" | "no_changes" | "limit_exceeded";
+export type CompareStatus =
+  | "first"
+  | "compared"
+  | "no_changes"
+  | "limit_exceeded"
+  | "pending"
+  | "failed"
+  | "rejected";
 export type FileRevisionView = Omit<SourceView, "kind" | "fileType" | "text"> & {
   kind: "file";
-  fileType: "xlsx";
+  fileType: NonNullable<SourceView["fileType"]>;
   file: { name: string; sizeBytes: number };
   compareStatus: CompareStatus;
   aiSummary: string | null;
@@ -172,7 +180,7 @@ export async function fileRevisionInTransaction(
   revision?: number,
 ): Promise<FileRevisionView> {
   const { text: _text, kind, fileType, ...base } = await sourceInTransaction(db, ctx, id, revision);
-  if (kind !== "file" || fileType !== "xlsx")
+  if (kind !== "file" || !fileType)
     throw new AppError("not_found", 404, "자료를 찾을 수 없습니다.");
   const file = await db.query<Record<string, unknown>>(
     'SELECT file_name AS name,size_bytes AS "sizeBytes",compare_status AS status,ai_summary AS "aiSummary" FROM source_files WHERE revision_id=$1',
@@ -182,7 +190,7 @@ export async function fileRevisionInTransaction(
     .object({
       name: z.string(),
       sizeBytes: z.number(),
-      status: z.enum(["compared", "limit_exceeded"]),
+      status: z.enum(["compared", "limit_exceeded"]).nullable(),
       aiSummary: z.string().nullable(),
     })
     .parse(file.rows[0]);
@@ -222,8 +230,29 @@ export async function fileRevisionInTransaction(
     });
   }
   // A later revision with questions but no changes could not be compared (one side was over the limit).
-  const compareStatus: CompareStatus =
-    base.revision === 1
+  const documentComparison = base.extraction
+    ? (
+        await db.query<{ status: string }>(
+          "SELECT comparison->>'status' AS status FROM document_results WHERE revision_id=$1",
+          [base.revisionId],
+        )
+      ).rows[0]?.status
+    : undefined;
+  const compareStatus: CompareStatus = base.extraction
+    ? ["queued", "processing"].includes(base.extraction.status)
+      ? "pending"
+      : base.extraction.status === "failed" || base.extraction.status === "rejected"
+        ? base.extraction.status
+        : base.extraction.status === "limited"
+          ? "limit_exceeded"
+          : base.revision === 1
+            ? "first"
+            : documentComparison === "limit_exceeded"
+              ? "limit_exceeded"
+              : changes.length
+                ? "compared"
+                : "no_changes"
+    : base.revision === 1
       ? "first"
       : row.status === "limit_exceeded" || (!changes.length && questions.length)
         ? "limit_exceeded"
@@ -249,6 +278,8 @@ export async function createFileSource(
   ctx: SessionContext,
   input: { title: string; fileName: string; bytes: Uint8Array },
 ): Promise<FileRevisionView> {
+  if (!/\.xlsx$/i.test(input.fileName)) return registerDocument(ctx, input);
+  await transaction((db) => assertSession(db, ctx, true));
   const title = z.string().trim().min(1).max(120).safeParse(input.title);
   if (!title.success) throw new AppError("invalid_input", 422, "제목은 120자까지 입력하세요.");
   const result = readUpload(input.bytes);
@@ -359,13 +390,24 @@ export async function addFileRevision(
   id: string,
   input: { fileName: string; bytes: Uint8Array; expectedRevision: number },
 ): Promise<FileRevisionView> {
+  if (!/\.xlsx$/i.test(input.fileName)) return registerDocument(ctx, input, id);
+  await transaction(async (db) => {
+    await assertSession(db, ctx, true);
+    const source = await sourceInTransaction(db, ctx, id);
+    if (source.fileType !== "xlsx")
+      throw new AppError(
+        "file_type_mismatch",
+        422,
+        "같은 자료에는 같은 형식의 파일만 올릴 수 있습니다.",
+      );
+  });
   const result = readUpload(input.bytes);
   const conflict = () =>
     new AppError("conflict", 409, "다른 곳에서 새 버전이 올라왔습니다. 새로고침 후 다시 올리세요.");
   const previous = await transaction(async (db) => {
     await assertSession(db, ctx, true);
     const source = await sourceInTransaction(db, ctx, id);
-    if (source.kind !== "file")
+    if (source.kind !== "file" || source.fileType !== "xlsx")
       throw new AppError(
         "file_type_mismatch",
         422,
@@ -442,6 +484,7 @@ export type RevisionSummary = {
   changeCount: number;
   questionCount: number;
   answeredCount: number;
+  extraction?: SourceView["extraction"];
 };
 export async function listFileRevisions(
   ctx: SessionContext,
@@ -460,6 +503,7 @@ export async function listFileRevisions(
       if (ctx.role === "reader" && revision !== latest.revision) continue;
       const view = await fileRevisionInTransaction(db, ctx, id, revision);
       list.push({
+        extraction: view.extraction,
         revision: view.revision,
         revisionId: view.revisionId,
         createdAt: view.createdAt,
@@ -518,13 +562,14 @@ export async function fileContent(ctx: SessionContext, id: string, revision: num
   return transaction(async (db) => {
     await assertSession(db, ctx);
     const view = await fileRevisionInTransaction(db, ctx, id, revision);
+    await assertDocumentReady(db, view.revisionId);
     const file = await db.query<{ content: Buffer }>(
       "SELECT content FROM source_files WHERE revision_id=$1",
       [view.revisionId],
     );
     const content = file.rows[0]?.content;
     if (!content) throw new AppError("not_found", 404, "자료를 찾을 수 없습니다.");
-    return { fileName: view.file.name, bytes: new Uint8Array(content) };
+    return { fileName: view.file.name, bytes: new Uint8Array(content), fileType: view.fileType };
   });
 }
 const AnswerSchema = z.union([
@@ -564,7 +609,18 @@ export const FileHistorySchema = z.object({
       uploadedByName: z.string().nullable(),
       uploadedByDepartment: z.string().nullable(),
       fileName: z.string(),
-      compareStatus: z.enum(["first", "compared", "no_changes", "limit_exceeded"]),
+      compareStatus: z.enum([
+        "first",
+        "compared",
+        "no_changes",
+        "limit_exceeded",
+        "pending",
+        "failed",
+        "rejected",
+      ]),
+      sourceRevisionId: z.string().optional(),
+      resultId: z.string().nullable().optional(),
+      questionIds: z.array(z.string()).optional(),
       aiSummary: z.string().nullable(),
       changes: z.array(
         z.object({ kind: z.string(), sheet: z.string().nullable(), range: z.string().nullable() }),
@@ -590,6 +646,9 @@ export async function fileHistory(
     const view = await fileRevisionInTransaction(db, ctx, sourceId, revision);
     revisions.push({
       revision,
+      sourceRevisionId: view.revisionId,
+      resultId: view.extraction?.resultId ?? null,
+      questionIds: view.questions.map((q) => q.id),
       createdAt: view.createdAt,
       uploadedByName: view.uploadedByName,
       uploadedByDepartment: view.uploadedByDepartment,
@@ -632,8 +691,8 @@ export async function similarSources(
       `SELECT s.id,r.title,s.revision,f.file_name,f.sha256 FROM sources s
         JOIN source_revisions r ON r.source_id=s.id AND r.revision=s.revision
         JOIN source_files f ON f.revision_id=r.id
-        WHERE s.workspace_id=$1 AND s.kind='file' ORDER BY s.created_at DESC`,
-      [ctx.workspaceId],
+        WHERE s.workspace_id=$1 AND s.kind='file' AND s.file_type=$2 ORDER BY s.created_at DESC`,
+      [ctx.workspaceId, input.fileName.split(".").at(-1)?.toLowerCase() ?? ""],
     );
     return rows.rows
       .map((r) => ({
@@ -665,6 +724,7 @@ export async function draftFromFile(
     const latest = await sourceInTransaction(db, ctx, sourceId);
     if (latest.revision !== expectedRevision)
       throw new AppError("conflict", 409, "자료가 변경됐습니다.");
+    await assertDocumentReady(db, latest.revisionId, false);
     const file = await db.query<{ snapshot: Snapshot | null }>(
       "SELECT snapshot FROM source_files WHERE revision_id=$1",
       [latest.revisionId],
@@ -673,6 +733,7 @@ export async function draftFromFile(
     const history = await fileHistory(db, ctx, sourceId, latest.revision);
     return {
       title: latest.title,
+      format: latest.fileType,
       sheets: snapshot ? changePrompt(latest.title, snapshot, []).sheets : [],
       versions: (history?.revisions ?? []).map((r) => ({
         revision: r.revision,
@@ -696,6 +757,8 @@ export async function cellChanges(
   return transaction(async (db) => {
     await assertSession(db, ctx, true);
     const view = await fileRevisionInTransaction(db, ctx, id, revision);
+    if (view.fileType !== "xlsx")
+      throw new AppError("not_found", 404, "엑셀 자료를 찾을 수 없습니다.");
     if (view.revision === 1) return { compared: true, total: 0, changes: [] };
     const rows = await db.query<{ revision: number; snapshot: Snapshot | null }>(
       `SELECT r.revision,f.snapshot FROM source_revisions r JOIN source_files f ON f.revision_id=r.id
