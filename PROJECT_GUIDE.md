@@ -1,5 +1,13 @@
 # GhostManual 프로젝트 가이드
 
+## 2026-11-05 외부 엔진 격리 보완·50GiB 확장
+
+사용자 승인으로 암호화 EBS와 ext4를40→50GiB 온라인 확장했다. 재부팅·기존 이미지/백업 삭제 없이 컨테이너와 앱 응답을 보존했다. 외부 엔진은 최종 무캐시 이미지 `bec10606…`·새 rootfs·오버레이 없는 전용 RootDirectory/cgroup/AppArmor 실행에서 격리5/5·추출10/10을 통과했다. **운영 앱 배포·migration007·외부 gateway/worker 활성화·커밋/PR은 아직 하지 않았다.** [현재 실행·검증 경계](docs/qa/2026-11-05/external-engine-runtime.md)를 우선한다.
+
+## 2026-11-04 다중 형식 엔진 구현·검증 중
+
+사용자 승인 설계로 DOCX·HWPX·PPTX·CSV 직접 추출, HWP v5·구형 DOC/PPT·PDF/스캔 PDF 외부 변환·OCR, 비동기 작업·소유자 전용 비교·검사 전 게시 차단을 별도 작업 트리에 구현했다. **미커밋 검토 단계이며 운영 배포·migration 007·외부 엔진 활성화는 하지 않았다.** 11/4 당시 외부 실제 파서 회귀20/20 통과·격리5건 FAIL/BLOCKED였으며, 이 차단은 위11/5 검증으로 해소했다. 합성 4형식 각각 2버전·390px·DOCX 검수/게시·별도 Reader 권한을 실제 확인했다. 부모 revision/최신 선택 동기화의 단일 수정과 범위 재검토 승인을 마쳤고, 최신 단위 232/232·DB 통합 146/146을 통과했다. 최종 타입 검사도 통과했다. 최신 lint·분리 빌드와 두 대기 버전의 실제 처리 순서/최신 재선택·최신 원본 작성 회귀도 통과했으며 아래 과거의 형식 확장 미구현 기록과 구분한다. [구현 범위·검증과 남은 조건](docs/qa/2026-11-04/multi-format-engines-implementation.md), [승인 설계](docs/superpowers/specs/2026-11-04-multi-format-engines-design.md), [실행 계획](docs/superpowers/plans/2026-11-04-multi-format-engines.md).
+
 > 11/4 후속: 문서 PR #47 병합·자동 배포 완료(현재 `6b5406f`/image `0096babc…`). [최신 확인·남은 작업](docs/qa/2026-11-04/park-gise-followup.md)을 우선하며, 아래 PR #46 운영 식별은 11/3 당시 기록이다. 03:20 정규 백업은 확인 시각 기준 실행 전이다.
 
 ## 2026-11-03 현재 기준과 박기성 남은 일정
