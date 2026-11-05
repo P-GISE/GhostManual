@@ -71,7 +71,8 @@ for (const failEvents of [false, true]) {
     await toggle.click();
     await confirmation.getByRole("button", { name: "AI 차단", exact: true }).click();
     await expect(page.getByRole("status")).toContainText("권한을 바꿨습니다");
-    await expect(row.getByText("차단됨", { exact: true })).toBeVisible();
+    await expect(row.getByLabel("대상 AI 차단됨")).toBeVisible();
+    await expect(row.getByLabel("대상 AI 차단됨")).not.toBeChecked();
     await expect(row.getByLabel("대상 AI 차단됨")).toBeFocused();
     if (failEvents) await expect(page.getByRole("alert")).toContainText("권한은 저장됐지만");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
