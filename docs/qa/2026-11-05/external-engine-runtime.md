@@ -1,5 +1,7 @@
 # 외부 문서 엔진 격리 보완 완료 — 2026-11-05
 
+> 후속 진행: 이 문서는 격리 검증 종료 당시 기록이다. 이후 최신 기본 통합·커밋과 [PR #55](https://github.com/P-GISE/GhostManual/pull/55) 작성은 완료했다. 운영 실행 구성·최신 CI·문서 migration007·앱/gateway/worker 활성화는 별도 진행 중이며, 관리자 migration006 적용은 [별도 기록](pr53-admin-migration.md)을 따른다.
+
 외부 엔진의 실제 격리 차단을 해결했다. 최종 무캐시 이미지 `sha256:bec10606f2500a62a5db9acac29b78dbd8d4d8b56d3ff82fce2522b0c1429946`에서 소스14개 해시를 검토본과 대조하고, 새 digest rootfs와 **DropInPaths가 빈 전용 서비스**에서 격리5/5·추출10/10을 함께 통과했다. 서비스 종료 결과는 success/0이며 디버깅 오버레이는 검증 후 해시를 확인해 제거했다. 이것은 운영 앱 반영 완료를 뜻하지 않는다.
 
 ## 수정 범위
