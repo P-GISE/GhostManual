@@ -153,7 +153,7 @@ async function profile(db: DbClient, ctx: SessionContext) {
   const result = await db.query<Record<string, unknown>>(
     `SELECT u.name,u.email,u.department,u.is_admin,u.storage_limit_bytes,u.password_hash IS NOT NULL AS password,u.google_sub IS NOT NULL AS google,
       u.created_at>now()-interval '1 hour' AS "newAccount",
-      (SELECT COALESCE(sum(size_bytes),0) FROM source_files WHERE workspace_id=s.workspace_id) AS bytes
+      workspace_file_bytes(s.workspace_id) AS bytes
       FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1`,
     [ctx.sessionId],
   );

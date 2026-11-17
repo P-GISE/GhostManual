@@ -86,10 +86,9 @@ export function fileText(title: string, result: ReadResult): string {
   return `${title}\n${lines.join("\n")}`.slice(0, 20000);
 }
 export async function usedFileBytes(db: DbClient, workspaceId: string): Promise<number> {
-  const result = await db.query<{ bytes: string }>(
-    "SELECT COALESCE(sum(size_bytes),0) AS bytes FROM source_files WHERE workspace_id=$1",
-    [workspaceId],
-  );
+  const result = await db.query<{ bytes: string }>("SELECT workspace_file_bytes($1) AS bytes", [
+    workspaceId,
+  ]);
   return Number(result.rows[0]?.bytes ?? 0);
 }
 export async function insertFileRevision(
