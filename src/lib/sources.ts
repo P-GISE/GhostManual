@@ -102,10 +102,10 @@ export async function createSource(ctx: SessionContext, input: SourceInput): Pro
     await assertSession(db, ctx, true);
     await assertSourceWrite(db, ctx, parsed, true);
     const id = newId();
-    await db.query("INSERT INTO sources(id,workspace_id,revision) VALUES($1,$2,1)", [
-      id,
-      ctx.workspaceId,
-    ]);
+    await db.query(
+      "INSERT INTO sources(id,workspace_id,revision,created_by) VALUES($1,$2,1,(SELECT user_id FROM sessions WHERE id=$3))",
+      [id, ctx.workspaceId, ctx.sessionId],
+    );
     await db.query(
       `INSERT INTO source_revisions(id,workspace_id,source_id,revision,title,text,uploaded_by_name,uploaded_by_department) SELECT $1,$2,$3,1,$4,$5,${uploader("$6")}`,
       [newId(), ctx.workspaceId, id, parsed.title, parsed.text, ctx.sessionId],

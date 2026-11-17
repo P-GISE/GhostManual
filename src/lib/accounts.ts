@@ -209,14 +209,38 @@ export async function updateProfile(ctx: SessionContext, input: unknown) {
 }
 export async function deleteAccount(ctx: SessionContext): Promise<void> {
   await transaction(async (db) => {
-    await assertSession(db, ctx, true);
     const result = await db.query<{ user_id: string | null }>(
       "SELECT user_id FROM sessions WHERE id=$1",
       [ctx.sessionId],
     );
     const userId = result.rows[0]?.user_id;
     if (!userId) throw new AppError("unauthorized", 401, "로그인이 필요합니다.");
-    await removeWorkspace(db, ctx.workspaceId);
+    await db.query(
+      "SELECT w.id FROM workspaces w WHERE w.id=$1 OR w.user_id=$2 OR EXISTS (SELECT 1 FROM workspace_members m WHERE m.workspace_id=w.id AND m.user_id=$2 AND m.role='admin') ORDER BY w.id FOR UPDATE",
+      [ctx.workspaceId, userId],
+    );
+    await assertSession(db, ctx, true);
+    const teams = await db.query<{ id: string; team_name: string }>(
+      "SELECT w.id,w.team_name FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id WHERE m.user_id=$1 AND m.role='admin' ORDER BY w.id FOR UPDATE OF w",
+      [userId],
+    );
+    for (const team of teams.rows) {
+      const other = await db.query(
+        "SELECT 1 FROM workspace_members WHERE workspace_id=$1 AND role='admin' AND user_id<>$2",
+        [team.id, userId],
+      );
+      if (!other.rowCount)
+        throw new AppError(
+          "conflict",
+          409,
+          team.team_name + "의 다른 관리자를 지정하거나 팀을 삭제한 뒤 계정을 삭제하세요.",
+        );
+    }
+    const personal = await db.query<{ id: string }>(
+      "SELECT id FROM workspaces WHERE user_id=$1 AND team_name IS NULL FOR UPDATE",
+      [userId],
+    );
+    for (const workspace of personal.rows) await removeWorkspace(db, workspace.id);
     await db.query("DELETE FROM users WHERE id=$1", [userId]);
   });
 }

@@ -297,8 +297,8 @@ export async function createFileSource(
     );
     const id = newId();
     await db.query(
-      "INSERT INTO sources(id,workspace_id,revision,kind,file_type) VALUES($1,$2,1,'file','xlsx')",
-      [id, ctx.workspaceId],
+      "INSERT INTO sources(id,workspace_id,revision,kind,file_type,created_by) VALUES($1,$2,1,'file','xlsx',(SELECT user_id FROM sessions WHERE id=$3))",
+      [id, ctx.workspaceId, ctx.sessionId],
     );
     await insertFileRevision(db, ctx, {
       sourceId: id,

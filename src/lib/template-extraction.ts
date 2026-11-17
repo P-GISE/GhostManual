@@ -38,8 +38,8 @@ export async function registerTemplate(ctx: SessionContext, fileName: string, by
     );
     const id = newId();
     await db.query(
-      "INSERT INTO manual_templates(id,workspace_id,name,file_name,file_type,content) VALUES($1,$2,$3,$3,$4,$5)",
-      [id, ctx.workspaceId, fileName.slice(0, 255), format, Buffer.from(bytes)],
+      "INSERT INTO manual_templates(id,workspace_id,name,file_name,file_type,content,created_by) VALUES($1,$2,$3,$3,$4,$5,(SELECT user_id FROM sessions WHERE id=$6))",
+      [id, ctx.workspaceId, fileName.slice(0, 255), format, Buffer.from(bytes), ctx.sessionId],
     );
     await db.query(
       "INSERT INTO manual_template_jobs(template_id,workspace_id,session_id) VALUES($1,$2,$3)",
