@@ -133,6 +133,7 @@ ALTER TABLE manual_versions ADD COLUMN published_by_name text
 | 초대·초대 취소·내보내기·역할 변경·팀 이름 변경·팀 삭제 | 가능 | 403 | 404 |
 | 팀 나가기 | 다른 관리자가 있을 때 | 가능 | 404 |
 
+- 회사 양식의 권한 검사(`src/lib/template-extraction.ts`의 `assertTemplateOwner`와 워커의 작업 검사)는 지금 "세션 사용자가 그 문서함의 주인 계정"을 요구한다. 팀 문서함에는 주인 계정이 없으므로 팀원 검사로 함께 바꾼다. 바꾸지 않으면 팀 문서함에서 양식을 쓸 수 없다.
 - AI 호출: 요청한 계정의 `ai_allowed`가 false면 차단한다. 하루 한도는 문서함 단위 그대로다.
 - 저장 용량: 팀 문서함은 100 MiB 고정으로 검사한다. 개인 문서함은 지금처럼 계정 한도를 쓴다.
 
@@ -198,5 +199,5 @@ ALTER TABLE manual_versions ADD COLUMN published_by_name text
 
 ## 12. 정하지 못한 것
 
-- migration 번호: 회사 양식(008)과 이 설계(009)의 순서는 구현 순서에 따라 박기성이 확정한다.
+- migration 번호: 회사 양식이 008로 운영에 반영됐으므로(PR #61) 이 설계는 009다.
 - 팀 문서함의 저장 용량과 AI 설정을 사이트 관리자가 조정하는 기능: 2차.
