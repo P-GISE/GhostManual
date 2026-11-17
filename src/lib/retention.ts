@@ -46,7 +46,7 @@ export async function deleteSource(owner: SessionContext, id: string): Promise<v
 export async function cleanupExpired(now: Date) {
   return transaction(async (db) => {
     const expired = await db.query<Record<string, unknown>>(
-      "SELECT id FROM workspaces WHERE expires_at<=$1 FOR UPDATE",
+      "SELECT id FROM workspaces WHERE team_name IS NULL AND expires_at<=$1 FOR UPDATE",
       [now],
     );
     for (const row of expired.rows) await removeWorkspace(db, z.uuid().parse(row["id"]));

@@ -80,8 +80,8 @@ export async function registerDocument(
     if (old) await db.query("UPDATE sources SET revision=$1 WHERE id=$2", [revision, id]);
     else
       await db.query(
-        "INSERT INTO sources(id,workspace_id,revision,kind,file_type) VALUES($1,$2,1,'file',$3)",
-        [id, ctx.workspaceId, format],
+        "INSERT INTO sources(id,workspace_id,revision,kind,file_type,created_by) VALUES($1,$2,1,'file',$3,(SELECT user_id FROM sessions WHERE id=$4))",
+        [id, ctx.workspaceId, format, ctx.sessionId],
       );
     await db.query(
       `INSERT INTO source_revisions(id,workspace_id,source_id,revision,title,text,uploaded_by_name,uploaded_by_department) SELECT $1,$2,$3,$4,$5,$6,${uploader("$7")}`,
