@@ -40,7 +40,7 @@ const userSelect = `SELECT u.id,u.name,u.email,u.department,u.created_at,u.email
   (SELECT count(*) FROM sources s WHERE s.workspace_id=w.id) AS sources,
   (SELECT count(*) FROM manuals m WHERE m.workspace_id=w.id) AS manuals,
   (SELECT count(*) FROM manuals m WHERE m.workspace_id=w.id AND m.published_version IS NOT NULL) AS published,
-  (SELECT COALESCE(sum(size_bytes),0) FROM source_files f WHERE f.workspace_id=w.id) AS bytes,
+  workspace_file_bytes(w.id) AS bytes,
   (SELECT COALESCE(sum(attempts),0) FROM usage_counters c WHERE c.scope=w.id::text AND c.day=${day}) AS ai_today
   FROM users u LEFT JOIN workspaces w ON w.user_id=u.id`;
 function view(row: unknown, actorId: string) {

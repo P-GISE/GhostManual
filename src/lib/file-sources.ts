@@ -87,7 +87,7 @@ export function fileText(title: string, result: ReadResult): string {
 }
 export async function usedFileBytes(db: DbClient, workspaceId: string): Promise<number> {
   const result = await db.query<{ bytes: string }>(
-    "SELECT COALESCE(sum(size_bytes),0) AS bytes FROM source_files WHERE workspace_id=$1",
+    "SELECT workspace_file_bytes($1) AS bytes",
     [workspaceId],
   );
   return Number(result.rows[0]?.bytes ?? 0);
