@@ -13,4 +13,5 @@ deploy
 *.log
 *.tsbuildinfo
 scripts/evaluate.ts
+scripts/measure-rewrite.ts
 scripts/capture-qa.mjs
