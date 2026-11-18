@@ -19,5 +19,7 @@ GhostManual에서 이 패키지는 vitest/vite/tinyglobby/fdir의 개발 도구 
 공식 수정판이 나오면 동일 공격 회귀와 전체 CI를 실행해 override 제거 여부를 검토한다.
 
 ## 검증
+독립 대조에서 원본4.0.7의 +(*a)와 a32개+! 입력은2초 timeout, 고정 포크는2ms/false를 확인했다.
+패키지의 scoped 이름 때문에 scanner가 upstream 공지와 연결하지 못할 수 있다. audit0건만으로 해결을 판정하지 않으며, 실제 소스 수정·무결성·공격 회귀를 함께 근거로 사용한다.
 tests/unit/picomatch-security.test.ts에서 실제 설치된 패키지 이름·버전, 프로젝트의 static glob 의미, 공격 패턴6개를 검사한다. 공격 매칭은 메모리 제한 worker에서 수행하고2초를 넘기면 종료해 테스트 실패로 판정한다.
 npm audit 결과와 전체 unit/통합/E2E/접근성·이미지 검증 결과는 PR #68의 최신 CI를 따른다.

@@ -27,7 +27,10 @@ it.each(["+(*a)", "*(*a)", "+(*)b", "+(@(*a))", "+(?(*a))", "+(*[ab])"])(
     try {
       await new Promise<void>((resolve, reject) => {
         timer = setTimeout(() => reject(new Error("Glob matching exceeded 2 seconds")), 2000);
-        worker.once("message", () => resolve());
+        worker.once("message", (result) => {
+          if (result !== false) reject(new Error("Hostile input unexpectedly matched"));
+          else resolve();
+        });
         worker.once("error", reject);
         worker.once("exit", (code) => {
           if (code !== 0) reject(new Error("Glob worker exited with code " + code));
