@@ -1,9 +1,10 @@
 "use client";
+import { HTTPError } from "ky";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { z } from "zod";
-import { http, message, read } from "../lib/client";
+import { http, message } from "../lib/client";
 import { templateStatusText } from "./TemplateList";
 
 const itemShape = { name: z.string(), guide: z.string(), kind: z.enum(["text", "list"]) };
@@ -36,21 +37,27 @@ export function TemplateDetail({ id }: { readonly id: string }) {
   const reading = !template || template.status === "reading";
   useEffect(() => {
     if (!reading) return;
+    const controller = new AbortController();
     let stopped = false;
     let inFlight = false;
     const load = () => {
       if (inFlight) return;
       inFlight = true;
-      read(`/api/templates/${id}`, templateSchema)
+      http
+        .get(`/api/templates/${id}`, { timeout: 10000, signal: controller.signal })
+        .json()
+        .then((data) => templateSchema.parse(data))
         .then((current) => {
           if (stopped) return;
           setTemplate(current);
+          setError("");
           if (current.status === "ready") setItems(current.items);
         })
         .catch(async (e) => {
           const text = await message(e);
           if (!stopped) setError(text);
-          clearInterval(timer);
+          if (e instanceof HTTPError && [401, 403, 404].includes(e.response.status))
+            clearInterval(timer);
         })
         .finally(() => {
           inFlight = false;
@@ -61,6 +68,7 @@ export function TemplateDetail({ id }: { readonly id: string }) {
     load();
     return () => {
       stopped = true;
+      controller.abort();
       clearInterval(timer);
     };
   }, [id, reading]);
@@ -101,7 +109,7 @@ export function TemplateDetail({ id }: { readonly id: string }) {
         await http.patch(`/api/templates/${id}`, { json }).json(),
       );
       setTemplate(current);
-      setItems(current.items);
+      if ("items" in json) setItems(current.items);
       setSaved(done);
     });
   if (!template)

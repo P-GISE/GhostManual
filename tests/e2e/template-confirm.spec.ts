@@ -56,3 +56,58 @@ test("owner checks candidates, enters items by hand and confirms the default tem
   await expect(page.getByText("사용 가능", { exact: true })).toBeVisible();
   await expect(page.getByText("항목 2개", { exact: true })).toBeVisible();
 });
+
+test("setting a default template preserves unsaved item edits", async ({ page }) => {
+  await signUpAndVerify(page);
+  const id = crypto.randomUUID();
+  const stored = {
+    id,
+    name: "합성 양식",
+    status: "ready",
+    isDefault: false,
+    extraction: null,
+    items: [{ id: "completion", name: "완료 기준", guide: "", kind: "text" }],
+  };
+  await page.route("**/api/templates/" + id, async (route) => {
+    if (route.request().method() === "PATCH") {
+      expect(route.request().postDataJSON()).toEqual({ isDefault: true });
+      await route.fulfill({ json: { ...stored, isDefault: true } });
+    } else await route.fulfill({ json: stored });
+  });
+  await page.goto("/templates/" + id);
+  await page.getByLabel("항목 1 이름").fill("편집 중인 완료 기준");
+  await page.getByRole("button", { name: "기본 양식으로 지정", exact: true }).click();
+  await expect(page.getByText("기본 양식으로 지정했습니다.", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("항목 1 이름")).toHaveValue("편집 중인 완료 기준");
+});
+
+test("template polling recovers after a temporary server error", async ({ page }) => {
+  await signUpAndVerify(page);
+  const id = crypto.randomUUID();
+  let attempts = 0;
+  await page.route("**/api/templates/" + id, async (route) => {
+    attempts++;
+    if (attempts === 1)
+      await route.fulfill({
+        status: 503,
+        json: { error: { message: "잠시 후 다시 시도하세요." } },
+      });
+    else
+      await route.fulfill({
+        json: {
+          id,
+          name: "합성 양식",
+          status: "review",
+          isDefault: false,
+          items: [],
+          extraction: { warnings: [], candidates: [] },
+        },
+      });
+  });
+  await page.goto("/templates/" + id);
+  await expect(page.getByRole("heading", { name: "꺼낸 후보 0개", exact: true })).toBeVisible({
+    timeout: 10000,
+  });
+  expect(attempts).toBeGreaterThan(1);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
