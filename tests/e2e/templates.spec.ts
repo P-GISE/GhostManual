@@ -1,10 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
-import { pool } from "../../src/lib/db.ts";
 import { runTemplateJob } from "../../src/lib/template-extraction.ts";
 import { docx, pack, wp } from "../fixtures/documents/native/build.ts";
 import { signUpAndVerify } from "./helpers";
-
-test.afterAll(() => pool.end());
 
 async function register(page: Page, name: string, buffer: Buffer) {
   await page.goto("/templates");
