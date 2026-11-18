@@ -2,7 +2,15 @@ import { transaction } from "../../../lib/db.ts";
 import { AppError } from "../../../lib/errors.ts";
 import { MAX_FILE_BYTES } from "../../../lib/file-sources.ts";
 import { endpoint, json, readBody, requestSession } from "../../../lib/http.ts";
-import { assertTemplateOwner, registerTemplate } from "../../../lib/template-extraction.ts";
+import {
+  assertTemplateOwner,
+  listTemplates,
+  registerTemplate,
+} from "../../../lib/template-extraction.ts";
+
+export async function GET(request: Request) {
+  return endpoint(request, async () => json(await listTemplates(await requestSession(request))));
+}
 
 export async function POST(request: Request) {
   return endpoint(request, async () => {

@@ -4,6 +4,7 @@ import { pool } from "../../src/lib/db.ts";
 import {
   deleteTemplate,
   getTemplate,
+  listTemplates,
   registerTemplate,
   runTemplateJob,
 } from "../../src/lib/template-extraction.ts";
@@ -45,6 +46,17 @@ it("stores originals, counts quota and processes owner-only templates", async ()
     },
   });
   expect(await runTemplateJob()).toBe(false);
+  expect(await listTemplates(ctx)).toEqual([
+    {
+      id: template.id,
+      name: "sample.docx",
+      status: "review",
+      fileBytes: bytes.length,
+      itemCount: 0,
+      isDefault: false,
+    },
+  ]);
+  expect(await listTemplates(other.ctx)).toEqual([]);
   await deleteTemplate(ctx, template.id);
   expect((await currentUser(ctx)).usage.bytes).toBe(0);
   const queued = await registerTemplate(ctx, "another.docx", bytes);

@@ -49,6 +49,17 @@ export async function registerTemplate(ctx: SessionContext, fileName: string, by
   });
 }
 
+export async function listTemplates(ctx: SessionContext) {
+  return transaction(async (db) => {
+    await assertTemplateOwner(db, ctx);
+    const { rows } = await db.query(
+      `SELECT id,name,status,file_bytes::int AS "fileBytes",jsonb_array_length(items) AS "itemCount",is_default AS "isDefault" FROM manual_templates WHERE workspace_id=$1 ORDER BY created_at DESC,id`,
+      [ctx.workspaceId],
+    );
+    return rows;
+  });
+}
+
 export async function getTemplate(ctx: SessionContext, id: string) {
   return transaction(async (db) => {
     await assertTemplateOwner(db, ctx);
