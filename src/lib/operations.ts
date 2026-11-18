@@ -104,7 +104,10 @@ export async function finishOperation(
   });
 }
 // Counts one change-question AI call against the global and per-workspace daily limits; false when used up.
-export async function reserveChangeAi(ctx: SessionContext): Promise<boolean> {
+export const reserveChangeAi = (ctx: SessionContext) => reserveDailyAi(ctx, "change", 30);
+// 양식 읽기(항목 정리)는 문서함당 하루 5회.
+export const reserveTemplateAi = (ctx: SessionContext) => reserveDailyAi(ctx, "template", 5);
+async function reserveDailyAi(ctx: SessionContext, kind: string, max: number): Promise<boolean> {
   return transaction(async (db) => {
     await db.query("SELECT pg_advisory_xact_lock(782402)");
     await assertSession(db, ctx, true);
@@ -113,7 +116,7 @@ export async function reserveChangeAi(ctx: SessionContext): Promise<boolean> {
     const day = "(now() AT TIME ZONE 'UTC')::date";
     const scopes = [
       { scope: "global", kind: "all", max: Number(process.env["AI_DAILY_LIMIT"] ?? 100) },
-      { scope: ctx.workspaceId, kind: "change", max: 30 },
+      { scope: ctx.workspaceId, kind, max },
     ];
     for (const quota of scopes) {
       const count = await db.query<{ attempts: number }>(

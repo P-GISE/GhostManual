@@ -64,7 +64,7 @@ export async function getTemplate(ctx: SessionContext, id: string) {
   return transaction(async (db) => {
     await assertTemplateOwner(db, ctx);
     const { rows } = await db.query(
-      `SELECT id,name,status,file_bytes::int AS "fileBytes",extraction FROM manual_templates WHERE workspace_id=$1 AND id=$2`,
+      `SELECT id,name,status,file_bytes::int AS "fileBytes",extraction,items,is_default AS "isDefault",file_name AS "fileName" FROM manual_templates WHERE workspace_id=$1 AND id=$2`,
       [ctx.workspaceId, id],
     );
     if (!rows[0]) throw missing();
