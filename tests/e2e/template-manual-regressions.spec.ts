@@ -183,13 +183,18 @@ test("an existing manual stays editable when template listing fails", async ({ p
   await page.route("**/api/templates?ready=1", (route) =>
     route.fulfill({ status: 503, json: { error: { message: "합성 조회 실패" } } }),
   );
-  await page.route("**/api/manuals", (route) => route.fulfill({ json: [manual] }));
-  await page.route(`**/api/manuals/${manualId}`, (route) => route.fulfill({ json: manual }));
+  const editable = { ...manual, draft: { ...manual.draft, references: [] } };
+  await page.route("**/api/manuals", (route) => route.fulfill({ json: [editable] }));
+  await page.route(`**/api/manuals/${manualId}`, (route) => route.fulfill({ json: editable }));
   await page.goto(`/sources/${sourceId}`);
   await expect(
     page.getByRole("alert").filter({ hasText: "양식 목록을 불러오지 못했습니다." }),
   ).toBeVisible();
   await page.getByRole("button", { name: "직접 작성하기", exact: true }).click();
   await expect(page).toHaveURL(`/manuals/${manualId}/edit`);
+  await page.getByLabel("매뉴얼 제목", { exact: true }).fill("편집 가능한 합성 제목");
+  await expect(page.getByLabel("매뉴얼 제목", { exact: true })).toHaveValue(
+    "편집 가능한 합성 제목",
+  );
   await expect(page.getByRole("button", { name: "초안 저장", exact: true })).toBeEnabled();
 });
