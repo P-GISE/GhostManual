@@ -96,7 +96,8 @@ beforeEach(() => {
     fileType: "docx",
     extraction: extraction("queued"),
   });
-  state.slots = [false, current, "", "", false, "", false, false];
+  // 양식 목록 조회가 끝난 상태에서 원본 추출 상태의 변경만 검증한다.
+  state.slots = [false, current, "", "", false, "", false, false, [], "", false, "", 0];
   state.versions = null;
   render();
 });

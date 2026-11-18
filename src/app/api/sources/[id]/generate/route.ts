@@ -6,11 +6,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   return endpoint(request, async () => {
     await limitRequest(request, "ai");
     const input = z
-      .object({ expectedRevision: z.number().int().positive() })
+      .object({
+        expectedRevision: z.number().int().positive(),
+        templateId: z.uuid().nullable().optional(),
+      })
       .parse(await readJson(request));
     const result = await generateDraft(await requestSession(request), {
       sourceId: z.uuid().parse((await context.params).id),
       expectedRevision: input.expectedRevision,
+      ...(input.templateId !== undefined ? { templateId: input.templateId } : {}),
       key: z.string().min(8).max(128).parse(request.headers.get("idempotency-key")),
     });
     return json(result, "processing" in result ? 202 : 200);

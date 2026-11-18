@@ -12,7 +12,7 @@ import {
   type Source,
   sourceSchema,
 } from "../lib/client";
-import { emptySections } from "../lib/sections";
+import { blockingSections, toSections } from "../lib/sections";
 import { FileHistory } from "./FileHistory";
 import { ManualContent } from "./ManualContent";
 import { ManualVersionComparison } from "./ManualVersionComparison";
@@ -114,7 +114,12 @@ export function ManualDetail({
     !reader &&
     (!source || (!!source.extraction && !["ready", "limited"].includes(source.extraction.status)));
   const limitedSource = source?.extraction?.status === "limited";
-  const missing = emptySections(content).filter((section) => section.required);
+  const missing = blockingSections(content);
+  const sectionName = (field: string) => {
+    const [id, index] = field.split(".");
+    const name = id === "title" ? "제목" : toSections(content).find((s) => s.id === id)?.name;
+    return name ? name + (index === undefined ? "" : ` ${Number(index) + 1}번째`) : field;
+  };
   return (
     <>
       {/* Print/PDF: only the published, reviewed version and its frozen change history. */}
@@ -289,7 +294,7 @@ export function ManualDetail({
                 content.references.map((r) => (
                   <details key={`${r.paragraphId}-${r.field}-${r.quote}`}>
                     <summary>
-                      {r.field} · 문단 {r.paragraphId}
+                      {sectionName(r.field)} · 문단 {r.paragraphId}
                     </summary>
                     <p className="source-text">{r.quote}</p>
                     <Link

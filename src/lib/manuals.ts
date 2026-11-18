@@ -4,7 +4,7 @@ import { assertDocumentReady } from "./document-sources.ts";
 import { AppError } from "./errors.ts";
 import { FileHistorySchema, fileHistory, reconcileFileUnknowns } from "./file-sources.ts";
 import { type ManualDraft, ManualDraftSchema } from "./schemas.ts";
-import { emptySections } from "./sections.ts";
+import { blockingSections, toSections } from "./sections.ts";
 import { assertSession } from "./session.ts";
 import { paragraphs } from "./sources.ts";
 import {
@@ -48,13 +48,14 @@ const invalid = () =>
   new AppError("invalid_reference", 422, "원문 인용과 연결된 매뉴얼 항목을 확인하세요.");
 function validateReferences(draft: ManualDraft, text: string) {
   const source = paragraphs(text);
+  const sections = toSections(draft);
   for (const ref of draft.references) {
     const [field, index, ...rest] = ref.field.split(".");
-    const value = field ? Reflect.get(draft, field) : undefined;
-    const knownField =
-      Object.keys(ManualDraftSchema.shape).includes(field ?? "") &&
-      field !== "references" &&
-      field !== "unknowns";
+    // 인용이 가리키는 곳은 제목이나 항목 하나다. 기본 형태의 항목 id는 칸 이름과 같다.
+    const section = sections.find((entry) => entry.id === field);
+    const value =
+      field === "title" ? draft.title : section?.kind === "list" ? section.items : section?.text;
+    const knownField = field === "title" || !!section;
     const target =
       index === undefined
         ? value
@@ -195,13 +196,15 @@ export async function publishManual(
     const draft = current.draft;
     validateReferences(draft, row.text);
     const acknowledgements = z.array(z.string()).parse(acknowledgedUnknowns);
-    const missing = emptySections(draft).filter((section) => section.required);
+    const missing = blockingSections(draft);
     if (missing.length)
       throw new AppError(
         "review_required",
         422,
         `비어 있는 항목: ${missing.map((section) => section.name).join(", ")}. 초안 수정에서 채운 뒤 게시하세요.`,
       );
+    if (!toSections(draft).some((section) => section.state === "filled"))
+      throw new AppError("review_required", 422, "한 항목 이상 내용을 채운 뒤 게시하세요.");
     if (
       draft.unknowns.some((item) => !acknowledgements.includes(item)) ||
       acknowledgements.some((item) => !draft.unknowns.includes(item))

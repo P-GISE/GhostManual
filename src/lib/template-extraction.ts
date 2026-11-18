@@ -49,11 +49,12 @@ export async function registerTemplate(ctx: SessionContext, fileName: string, by
   });
 }
 
-export async function listTemplates(ctx: SessionContext) {
+// ready=true면 확정된 양식만 항목과 함께 돌려준다(매뉴얼을 만들 때 고르는 목록).
+export async function listTemplates(ctx: SessionContext, ready = false) {
   return transaction(async (db) => {
     await assertTemplateOwner(db, ctx);
     const { rows } = await db.query(
-      `SELECT id,name,status,file_bytes::int AS "fileBytes",jsonb_array_length(items) AS "itemCount",is_default AS "isDefault" FROM manual_templates WHERE workspace_id=$1 ORDER BY created_at DESC,id`,
+      `SELECT id,name,status,file_bytes::int AS "fileBytes",jsonb_array_length(items) AS "itemCount",is_default AS "isDefault"${ready ? ",items" : ""} FROM manual_templates WHERE workspace_id=$1${ready ? " AND status='ready'" : ""} ORDER BY created_at DESC,id`,
       [ctx.workspaceId],
     );
     return rows;
