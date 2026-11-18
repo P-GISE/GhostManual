@@ -17,6 +17,22 @@ import { type ManualDraft, SourceInputSchema } from "../lib/schemas";
 import { FileVersions } from "./FileVersions";
 import { SourceDelete } from "./SourceDelete";
 import { useUnsavedChanges } from "./useUnsavedChanges";
+
+const readyTemplatesSchema = z.array(
+  z.object({
+    id: z.uuid(),
+    name: z.string(),
+    isDefault: z.boolean(),
+    items: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        guide: z.string(),
+        kind: z.enum(["text", "list"]),
+      }),
+    ),
+  }),
+);
 export function SourceDetail({
   id,
   upload = false,
@@ -33,6 +49,19 @@ export function SourceDetail({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
+  // 확정된 양식이 있으면 "매뉴얼 만들기"에서 고른다. 기본 양식이 먼저 선택돼 있다.
+  const [templates, setTemplates] = useState<z.infer<typeof readyTemplatesSchema>>([]);
+  const [templateId, setTemplateId] = useState("");
+  useEffect(() => {
+    if (reader) return;
+    read("/api/templates?ready=1", readyTemplatesSchema)
+      .then((list) => {
+        setTemplates(list);
+        setTemplateId(list.find((entry) => entry.isDefault)?.id ?? "");
+      })
+      // 양식은 선택 사항이라 불러오지 못해도 기본 항목으로 만들 수 있다.
+      .catch(() => {});
+  }, [reader]);
   const updateFile = useCallback(
     ({ revision, revisionId, fileType, extraction }: FileRevision) =>
       setSource((current) =>
@@ -103,25 +132,40 @@ export function SourceDetail({
           return;
         }
       }
-      const draft: ManualDraft = {
-        title: source.title,
-        purpose: null,
-        trigger: null,
-        cadence: null,
-        ownerRole: null,
-        resources: [],
-        systems: [],
-        steps: [],
-        warnings: [],
-        exceptions: [],
-        completion: null,
-        unknowns: ["담당자가 내용을 작성하고 원본 근거를 확인해야 합니다."],
-        references: [],
-      };
+      const chosen = templates.find((entry) => entry.id === templateId);
+      const draft: ManualDraft = chosen
+        ? {
+            title: source.title,
+            template: { id: chosen.id, name: chosen.name },
+            sections: chosen.items.map((item) => ({
+              ...item,
+              text: null,
+              items: [],
+              state: "empty" as const,
+              by: "human" as const,
+            })),
+            unknowns: ["담당자가 내용을 작성하고 원본 근거를 확인해야 합니다."],
+            references: [],
+          }
+        : {
+            title: source.title,
+            purpose: null,
+            trigger: null,
+            cadence: null,
+            ownerRole: null,
+            resources: [],
+            systems: [],
+            steps: [],
+            warnings: [],
+            exceptions: [],
+            completion: null,
+            unknowns: ["담당자가 내용을 작성하고 원본 근거를 확인해야 합니다."],
+            references: [],
+          };
       const result = generate
         ? await http
             .post(`/api/sources/${id}/generate`, {
-              json: { expectedRevision: source.revision },
+              json: { expectedRevision: source.revision, templateId: templateId || null },
               headers: { "idempotency-key": crypto.randomUUID() },
             })
             .json()
@@ -178,6 +222,23 @@ export function SourceDetail({
     <aside className="panel">
       <h2>매뉴얼 만들기</h2>
       <p>업무 목적과 순서, 주의 사항을 정리한 다음 직접 검수합니다.</p>
+      {templates.length > 0 && (
+        <>
+          <label htmlFor="manual-template">매뉴얼 항목</label>
+          <select
+            id="manual-template"
+            value={templateId}
+            onChange={(event) => setTemplateId(event.target.value)}
+          >
+            {templates.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                양식: {entry.name}
+              </option>
+            ))}
+            <option value="">기본 항목(양식 없음)</option>
+          </select>
+        </>
+      )}
       <div className="actions">
         <button
           type="button"

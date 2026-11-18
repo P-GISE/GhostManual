@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { message, publishedSchema, read } from "../lib/client";
-import { manualFields } from "./ManualContent";
+import { toSections } from "../lib/sections";
 
 export function ManualVersionComparison({
   id,
@@ -34,16 +34,34 @@ export function ManualVersionComparison({
   }, [id, latest]);
   const old = versions.find((v) => v.version === before);
   const current = versions.find((v) => v.version === after);
-  const fields = [
-    { key: "title", label: "제목" },
-    ...manualFields,
-    { key: "references", label: "원본 인용" },
-  ] as const;
+  // 두 버전의 항목을 이름으로 맞춘다. 양식을 바꿔 다시 만든 버전끼리도 비교된다.
+  const rows = (content: z.infer<typeof publishedSchema>["content"]) =>
+    new Map<string, string>([
+      ["제목", content.title],
+      ...toSections(content).map(
+        (section) =>
+          [
+            section.name,
+            section.state === "na"
+              ? "해당 없음"
+              : (section.text ?? section.items.join(String.fromCharCode(10))),
+          ] as const,
+      ),
+      ["미확인 항목", content.unknowns.join(String.fromCharCode(10))],
+      [
+        "원본 인용",
+        content.references
+          .map((ref) => `${ref.field} · 문단 ${ref.paragraphId}: ${ref.quote}`)
+          .join(String.fromCharCode(10)),
+      ],
+    ]);
+  const before_ = old ? rows(old.content) : new Map<string, string>();
+  const after_ = current ? rows(current.content) : new Map<string, string>();
   const changed =
     old && current
-      ? fields.filter(
-          (f) => JSON.stringify(old.content[f.key]) !== JSON.stringify(current.content[f.key]),
-        )
+      ? [...new Set([...before_.keys(), ...after_.keys()])]
+          .filter((label) => (before_.get(label) ?? "") !== (after_.get(label) ?? ""))
+          .map((label) => ({ key: label, label }))
       : [];
   const metadataChanges =
     old && current
@@ -130,9 +148,9 @@ export function ManualVersionComparison({
                   <section className="document" key={f.key}>
                     <h3>{f.label}</h3>
                     <h4>이전 · 버전 {before}</h4>
-                    <p className="source-text">{display(old.content[f.key])}</p>
+                    <p className="source-text">{before_.get(f.key) || "확인된 내용 없음"}</p>
                     <h4>이후 · 버전 {after}</h4>
-                    <p className="source-text">{display(current.content[f.key])}</p>
+                    <p className="source-text">{after_.get(f.key) || "확인된 내용 없음"}</p>
                   </section>
                 ))}
               </>
@@ -143,24 +161,6 @@ export function ManualVersionComparison({
     </details>
   );
 }
-function display(
-  value: z.infer<typeof publishedSchema>["content"][keyof z.infer<
-    typeof publishedSchema
-  >["content"]],
-) {
-  if (Array.isArray(value))
-    return value.length
-      ? value
-          .map((item) =>
-            typeof item === "string"
-              ? item
-              : `${item.field} · 문단 ${item.paragraphId}: ${item.quote}`,
-          )
-          .join(String.fromCharCode(10))
-      : "확인된 내용 없음";
-  return value ?? "확인된 내용 없음";
-}
-
 function provenanceLabel(value: string) {
   return value === "ai" ? "AI 생성" : value === "example" ? "합성 예제" : "담당자 작성";
 }

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { FILE_QUOTA_BYTES } from "./accounts.ts";
 import { workspaceStorageLimit } from "./admin.ts";
-import { generateFileManual } from "./ai.ts";
+import { type DraftTemplate, generateFileManual } from "./ai.ts";
 import { type CellChange, diffCells } from "./cell-diff.ts";
 import { changePrompt, changeQuestions } from "./change-ai.ts";
 import { type DbClient, transaction } from "./db.ts";
@@ -717,6 +717,7 @@ export async function draftFromFile(
   ctx: SessionContext,
   sourceId: string,
   expectedRevision: number,
+  template: DraftTemplate | null = null,
 ): Promise<ManualDraft> {
   const input = await transaction(async (db) => {
     await assertSession(db, ctx, true);
@@ -742,7 +743,7 @@ export async function draftFromFile(
       })),
     };
   });
-  return generateFileManual(input);
+  return generateFileManual(input, template);
 }
 export type CellChanges = { compared: boolean; total: number; changes: CellChange[] };
 // Cell-by-cell record of one version against the previous one, rebuilt from the stored immutable snapshots.

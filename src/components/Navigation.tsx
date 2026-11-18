@@ -62,13 +62,18 @@ export function Navigation() {
           {[
             { href: "/manuals", label: "문서함" },
             { href: "/sources/new", label: "자료 등록" },
+            { href: "/templates", label: "양식" },
             { href: "/help", label: "도움말" },
           ].map(({ href, label }) => (
             <Link
               key={href}
               href={href}
               aria-current={pathname === href ? "page" : undefined}
-              data-active={href === "/manuals" ? pathname.startsWith(href) : pathname === href}
+              data-active={
+                href === "/manuals" || href === "/templates"
+                  ? pathname.startsWith(href)
+                  : pathname === href
+              }
             >
               {label}
             </Link>

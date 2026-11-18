@@ -74,7 +74,9 @@ export async function retrieve(
  SELECT e.*,p.quote,p.ordinality,'source' AS kind FROM eligible e CROSS JOIN LATERAL regexp_split_to_table(e.text,E'\\n\\s*\\n') WITH ORDINALITY p(quote,ordinality)
  UNION ALL
  SELECT e.*,p.quote,p.ordinality,'manual' AS kind FROM eligible e CROSS JOIN LATERAL jsonb_array_elements_text(
- jsonb_build_array(e.content->>'purpose',e.content->>'trigger',e.content->>'cadence',e.content->>'ownerRole',e.content->>'completion') || (e.content->'steps') || (e.content->'warnings') || (e.content->'exceptions') || (e.content->'resources') || (e.content->'systems')) WITH ORDINALITY p(quote,ordinality)
+ CASE WHEN e.content ? 'sections' THEN (SELECT coalesce(jsonb_agg(line ORDER BY pos,item),'[]'::jsonb) FROM jsonb_array_elements(e.content->'sections') WITH ORDINALITY sections(section,pos)
+   CROSS JOIN LATERAL jsonb_array_elements(jsonb_build_array(section->'text') || (section->'items')) WITH ORDINALITY lines(line,item) WHERE jsonb_typeof(line)='string')
+ ELSE jsonb_build_array(e.content->>'purpose',e.content->>'trigger',e.content->>'cadence',e.content->>'ownerRole',e.content->>'completion') || (e.content->'steps') || (e.content->'warnings') || (e.content->'exceptions') || (e.content->'resources') || (e.content->'systems') END) WITH ORDINALITY p(quote,ordinality)
  ), ranked AS (
  SELECT *, (SELECT count(*) FROM unnest($4::text[]) term WHERE regexp_replace(lower(normalize(quote,NFKC)),'[^a-z0-9가-힣]','','g') LIKE '%'||term||'%') AS hits,
  similarity(regexp_replace(lower(normalize(quote,NFKC)),'[^a-z0-9가-힣]','','g'),$5) AS fuzzy FROM chunks WHERE quote IS NOT NULL AND length(quote)>0 AND length(quote)<=12000

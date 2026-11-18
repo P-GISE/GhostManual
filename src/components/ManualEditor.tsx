@@ -11,26 +11,18 @@ import {
   sourceSchema,
 } from "../lib/client";
 import { type ManualDraft, ManualDraftSchema } from "../lib/schemas";
-import { emptySections, NOT_APPLICABLE } from "../lib/sections";
+import { NOT_APPLICABLE, toSections, withSection } from "../lib/sections";
 import { ManualCitationPanel } from "./ManualCitationPanel";
 import { ManualContent } from "./ManualContent";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 
-const textFields = [
-  { key: "purpose", label: "업무 목적" },
-  { key: "trigger", label: "시작 조건" },
-  { key: "cadence", label: "주기" },
-  { key: "ownerRole", label: "담당 역할" },
-  { key: "completion", label: "완료 기준" },
-] as const;
-const listFields = [
-  { key: "resources", label: "준비 자료" },
-  { key: "systems", label: "사용 시스템" },
-  { key: "steps", label: "업무 순서" },
-  { key: "warnings", label: "주의 사항" },
-  { key: "exceptions", label: "예외 상황" },
-  { key: "unknowns", label: "미확인 항목" },
-] as const;
+const lines = (list: readonly string[]) => list.map((line) => line.trim()).filter(Boolean);
+// 입력 중인 목록은 빈 줄까지 그대로 보여 줘야 줄바꿈이 사라지지 않는다.
+function rawItems(draft: ManualDraft, id: string): readonly string[] {
+  if ("sections" in draft) return draft.sections.find((section) => section.id === id)?.items ?? [];
+  const value = Reflect.get(draft, id);
+  return Array.isArray(value) ? value : [];
+}
 export function ManualEditor({ id }: { readonly id: string }) {
   const [manual, setManual] = useState<Manual | null>(null);
   const [draft, setDraft] = useState<ManualDraft | null>(null);
@@ -56,10 +48,26 @@ export function ManualEditor({ id }: { readonly id: string }) {
       setError("변경된 원본을 확인하고 재검토 확인란을 선택하세요.");
       return;
     }
-    const normalized = { ...draft };
-    for (const field of listFields)
-      normalized[field.key] = draft[field.key].map((line) => line.trim()).filter(Boolean);
-    const parsed = ManualDraftSchema.safeParse(normalized);
+    // 입력 중에는 빈 줄을 그대로 두고, 저장할 때 목록의 빈 줄을 뺀다.
+    const normalized =
+      "sections" in draft
+        ? {
+            ...draft,
+            sections: draft.sections.map((section) => ({
+              ...section,
+              items: lines(section.items),
+            })),
+          }
+        : toSections(draft)
+            .filter((section) => section.kind === "list" && section.state !== "na")
+            .reduce<ManualDraft>(
+              (next, section) => withSection(next, section.id, section.items),
+              draft,
+            );
+    const parsed = ManualDraftSchema.safeParse({
+      ...normalized,
+      unknowns: lines(draft.unknowns),
+    });
     if (!parsed.success) {
       setError("제목과 각 항목의 길이를 확인하세요. 빈 목록 줄은 제거해 주세요.");
       return;
@@ -99,7 +107,8 @@ export function ManualEditor({ id }: { readonly id: string }) {
         (paragraph) => paragraph.id === ref.paragraphId && paragraph.text.includes(ref.quote),
       ),
   );
-  const empty = emptySections(draft);
+  const sections = toSections(draft);
+  const empty = sections.filter((section) => section.state === "empty");
   return (
     <>
       <span className="eyebrow">미검수 초안</span>
@@ -143,14 +152,16 @@ export function ManualEditor({ id }: { readonly id: string }) {
         <section className="panel" aria-labelledby="empty-sections">
           <h2 id="empty-sections">채우지 못한 항목 {empty.length}개</h2>
           <p className="help">
-            원본에서 근거를 찾지 못해 비워 둔 항목입니다. 게시 필수 항목은 채워야 게시할 수
-            있습니다.
+            {"sections" in draft
+              ? "근거를 찾지 못해 비워 둔 항목입니다. 채우거나 해당 없음으로 표시해야 게시할 수 있습니다."
+              : "원본에서 근거를 찾지 못해 비워 둔 항목입니다. 게시 필수 항목은 채워야 게시할 수 있습니다."}
           </p>
           <ul className="empty-sections">
             {empty.map((section) => (
               <li key={section.id}>
                 <strong>{section.name}</strong>
                 {section.required && <span className="badge">게시 필수</span>}
+                {section.guide && <span className="help">{section.guide}</span>}
                 <span className="actions">
                   <button
                     type="button"
@@ -165,12 +176,7 @@ export function ManualEditor({ id }: { readonly id: string }) {
                       type="button"
                       className="secondary"
                       aria-label={`${section.name} 해당 없음`}
-                      onClick={() =>
-                        setDraft({
-                          ...draft,
-                          [section.id]: section.kind === "list" ? [NOT_APPLICABLE] : NOT_APPLICABLE,
-                        })
-                      }
+                      onClick={() => setDraft(withSection(draft, section.id, null))}
                     >
                       해당 없음
                     </button>
@@ -190,35 +196,62 @@ export function ManualEditor({ id }: { readonly id: string }) {
             maxLength={120}
             onChange={(e) => setDraft({ ...draft, title: e.target.value })}
           />
-          {textFields.map((f) => (
-            <div key={f.key}>
-              <label htmlFor={f.key}>{f.label}</label>
+          {"template" in draft && (
+            <p className="help">양식: {draft.template.name} (만들 당시 항목의 복사본)</p>
+          )}
+          {sections.map((section) => (
+            <div key={section.id}>
+              <label htmlFor={section.id}>{section.name}</label>
               <textarea
-                id={f.key}
-                rows={3}
-                value={draft[f.key] ?? ""}
-                maxLength={4000}
-                onChange={(e) =>
-                  setDraft({ ...draft, [f.key]: e.target.value.trim() ? e.target.value : null })
+                id={section.id}
+                rows={section.kind === "list" ? 4 : 3}
+                value={
+                  section.state === "na"
+                    ? NOT_APPLICABLE
+                    : section.kind === "list"
+                      ? rawItems(draft, section.id).join("\n")
+                      : (section.text ?? "")
                 }
+                maxLength={section.kind === "list" ? undefined : 4000}
+                onChange={(e) =>
+                  setDraft(
+                    withSection(
+                      draft,
+                      section.id,
+                      section.kind === "list" ? e.target.value.split("\n") : e.target.value,
+                    ),
+                  )
+                }
+                aria-describedby={`${section.id}-help`}
               />
-            </div>
-          ))}
-          {listFields.map((f) => (
-            <div key={f.key}>
-              <label htmlFor={f.key}>{f.label}</label>
-              <textarea
-                id={f.key}
-                rows={4}
-                value={draft[f.key].join("\n")}
-                onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value.split("\n") })}
-                aria-describedby={`${f.key}-help`}
-              />
-              <p className="help" id={`${f.key}-help`}>
-                한 줄에 한 항목. 비어 있는 줄은 저장할 때 제외됩니다.
+              <p className="help" id={`${section.id}-help`}>
+                {[
+                  section.guide,
+                  section.kind === "list" &&
+                    "한 줄에 한 항목. 비어 있는 줄은 저장할 때 제외됩니다.",
+                  section.state === "na"
+                    ? "해당 없음으로 표시됨"
+                    : section.state === "filled" &&
+                      (section.by === "human" ? "담당자 작성" : section.by === "ai" && "AI 초안"),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
             </div>
           ))}
+          <div>
+            <label htmlFor="unknowns">미확인 항목</label>
+            <textarea
+              id="unknowns"
+              rows={4}
+              value={draft.unknowns.join("\n")}
+              onChange={(e) => setDraft({ ...draft, unknowns: e.target.value.split("\n") })}
+              aria-describedby="unknowns-help"
+            />
+            <p className="help" id="unknowns-help">
+              한 줄에 한 항목. 비어 있는 줄은 저장할 때 제외됩니다.
+            </p>
+          </div>
           <div className="actions">
             <button type="button" disabled={busy || invalidReferences.length > 0} onClick={save}>
               {busy ? "저장 중…" : "초안 저장"}
