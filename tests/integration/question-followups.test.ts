@@ -96,7 +96,9 @@ it("rewrites a follow-up from the conversation, searches with it and counts one 
   expect(requests.map((r) => r.kind)).toEqual(["answer"]);
   const globalBefore = await counter("global", "all");
   // "그건"만으로는 매뉴얼에서 아무것도 찾지 못한다.
-  expect((await ask(owner, { question: "그건 누가 해?" }, "alone-question")).status).toBe("insufficient");
+  expect((await ask(owner, { question: "그건 누가 해?" }, "alone-question")).status).toBe(
+    "insufficient",
+  );
   requests.length = 0;
   const followUp = await ask(
     owner,
@@ -129,7 +131,11 @@ it("still answers when the rewrite fails by searching with the previous question
   const first = await ask(owner, { question: "업무 계정 발급 절차" }, "first-turn");
   rewrite = null;
   requests.length = 0;
-  const followUp = await ask(owner, { question: "그건 누가 해?", after: [first.id] }, "fallback-search");
+  const followUp = await ask(
+    owner,
+    { question: "그건 누가 해?", after: [first.id] },
+    "fallback-search",
+  );
   expect(followUp.status).toBe("supported");
   expect(followUp.understoodAs).toBeNull();
   expect(requests.map((r) => r.kind)).toEqual(["rewrite", "answer"]);
@@ -145,7 +151,11 @@ it("ignores question ids from another session and skips the rewrite when AI is o
   expect(stolen.status).toBe("insufficient");
   expect(requests).toHaveLength(0);
   vi.stubEnv("AI_ENABLED", "false");
-  const off = await ask(owner, { question: "업무 계정 승인", after: [first.id] }, "ai-off-question");
+  const off = await ask(
+    owner,
+    { question: "업무 계정 승인", after: [first.id] },
+    "ai-off-question",
+  );
   expect(off.status).toBe("unavailable");
   expect(off.understoodAs).toBeNull();
   expect(requests).toHaveLength(0);
