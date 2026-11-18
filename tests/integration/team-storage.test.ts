@@ -137,3 +137,49 @@ it("records the creator through text, spreadsheet, document and template creatio
     await deleteAccount(ctx);
   }
 });
+
+it("serializes concurrent administrator account deletions and retains one administrator", async () => {
+  const mail = setupFileMail();
+  const first = await signedInUser(mail);
+  const second = await signedInUser(mail);
+  const teamId = crypto.randomUUID();
+  const userIds = (
+    await pool.query("SELECT user_id FROM sessions WHERE id=ANY($1::uuid[])", [
+      [first.ctx.sessionId, second.ctx.sessionId],
+    ])
+  ).rows.map((row) => row.user_id);
+  try {
+    await pool.query(
+      "INSERT INTO workspaces(id,mode,team_name,expires_at) VALUES($1,'blank','동시 삭제 팀','infinity')",
+      [teamId],
+    );
+    for (const id of userIds)
+      await pool.query(
+        "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'admin')",
+        [teamId, id],
+      );
+    const outcomes = await Promise.allSettled([
+      deleteAccount(first.ctx),
+      deleteAccount(second.ctx),
+    ]);
+    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+    const rejected = outcomes.find((outcome) => outcome.status === "rejected");
+    expect(rejected?.status === "rejected" && rejected.reason).toMatchObject({ httpStatus: 409 });
+    expect(
+      (
+        await pool.query(
+          "SELECT count(*)::int AS n FROM workspace_members WHERE workspace_id=$1 AND role='admin'",
+          [teamId],
+        )
+      ).rows[0].n,
+    ).toBe(1);
+  } finally {
+    await pool.query("DELETE FROM workspaces WHERE id=$1", [teamId]);
+    for (const account of [first, second]) {
+      const present = await pool.query("SELECT id FROM sessions WHERE id=$1", [
+        account.ctx.sessionId,
+      ]);
+      if (present.rowCount) await deleteAccount(account.ctx);
+    }
+  }
+});
