@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { generate, instructions } from "./ai.ts";
+import { type DraftTemplate, generate, instructions } from "./ai.ts";
 import { transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
 import { reserveTemplateAi } from "./operations.ts";
@@ -75,6 +75,19 @@ export async function updateTemplate(ctx: SessionContext, id: string, input: Tem
       ]);
   });
   return getTemplate(ctx, id);
+}
+
+// 초안을 만들 때 쓸 확정 양식. 생략하면 문서함의 기본 양식, null이면 양식 없이 기본 10개 항목.
+export async function resolveTemplate(ctx: SessionContext, templateId: string | null | undefined) {
+  if (templateId === null) return null;
+  return transaction(async (db) => {
+    const { rows } = await db.query<DraftTemplate>(
+      "SELECT id,name,items FROM manual_templates WHERE workspace_id=$1 AND status='ready' AND (id=$2 OR ($2::uuid IS NULL AND is_default))",
+      [ctx.workspaceId, templateId ?? null],
+    );
+    if (templateId && !rows[0]) throw missing();
+    return rows[0] ?? null;
+  });
 }
 
 const ReadOutputSchema = z.object({

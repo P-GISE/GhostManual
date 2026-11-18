@@ -1,6 +1,7 @@
 import { afterAll, expect, it } from "vitest";
 import { pool } from "../../src/lib/db.ts";
 import { listManualVersions, publishManual, saveDraft } from "../../src/lib/manuals.ts";
+import { toSections } from "../../src/lib/sections.ts";
 import { createWorkspace, requireSession } from "../../src/lib/session.ts";
 import { createSource } from "../../src/lib/sources.ts";
 import { exampleDraft, exampleSource } from "../fixtures/manual-example.ts";
@@ -29,7 +30,10 @@ it("returns immutable publications in descending order, excluding drafts", async
   expect(invalid.status).toBe(422);
   const versions = await listManualVersions(owner, manual.id);
   expect(versions.map((v) => v.version)).toEqual([2, 1]);
-  expect(versions.map((v) => v.content.purpose)).toEqual(["새 검수 목적", exampleDraft.purpose]);
+  expect(versions.map((v) => toSections(v.content)[0]?.text)).toEqual([
+    "새 검수 목적",
+    exampleDraft.purpose,
+  ]);
   const other = await requireSession((await createWorkspace()).token);
   await expect(listManualVersions(other, manual.id)).rejects.toMatchObject({ httpStatus: 404 });
   const reader = await requireSession((await shareWithNewReader(owner, manual.id)).token);

@@ -4,10 +4,12 @@ import { draftFromFile } from "./file-sources.ts";
 import { getManual, listManuals, saveDraft } from "./manuals.ts";
 import { finishOperation, payloadHash, reserveAiAttempt } from "./operations.ts";
 import { getSource } from "./sources.ts";
+import { resolveTemplate } from "./templates.ts";
 import type { SessionContext } from "./types.ts";
 export async function generateDraft(
   ctx: SessionContext,
-  input: { sourceId: string; expectedRevision: number; key: string },
+  // templateId: 생략하면 기본 양식, null이면 기본 10개 항목.
+  input: { sourceId: string; expectedRevision: number; key: string; templateId?: string | null },
 ) {
   if (ctx.role !== "owner") throw new AppError("forbidden", 403, "소유자만 생성할 수 있습니다.");
   const source = await getSource(ctx, input.sourceId);
@@ -25,11 +27,16 @@ export async function generateDraft(
     );
   if (source.revision !== input.expectedRevision)
     throw new AppError("conflict", 409, "자료가 변경됐습니다.");
+  const template = await resolveTemplate(ctx, input.templateId);
   const existing = (await listManuals(ctx)).find((m) => m.sourceId === source.id);
   const operation = await reserveAiAttempt(ctx, {
     kind: "generate",
     key: input.key,
-    payloadHash: payloadHash({ sourceId: source.id, revision: source.revision }),
+    payloadHash: payloadHash({
+      sourceId: source.id,
+      revision: source.revision,
+      ...(template ? { templateId: template.id } : {}),
+    }),
   });
   if (operation.status === "processing" && !operation.isNew)
     return { processing: true, operationId: operation.id };
@@ -53,8 +60,8 @@ export async function generateDraft(
   try {
     const draft =
       source.kind === "file"
-        ? await draftFromFile(ctx, source.id, input.expectedRevision)
-        : await generateManual(source);
+        ? await draftFromFile(ctx, source.id, input.expectedRevision, template)
+        : await generateManual(source, template);
     const manual = await saveDraft(ctx, source.revisionId, draft, existing?.draftRevision, "ai");
     await finishOperation(operation.id, { result: { manualId: manual.id } });
     return { manual, operationId: operation.id };

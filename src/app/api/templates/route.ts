@@ -9,7 +9,14 @@ import {
 } from "../../../lib/template-extraction.ts";
 
 export async function GET(request: Request) {
-  return endpoint(request, async () => json(await listTemplates(await requestSession(request))));
+  return endpoint(request, async () =>
+    json(
+      await listTemplates(
+        await requestSession(request),
+        new URL(request.url).searchParams.has("ready"),
+      ),
+    ),
+  );
 }
 
 export async function POST(request: Request) {

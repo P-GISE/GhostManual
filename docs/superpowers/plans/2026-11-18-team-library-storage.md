@@ -10,6 +10,15 @@
 
 **Spec:** docs/superpowers/specs/2026-11-17-team-library-design.md
 
+## 2026-11-18 현재 합의
+사용자가 PR #71의 이동 시 질문 기록 삭제안을 수용했다. 아래에 남긴 질문 보존·복합 인용 시409 거부안은 초기 검토안이며 이 결정으로 대체된다.
+- 문서함 전환은 대상 문서함용 새 세션을 발급하고 기존 세션의 workspace_id를 바꾸지 않는다.
+- AI 질문은 개인 기록으로 다룬다. 업무 이동 때 해당 업무를 인용한 작성자·후임자의 question_runs/evidence와 관련 재조회 캐시를 제거한다. 같은 질문이 여러 업무를 인용했어도 이 정책을 따른다.
+- revision_questions의 업무 변경 질문·답변, 버전·원본 파일·매뉴얼/게시본·양식은 이 AI 질문 삭제 대상이 아니다. 이동할 업무 자료의 소속은 정상 이관한다.
+- 기존 공유 링크는 보존한다. 개인 질문 보존을 위해 세션/질문 FK를 바꾸는 migration은 이번1차에 추가하지 않는다.
+- 이번 사용자 답변은 후속 기능의 정책 결정이다. 실제 운영 기록의 즉시 삭제를 지시한 것으로 취급하지 않는다.
+- 팀 API·세션·워커의 membership 재검사와 마지막 관리자 잠금 규칙은 유지한다. 작업 중 계정/세션 삭제의 처리 근거는 docs/qa/2026-11-18/template-manual-review.md를 따른다.
+
 ## 저장 기반
 - [x] 009에 team_name, workspace_members, workspace_invites, sources.created_by, manual_versions.published_by_name 추가.
 - [x] 양식 삭제 권한에 필요한 manual_templates.created_by를 추가하고 기존 개인 자료·양식 작성자를 소유자로 채운다.

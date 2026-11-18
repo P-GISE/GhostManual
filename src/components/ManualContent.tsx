@@ -1,42 +1,39 @@
 import type { ManualDraft } from "../lib/schemas";
+import { toSections } from "../lib/sections";
 
-export const manualFields = [
-  { key: "purpose", label: "업무 목적" },
-  { key: "trigger", label: "시작 조건" },
-  { key: "cadence", label: "주기" },
-  { key: "ownerRole", label: "담당 역할" },
-  { key: "resources", label: "준비 자료" },
-  { key: "systems", label: "사용 시스템" },
-  { key: "steps", label: "업무 순서" },
-  { key: "warnings", label: "주의 사항" },
-  { key: "exceptions", label: "예외 상황" },
-  { key: "completion", label: "완료 기준" },
-  { key: "unknowns", label: "미확인 항목" },
-] as const;
 export function ManualContent({ content }: { readonly content: ManualDraft }) {
   return (
     <article className="document">
-      {manualFields.map((f) => {
-        const value = content[f.key];
-        return (
-          <section key={f.key}>
-            <h3>{f.label}</h3>
-            {Array.isArray(value) ? (
-              value.length ? (
-                <ol>
-                  {value.map((v) => (
-                    <li key={`${f.key}-${v}`}>{v || "내용 미입력"}</li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="muted">확인된 내용 없음</p>
-              )
-            ) : (
-              <p>{value ?? "확인된 내용 없음"}</p>
-            )}
-          </section>
-        );
-      })}
+      {toSections(content).map((section) => (
+        <section key={section.id}>
+          <h3>{section.name}</h3>
+          {section.state === "na" ? (
+            <p className="muted">해당 없음</p>
+          ) : section.kind === "list" && section.items.length ? (
+            <ol>
+              {section.items.map((item) => (
+                <li key={`${section.id}-${item}`}>{item}</li>
+              ))}
+            </ol>
+          ) : (
+            <p className={section.text ? undefined : "muted"}>
+              {section.text ?? "확인된 내용 없음"}
+            </p>
+          )}
+        </section>
+      ))}
+      <section>
+        <h3>미확인 항목</h3>
+        {content.unknowns.length ? (
+          <ol>
+            {content.unknowns.map((item) => (
+              <li key={`unknowns-${item}`}>{item}</li>
+            ))}
+          </ol>
+        ) : (
+          <p className="muted">확인된 내용 없음</p>
+        )}
+      </section>
     </article>
   );
 }

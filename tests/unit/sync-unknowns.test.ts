@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { syncUnknowns } from "../../src/lib/file-sources.ts";
-import { ManualDraftSchema } from "../../src/lib/schemas.ts";
+import { DefaultDraftSchema } from "../../src/lib/schemas.ts";
 
 const revision = (unanswered: string[], questions = unanswered) => [
   { revision: 2, questions, unanswered },
@@ -21,7 +21,7 @@ it("uses the final slot for all pending questions without dropping human items",
   const human = Array.from({ length: 29 }, (_, i) => `human ${i}`);
   const result = syncUnknowns(human, revision(["one", "two", "three"]));
   expect(result).toEqual([...human, "[v2 확인 필요] 답하지 않은 변경 질문 3건"]);
-  expect(ManualDraftSchema.shape.unknowns.safeParse(result).success).toBe(true);
+  expect(DefaultDraftSchema.shape.unknowns.safeParse(result).success).toBe(true);
 });
 it("replaces the current revision only and bounds long questions", () => {
   const long = "x".repeat(600);
@@ -31,7 +31,7 @@ it("replaces the current revision only and bounds long questions", () => {
   );
   expect(result.slice(0, 2)).toEqual(["human", "[v1 확인 필요] old"]);
   expect(result[2]).toHaveLength(500);
-  expect(ManualDraftSchema.shape.unknowns.safeParse(result).success).toBe(true);
+  expect(DefaultDraftSchema.shape.unknowns.safeParse(result).success).toBe(true);
 });
 
 it("preserves human entries that share the generated prefix or resemble a summary", () => {
