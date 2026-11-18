@@ -52,16 +52,38 @@ export function SourceDetail({
   // 확정된 양식이 있으면 "매뉴얼 만들기"에서 고른다. 기본 양식이 먼저 선택돼 있다.
   const [templates, setTemplates] = useState<z.infer<typeof readyTemplatesSchema>>([]);
   const [templateId, setTemplateId] = useState("");
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [templatesError, setTemplatesError] = useState("");
+  const [templateAttempt, setTemplateAttempt] = useState(0);
+  const sourceReady = source?.id === id;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 재시도 버튼이 같은 목록 요청을 다시 실행한다.
   useEffect(() => {
-    if (reader) return;
-    read("/api/templates?ready=1", readyTemplatesSchema)
-      .then((list) => {
+    if (reader || !sourceReady) return;
+    let active = true;
+    const controller = new AbortController();
+    setTemplatesLoading(true);
+    setTemplatesError("");
+    http
+      .get("/api/templates?ready=1", { timeout: 10000, signal: controller.signal })
+      .json()
+      .then((value) => {
+        const list = readyTemplatesSchema.parse(value);
+        if (!active) return;
         setTemplates(list);
         setTemplateId(list.find((entry) => entry.isDefault)?.id ?? "");
       })
-      // 양식은 선택 사항이라 불러오지 못해도 기본 항목으로 만들 수 있다.
-      .catch(() => {});
-  }, [reader]);
+      .catch(async (error) => {
+        const detail = await message(error);
+        if (active) setTemplatesError(`양식 목록을 불러오지 못했습니다. ${detail}`);
+      })
+      .finally(() => {
+        if (active) setTemplatesLoading(false);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [reader, sourceReady, templateAttempt]);
   const updateFile = useCallback(
     ({ revision, revisionId, fileType, extraction }: FileRevision) =>
       setSource((current) =>
@@ -131,6 +153,13 @@ export function SourceDetail({
           router.push(`/manuals/${existing.id}/edit`);
           return;
         }
+      }
+      if (templatesLoading || templatesError) {
+        setError(
+          "새 매뉴얼을 만들려면 양식 목록을 불러온 뒤 다시 시도하세요. 기존 매뉴얼은 직접 작성하기로 열 수 있습니다.",
+        );
+        setBusy(false);
+        return;
       }
       const chosen = templates.find((entry) => entry.id === templateId);
       const draft: ManualDraft = chosen
@@ -222,7 +251,25 @@ export function SourceDetail({
     <aside className="panel">
       <h2>매뉴얼 만들기</h2>
       <p>업무 목적과 순서, 주의 사항을 정리한 다음 직접 검수합니다.</p>
-      {templates.length > 0 && (
+      {templatesLoading && <p role="status">양식 목록을 불러오고 있습니다.</p>}
+      {templatesError && (
+        <div className="notice">
+          <p role="alert">{templatesError}</p>
+          <button
+            type="button"
+            className="secondary"
+            disabled={templatesLoading || busy}
+            onClick={() => {
+              setTemplatesLoading(true);
+              setError("");
+              setTemplateAttempt((attempt) => attempt + 1);
+            }}
+          >
+            양식 목록 다시 불러오기
+          </button>
+        </div>
+      )}
+      {!templatesLoading && !templatesError && templates.length > 0 && (
         <>
           <label htmlFor="manual-template">매뉴얼 항목</label>
           <select
@@ -251,7 +298,14 @@ export function SourceDetail({
           type="button"
           className="secondary"
           onClick={() => create(true)}
-          disabled={busy || editing || sourceBlocked || source.extraction?.status === "limited"}
+          disabled={
+            busy ||
+            editing ||
+            sourceBlocked ||
+            templatesLoading ||
+            !!templatesError ||
+            source.extraction?.status === "limited"
+          }
         >
           AI 초안 요청
         </button>

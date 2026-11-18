@@ -34,34 +34,60 @@ export function ManualVersionComparison({
   }, [id, latest]);
   const old = versions.find((v) => v.version === before);
   const current = versions.find((v) => v.version === after);
-  // 두 버전의 항목을 이름으로 맞춘다. 양식을 바꿔 다시 만든 버전끼리도 비교된다.
+  // 항목 이름은 중복되거나 바뀔 수 있으므로 ID로 연결하고 메타데이터와 구분한다.
   const rows = (content: z.infer<typeof publishedSchema>["content"]) =>
-    new Map<string, string>([
-      ["제목", content.title],
+    new Map<string, { label: string; value: string }>([
+      ["meta:title", { label: "제목", value: content.title }],
       ...toSections(content).map(
         (section) =>
           [
-            section.name,
-            section.state === "na"
-              ? "해당 없음"
-              : (section.text ?? section.items.join(String.fromCharCode(10))),
+            `section:${section.id}`,
+            {
+              label: section.name,
+              value:
+                section.state === "na"
+                  ? "해당 없음"
+                  : (section.text ?? section.items.join(String.fromCharCode(10))),
+            },
           ] as const,
       ),
-      ["미확인 항목", content.unknowns.join(String.fromCharCode(10))],
       [
-        "원본 인용",
-        content.references
-          .map((ref) => `${ref.field} · 문단 ${ref.paragraphId}: ${ref.quote}`)
-          .join(String.fromCharCode(10)),
+        "meta:unknowns",
+        { label: "미확인 항목", value: content.unknowns.join(String.fromCharCode(10)) },
+      ],
+      [
+        "meta:references",
+        {
+          label: "원본 인용",
+          value: content.references
+            .map((ref) => `${ref.field} · 문단 ${ref.paragraphId}: ${ref.quote}`)
+            .join(String.fromCharCode(10)),
+        },
       ],
     ]);
-  const before_ = old ? rows(old.content) : new Map<string, string>();
-  const after_ = current ? rows(current.content) : new Map<string, string>();
+  const before_ = old ? rows(old.content) : new Map<string, { label: string; value: string }>();
+  const after_ = current
+    ? rows(current.content)
+    : new Map<string, { label: string; value: string }>();
   const changed =
     old && current
       ? [...new Set([...before_.keys(), ...after_.keys()])]
-          .filter((label) => (before_.get(label) ?? "") !== (after_.get(label) ?? ""))
-          .map((label) => ({ key: label, label }))
+          .filter(
+            (key) =>
+              before_.get(key)?.value !== after_.get(key)?.value ||
+              before_.get(key)?.label !== after_.get(key)?.label,
+          )
+          .map((key) => {
+            const previous = before_.get(key)?.label;
+            const next = after_.get(key)?.label;
+            return {
+              key,
+              label:
+                previous && next && previous !== next
+                  ? `${previous} → ${next}`
+                  : (next ?? previous),
+            };
+          })
       : [];
   const metadataChanges =
     old && current
@@ -148,9 +174,9 @@ export function ManualVersionComparison({
                   <section className="document" key={f.key}>
                     <h3>{f.label}</h3>
                     <h4>이전 · 버전 {before}</h4>
-                    <p className="source-text">{before_.get(f.key) || "확인된 내용 없음"}</p>
+                    <p className="source-text">{before_.get(f.key)?.value || "확인된 내용 없음"}</p>
                     <h4>이후 · 버전 {after}</h4>
-                    <p className="source-text">{after_.get(f.key) || "확인된 내용 없음"}</p>
+                    <p className="source-text">{after_.get(f.key)?.value || "확인된 내용 없음"}</p>
                   </section>
                 ))}
               </>
