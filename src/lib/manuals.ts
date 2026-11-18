@@ -4,6 +4,7 @@ import { assertDocumentReady } from "./document-sources.ts";
 import { AppError } from "./errors.ts";
 import { FileHistorySchema, fileHistory, reconcileFileUnknowns } from "./file-sources.ts";
 import { type ManualDraft, ManualDraftSchema } from "./schemas.ts";
+import { emptySections } from "./sections.ts";
 import { assertSession } from "./session.ts";
 import { paragraphs } from "./sources.ts";
 import {
@@ -194,18 +195,18 @@ export async function publishManual(
     const draft = current.draft;
     validateReferences(draft, row.text);
     const acknowledgements = z.array(z.string()).parse(acknowledgedUnknowns);
-    if (
-      !draft.purpose ||
-      !draft.steps.length ||
-      !draft.completion ||
-      draft.unknowns.some((item) => !acknowledgements.includes(item)) ||
-      acknowledgements.some((item) => !draft.unknowns.includes(item))
-    )
+    const missing = emptySections(draft).filter((section) => section.required);
+    if (missing.length)
       throw new AppError(
         "review_required",
         422,
-        "목적·절차·완료 조건 및 미확인 항목을 검수하세요.",
+        `비어 있는 항목: ${missing.map((section) => section.name).join(", ")}. 초안 수정에서 채운 뒤 게시하세요.`,
       );
+    if (
+      draft.unknowns.some((item) => !acknowledgements.includes(item)) ||
+      acknowledgements.some((item) => !draft.unknowns.includes(item))
+    )
+      throw new AppError("review_required", 422, "미확인 항목을 확인한 뒤 게시하세요.");
     const version = (current.publishedVersion ?? 0) + 1;
     await db.query(
       "INSERT INTO manual_versions(id,workspace_id,manual_id,version,source_revision_id,content,provenance,acknowledged_unknowns,history) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",

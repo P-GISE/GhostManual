@@ -111,3 +111,29 @@ test("owner can revise a source then re-review the same manual", async ({ page }
   await expect(page.getByText("검수 완료 · 버전 2", { exact: true })).toBeVisible();
   await expect(page.getByText("재검토 필요", { exact: true })).toHaveCount(0);
 });
+
+test("empty items are listed for the author and block publishing by name", async ({ page }) => {
+  await signUpAndVerify(page);
+  await loadExample(page);
+  await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
+  await page.getByRole("link", { name: "초안 수정", exact: true }).click();
+  await page.getByLabel("완료 기준", { exact: true }).fill("");
+  await page.getByLabel("주기", { exact: true }).fill("");
+  // 예제 초안은 사용 시스템이 처음부터 비어 있다.
+  await expect(page.getByRole("heading", { name: "채우지 못한 항목 3개" })).toBeVisible();
+  await page.getByRole("button", { name: "주기 해당 없음" }).click();
+  await expect(page.getByLabel("주기", { exact: true })).toHaveValue("해당 없음");
+  await expect(page.getByRole("heading", { name: "채우지 못한 항목 2개" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "완료 기준 해당 없음" })).toHaveCount(0);
+  await page.getByRole("button", { name: "완료 기준 답하기" }).click();
+  await expect(page.getByLabel("완료 기준", { exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "초안 저장", exact: true }).click();
+  await expect(
+    page.getByText("초안을 저장했습니다. 검수 후 게시할 수 있습니다.", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "검수 화면", exact: true }).click();
+  await expect(page.getByText("비어 있는 항목: 완료 기준.", { exact: false })).toBeVisible();
+  await page.getByLabel("원본과 업무 내용을 확인했습니다.").check();
+  await page.getByLabel("미확인 항목이 남아 있음을 확인했습니다.").check();
+  await expect(page.getByRole("button", { name: "검수 완료·버전 게시" })).toBeDisabled();
+});
