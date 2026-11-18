@@ -128,6 +128,34 @@ it("accepts claims using supplied candidate IDs", async () => {
   expect((await generateAnswer([candidate], "발급 방법?")).status).toBe("supported");
   expect(z.object({ max_tokens: z.number() }).parse(request).max_tokens).toBe(8000);
 });
+it("takes an insufficient answer that still lists what is missing as claims", async () => {
+  payload = response({
+    status: "insufficient",
+    claims: [
+      { text: "근거에 대체 결재자가 나와 있지 않습니다.", evidenceIds: [] },
+      { text: "일반 절차에서는 승인 후 발급합니다.", evidenceIds: [id] },
+    ],
+    procedure: [],
+    limitations: ["대체 결재자를 담당자에게 확인하세요."],
+  });
+  expect(await generateAnswer([candidate], "승인자가 없으면?")).toEqual({
+    status: "insufficient",
+    claims: [],
+    procedure: [],
+    limitations: ["대체 결재자를 담당자에게 확인하세요."],
+  });
+});
+it("still rejects a supported answer whose claim has no evidence", async () => {
+  payload = response({
+    status: "supported",
+    claims: [{ text: "발급합니다.", evidenceIds: [] }],
+    procedure: [],
+    limitations: [],
+  });
+  await expect(generateAnswer([candidate], "발급?")).rejects.toMatchObject({
+    code: "ai_invalid_output",
+  });
+});
 it("rejects invented candidate IDs", async () => {
   payload = response({
     status: "supported",

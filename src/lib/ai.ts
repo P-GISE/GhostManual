@@ -259,6 +259,14 @@ export async function rewriteQuestion(
     return null;
   }
 }
+// AI가 채우는 모양만 맞춘 느슨한 형식. 내용 규칙(근거 필수 등)은 AnswerModelSchema가 본다.
+const wireClaim = z.object({ text: z.string(), evidenceIds: z.array(z.string()) });
+const AnswerWireSchema = z.object({
+  status: z.enum(["supported", "partial", "insufficient"]),
+  claims: z.array(wireClaim),
+  procedure: z.array(wireClaim),
+  limitations: z.array(z.string()),
+});
 export async function generateAnswer(
   candidates: readonly EvidenceCandidate[],
   question: string,
@@ -267,15 +275,22 @@ export async function generateAnswer(
   const input = QuestionInputSchema.parse({ question });
   if (parsedCandidates.reduce((sum, c) => sum + c.quote.length, 0) > 12000)
     throw new AppError("invalid_input", 422, "질문 근거가 너무 깁니다.");
-  const answer = await generate(
-    AnswerModelSchema,
+  const raw = await generate(
+    AnswerWireSchema,
     "answer_model",
     { question: input.question, candidates: parsedCandidates },
     30000,
     8000,
     instructions +
-      " 질문에 답하세요. 모든 주장과 절차에는 제공된 candidate id를 evidenceIds로 지정하세요. 필요한 근거가 없으면 insufficient로 답하세요.",
+      " 질문에 답하세요. 모든 주장과 절차에는 제공된 candidate id를 evidenceIds로 지정하세요. 필요한 근거가 없으면 insufficient로 답하세요. insufficient일 때는 claims와 procedure를 비우고, 근거에 무엇이 없는지는 limitations에 적으세요. 일부만 답할 수 있으면 partial로 답하고 limitations에 부족한 점을 적으세요. limitations는 사용자가 읽는 글이므로 candidate id를 쓰지 마세요.",
   );
+  // 근거 부족이라면서 "무엇이 없는지"를 주장 칸에 적어 보내는 일이 잦다. 그 주장은 답이 아니므로 버리고 근거 부족으로 받는다.
+  const checked = AnswerModelSchema.safeParse(
+    raw.status === "insufficient" ? { ...raw, claims: [], procedure: [] } : raw,
+  );
+  if (!checked.success)
+    throw new AppError("ai_invalid_output", 502, "AI 출력 형식이 올바르지 않습니다.");
+  const answer = checked.data;
   const ids = new Set(parsedCandidates.map((c) => c.id));
   if (
     [...answer.claims, ...answer.procedure].some((claim) =>
