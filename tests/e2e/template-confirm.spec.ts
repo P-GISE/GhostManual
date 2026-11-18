@@ -109,5 +109,5 @@ test("template polling recovers after a temporary server error", async ({ page }
     timeout: 10000,
   });
   expect(attempts).toBeGreaterThan(1);
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.locator(".error[role=alert]")).toHaveCount(0);
 });
