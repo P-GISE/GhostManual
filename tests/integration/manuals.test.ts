@@ -49,9 +49,14 @@ it("rejects stale draft edits and source revision races", async () => {
 });
 it("rejects missing publication fields and unacknowledged unknowns", async () => {
   const { owner, source } = await setup();
-  const draft = await saveDraft(owner, source.revisionId, { ...exampleDraft, purpose: null });
+  const draft = await saveDraft(owner, source.revisionId, {
+    ...exampleDraft,
+    purpose: null,
+    completion: null,
+  });
   await expect(publishManual(owner, draft.id, 1, exampleDraft.unknowns)).rejects.toMatchObject({
     httpStatus: 422,
+    message: "비어 있는 항목: 업무 목적, 완료 기준. 초안 수정에서 채운 뒤 게시하세요.",
   });
   const ready = await saveDraft(owner, source.revisionId, exampleDraft, 1);
   await expect(publishManual(owner, ready.id, 2, [])).rejects.toMatchObject({ httpStatus: 422 });

@@ -12,6 +12,7 @@ import {
   type Source,
   sourceSchema,
 } from "../lib/client";
+import { emptySections } from "../lib/sections";
 import { FileHistory } from "./FileHistory";
 import { ManualContent } from "./ManualContent";
 import { ManualVersionComparison } from "./ManualVersionComparison";
@@ -113,6 +114,7 @@ export function ManualDetail({
     !reader &&
     (!source || (!!source.extraction && !["ready", "limited"].includes(source.extraction.status)));
   const limitedSource = source?.extraction?.status === "limited";
+  const missing = emptySections(content).filter((section) => section.required);
   return (
     <>
       {/* Print/PDF: only the published, reviewed version and its frozen change history. */}
@@ -216,10 +218,17 @@ export function ManualDetail({
                     내용 비교가 제한돼 원본을 직접 확인했습니다.
                   </label>
                 )}
+                {missing.length > 0 && (
+                  <p className="notice" role="status">
+                    비어 있는 항목: {missing.map((section) => section.name).join(", ")}. 초안
+                    수정에서 채운 뒤 게시하세요.
+                  </p>
+                )}
                 <button
                   type="button"
                   disabled={
                     busy ||
+                    missing.length > 0 ||
                     sourceBlocked ||
                     (limitedSource && !limitedAcknowledged) ||
                     !confirmed ||
