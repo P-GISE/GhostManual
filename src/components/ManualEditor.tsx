@@ -11,6 +11,7 @@ import {
   sourceSchema,
 } from "../lib/client";
 import { type ManualDraft, ManualDraftSchema } from "../lib/schemas";
+import { emptySections, NOT_APPLICABLE } from "../lib/sections";
 import { ManualCitationPanel } from "./ManualCitationPanel";
 import { ManualContent } from "./ManualContent";
 import { useUnsavedChanges } from "./useUnsavedChanges";
@@ -98,6 +99,7 @@ export function ManualEditor({ id }: { readonly id: string }) {
         (paragraph) => paragraph.id === ref.paragraphId && paragraph.text.includes(ref.quote),
       ),
   );
+  const empty = emptySections(draft);
   return (
     <>
       <span className="eyebrow">미검수 초안</span>
@@ -136,6 +138,48 @@ export function ManualEditor({ id }: { readonly id: string }) {
         <p className="notice" role="status">
           {saved}
         </p>
+      )}
+      {empty.length > 0 && (
+        <section className="panel" aria-labelledby="empty-sections">
+          <h2 id="empty-sections">채우지 못한 항목 {empty.length}개</h2>
+          <p className="help">
+            원본에서 근거를 찾지 못해 비워 둔 항목입니다. 게시 필수 항목은 채워야 게시할 수
+            있습니다.
+          </p>
+          <ul className="empty-sections">
+            {empty.map((section) => (
+              <li key={section.id}>
+                <strong>{section.name}</strong>
+                {section.required && <span className="badge">게시 필수</span>}
+                <span className="actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    aria-label={`${section.name} 답하기`}
+                    onClick={() => document.getElementById(section.id)?.focus()}
+                  >
+                    답하기
+                  </button>
+                  {!section.required && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      aria-label={`${section.name} 해당 없음`}
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          [section.id]: section.kind === "list" ? [NOT_APPLICABLE] : NOT_APPLICABLE,
+                        })
+                      }
+                    >
+                      해당 없음
+                    </button>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
       <div className="split">
         <section className="editor-form">

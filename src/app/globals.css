@@ -480,6 +480,21 @@ li {
   align-items: center;
   margin-top: 22px;
 }
+.empty-sections {
+  list-style: none;
+  padding: 0;
+}
+.empty-sections li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.empty-sections .actions {
+  margin: 0 0 0 auto;
+}
 .notice {
   padding: 14px 17px;
   background: var(--tint);
