@@ -1,5 +1,12 @@
 # GhostManual 프로젝트 가이드
 
+## 2026-11-18 현재 운영 기준과 팀 문서함 후속
+
+현재 운영은 PR #63 병합44f262b다. [CI44124905670](https://github.com/P-GISE/GhostManual/actions/runs/44124905670)·[배포44126435638](https://github.com/P-GISE/GhostManual/actions/runs/44126435638) 성공, S3 사전 백업 후 migration009·앱 역할 권한·작성자 backfill을 확인했다. 앱/워커 동일 이미지, 기존 자료·파일·매뉴얼 데이터 지문 보존과 합성 운영 API 회귀를 통과했다. migration008과 DOCX/HWPX 원본·용량·비동기 추출은 PR #61에서 반영했다.
+
+팀 저장 기반은 운영 적용됐고 팀 API·화면·업무 이동은 후속이다. 박효민은 세션·권한·팀/양식 API·화면을, 박기성은 DB 이동 구현·통합 검토·배포/검증을 맡는다. 세션 DELETE가 질문 이력도 지우므로 팀 활성화 전에 이력 보존 구조가 필요하다. [현재 남은 작업과 계약 초안](docs/superpowers/plans/2026-11-18-team-library-storage.md)을 따른다. 아래 날짜별 배포·미구현 기록은 당시 이력이다.
+
+
 ## 2026-11-05 관리자 PR #53 최신 기본 통합 검토
 
 PR #55 병합본42075bc의 canonical CI41962905984와 운영 배포41964085520이 성공했고 문서007·실제 mTLS gateway/queue worker를 활성화했다. 합성9종18버전(16ready·OCR2limited)·원본검수 게시를 확인한 뒤 사용자 승인으로 시험 기록만 정리했다. 기존 자료·DB·설정은 보존했다. OCR 한글 오인식은 남아 원본 대조가 필요하다.
