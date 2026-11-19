@@ -28,6 +28,7 @@ test("prewritten example can be reviewed shared and searched without pretending 
   ).toBeVisible();
   await expect(readerPage.getByRole("button", { name: "검수 완료·버전 게시" })).toHaveCount(0);
   await expect(readerPage).toHaveURL(/share$/);
+  await readerPage.getByRole("button", { name: "질문하기", exact: true }).click();
   await readerPage
     .getByLabel("업무 질문", { exact: true })
     .fill("계정 발급 전에 무엇을 확인하나요?");

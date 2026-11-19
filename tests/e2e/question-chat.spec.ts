@@ -5,6 +5,7 @@ test("a manual's question box keeps a chat of several questions and answers", as
   await signUpAndVerify(page);
   await loadExample(page);
   await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
+  await page.getByRole("button", { name: "질문하기", exact: true }).click();
   const box = page.getByLabel("업무 질문", { exact: true });
   await box.fill("계정 발급 전에 무엇을 확인하나요?");
   await page.getByRole("button", { name: "근거 찾아 질문하기" }).click();
@@ -33,4 +34,45 @@ test("the header offers help instead of a separate question page", async ({ page
   ).toBeVisible();
   await expect(page.getByRole("list", { name: "이용 순서" }).getByRole("listitem")).toHaveCount(6);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("the floating question window opens anywhere on the manual and keeps the conversation", async ({
+  page,
+}) => {
+  await signUpAndVerify(page);
+  await loadExample(page);
+  await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
+  const launcher = page.getByRole("button", { name: "질문하기", exact: true });
+  const dialog = page.getByRole("dialog", { name: "이 매뉴얼에 질문" });
+  await expect(dialog).toBeHidden();
+  await launcher.click();
+  await expect(dialog).toBeVisible();
+  const box = page.getByLabel("업무 질문", { exact: true });
+  await expect(box).toBeFocused();
+  // 좁은 화면에서는 창이 화면 전체를 덮는다.
+  const viewport = page.viewportSize();
+  const size = await dialog.boundingBox();
+  if (viewport && viewport.width <= 560) expect(size?.width).toBe(viewport.width);
+  await box.fill("계정 발급 전에 무엇을 확인하나요?");
+  await box.press("Enter");
+  const chat = page.getByRole("log", { name: "질문과 답변" });
+  await expect(chat.getByRole("article").first().locator(".chat-answer .badge")).toBeVisible();
+  // Esc로 닫으면 초점이 버튼으로 돌아가고, 다시 열면 대화가 남아 있다.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(launcher).toBeFocused();
+  await launcher.click();
+  await expect(chat.getByRole("article")).toHaveCount(1);
+  // 새로고침해도 이 세션에서 한 대화가 이어진다.
+  await page.reload();
+  await page.getByRole("button", { name: "질문하기", exact: true }).click();
+  await expect(chat.getByText("계정 발급 전에 무엇을 확인하나요?")).toBeVisible();
+  await expect(chat.getByRole("article").first().locator(".chat-answer .badge")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  // 새 대화를 누르면 비워지고, 새로고침해도 돌아오지 않는다.
+  await page.getByRole("button", { name: "새 대화" }).click();
+  await expect(chat).toHaveCount(0);
+  await page.reload();
+  await page.getByRole("button", { name: "질문하기", exact: true }).click();
+  await expect(page.getByRole("button", { name: "새 대화" })).toHaveCount(0);
 });
