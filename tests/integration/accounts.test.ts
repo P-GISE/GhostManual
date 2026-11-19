@@ -1,12 +1,19 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { deleteAccount, login, logout, signup, verifyEmail } from "../../src/lib/accounts.ts";
+import { POST as postLogout } from "../../src/app/api/auth/logout/route.ts";
+import { deleteAccount, login, signup, verifyEmail } from "../../src/lib/accounts.ts";
 import { pool } from "../../src/lib/db.ts";
-import { listManuals } from "../../src/lib/manuals.ts";
+import { listManuals, publishManual, saveDraft } from "../../src/lib/manuals.ts";
 import { limitRequest } from "../../src/lib/rate-limit.ts";
 import { requireSession, tokenHash } from "../../src/lib/session.ts";
 import { createSource, getSource } from "../../src/lib/sources.ts";
-import { exampleSource } from "../fixtures/manual-example.ts";
-import { mailsTo, setupFileMail, uniqueEmail, verificationToken } from "./mail-helper.ts";
+import { exampleDraft, exampleSource } from "../fixtures/manual-example.ts";
+import {
+  mailsTo,
+  setupFileMail,
+  shareWithNewReader,
+  uniqueEmail,
+  verificationToken,
+} from "./mail-helper.ts";
 
 let mail = "";
 beforeAll(() => {
@@ -131,7 +138,21 @@ it("users cannot read each other's documents", async () => {
 });
 it("logout invalidates the session", async () => {
   const session = await login(await verifiedUser(), password);
-  await logout(await requireSession(session.token));
+  const ctx = await requireSession(session.token);
+  const source = await createSource(ctx, exampleSource);
+  const manual = await saveDraft(ctx, source.revisionId, exampleDraft);
+  await publishManual(ctx, manual.id, 1, exampleDraft.unknowns);
+  const reader = await shareWithNewReader(ctx, manual.id);
+  const request = (origin: string) =>
+    new Request("http://localhost:3200/api/auth/logout?view=shared", {
+      method: "POST",
+      headers: { origin, cookie: `gm_owner=${session.token}; gm_reader=${reader.token}` },
+    });
+  expect((await postLogout(request("https://example.invalid"))).status).toBe(403);
+  await expect(requireSession(reader.token)).resolves.toMatchObject({ role: "reader" });
+  expect((await postLogout(request("http://localhost:3200"))).status).toBe(200);
+  await expect(requireSession(reader.token)).rejects.toMatchObject({ httpStatus: 401 });
+  expect((await postLogout(request("http://localhost:3200"))).status).toBe(200);
   await expect(requireSession(session.token)).rejects.toMatchObject({ httpStatus: 401 });
 });
 it("deleting the account removes workspace and sessions", async () => {
