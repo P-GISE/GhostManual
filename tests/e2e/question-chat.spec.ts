@@ -83,6 +83,7 @@ test("a reader conversation is not automatically restored in the owner's session
   await signUpAndVerify(page);
   await loadExample(page);
   await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
+  await expect(page).toHaveURL(/\/manuals\/[0-9a-f-]+$/);
   const ownerUrl = page.url();
   await page.getByLabel("원본과 업무 내용을 확인했습니다.").check();
   await page.getByLabel("미확인 항목이 남아 있음을 확인했습니다.").check();
@@ -103,6 +104,10 @@ test("a reader conversation is not automatically restored in the owner's session
   await expect(
     page.getByRole("log", { name: "질문과 답변" }).locator(".chat-answer .badge"),
   ).toBeVisible();
+  const manualId = new URL(ownerUrl).pathname.split("/").at(-1);
+  await expect
+    .poll(() => page.evaluate((key) => localStorage.getItem(key), `gm-chat:${manualId}`))
+    .toContain(id);
   const restored = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return url.pathname === `/api/questions/${id}` && url.searchParams.get("conversation") === "1";
