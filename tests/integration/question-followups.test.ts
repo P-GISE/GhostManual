@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { afterAll, afterEach, beforeEach, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { setAITransportForTest } from "../../src/lib/ai.ts";
-import { ask } from "../../src/lib/answers.ts";
+import { ask, getQuestion } from "../../src/lib/answers.ts";
 import { pool } from "../../src/lib/db.ts";
 import { publishManual, saveDraft } from "../../src/lib/manuals.ts";
 import { createWorkspace, requireSession } from "../../src/lib/session.ts";
@@ -159,4 +159,89 @@ it("ignores question ids from another session and skips the rewrite when AI is o
   expect(off.status).toBe("unavailable");
   expect(off.understoodAs).toBeNull();
   expect(requests).toHaveLength(0);
+});
+
+it("restores only the current session while preserving ordinary owner question access", async () => {
+  const { owner, manual } = await published();
+  const reader = await requireSession((await shareWithNewReader(owner, manual.id)).token);
+  const turn = await ask(reader, { question: "업무 계정 발급 절차" }, "reader-personal-turn");
+  expect((await getQuestion(owner, turn.id)).id).toBe(turn.id);
+  await expect(getQuestion(owner, turn.id, true)).rejects.toMatchObject({ code: "not_found" });
+  expect((await getQuestion(reader, turn.id, true)).id).toBe(turn.id);
+  const other = await requireSession((await createWorkspace()).token);
+  await expect(getQuestion(other, turn.id, true)).rejects.toMatchObject({ code: "not_found" });
+});
+
+it("keeps the entire current question when a 1000-character previous question falls back", async () => {
+  const { owner } = await published();
+  const first = await ask(owner, { question: "배경".repeat(500) }, "long-first-turn");
+  rewrite = null;
+  requests.length = 0;
+  const current = "업무 계정 발급 절차";
+  const result = await ask(owner, { question: current, after: [first.id] }, "long-fallback-turn");
+  expect(result.status).toBe("supported");
+  expect(requests.map((r) => r.kind)).toEqual(["rewrite", "answer"]);
+  const sent = JSON.parse(requests[1]?.body ?? "{}") as { question: string };
+  expect(sent.question.endsWith(current)).toBe(true);
+  expect(sent.question.length).toBeLessThanOrEqual(1000);
+});
+
+it("charges only the rewrite when the rewritten query finds no evidence", async () => {
+  const { owner } = await published();
+  const first = await ask(owner, { question: "업무 계정 발급 절차" }, "first-turn");
+  rewrite = "달나라 유니콘";
+  requests.length = 0;
+  const before = await counter("global", "all");
+  const result = await ask(owner, { question: "그건 어디?", after: [first.id] }, "empty-rewrite");
+  expect(result.status).toBe("insufficient");
+  expect(requests.map((r) => r.kind)).toEqual(["rewrite"]);
+  expect((await counter("global", "all")) - before).toBe(1);
+  expect(await counter(owner.workspaceId, "question")).toBe(2);
+});
+
+it("uses the last global slot for rewriting and returns evidence without an answer call", async () => {
+  const { owner } = await published();
+  const first = await ask(owner, { question: "업무 계정 발급 절차" }, "first-turn");
+  const before = await counter("global", "all");
+  vi.stubEnv("AI_DAILY_LIMIT", String(before + 1));
+  requests.length = 0;
+  const input = { question: "그건 누가 해?", after: [first.id] };
+  const result = await ask(owner, input, "last-global-slot");
+  expect(result.status).toBe("unavailable");
+  expect(result.answer).toContain("한도");
+  expect(result.searchResults.length).toBeGreaterThan(0);
+  expect(requests.map((r) => r.kind)).toEqual(["rewrite"]);
+  expect((await counter("global", "all")) - before).toBe(1);
+  requests.length = 0;
+  expect((await ask(owner, input, "last-global-slot")).id).toBe(result.id);
+  expect(requests).toHaveLength(0);
+});
+
+it("makes no provider call when no global quota remains", async () => {
+  const { owner } = await published();
+  const first = await ask(owner, { question: "업무 계정 발급 절차" }, "first-turn");
+  const before = await counter("global", "all");
+  vi.stubEnv("AI_DAILY_LIMIT", String(before));
+  requests.length = 0;
+  await expect(
+    ask(owner, { question: "그건 누가 해?", after: [first.id] }, "zero-global-slot"),
+  ).rejects.toMatchObject({ code: "daily_limit" });
+  expect(requests).toHaveLength(0);
+  expect(await counter("global", "all")).toBe(before);
+});
+
+it("counts the failed rewrite attempt and the successful fallback answer exactly once each", async () => {
+  const { owner } = await published();
+  const first = await ask(owner, { question: "업무 계정 발급 절차" }, "first-turn");
+  rewrite = null;
+  requests.length = 0;
+  const before = await counter("global", "all");
+  const result = await ask(
+    owner,
+    { question: "그건 누가 해?", after: [first.id] },
+    "failed-rewrite-count",
+  );
+  expect(result.status).toBe("supported");
+  expect(requests.map((r) => r.kind)).toEqual(["rewrite", "answer"]);
+  expect((await counter("global", "all")) - before).toBe(2);
 });

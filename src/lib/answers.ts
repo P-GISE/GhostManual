@@ -31,10 +31,11 @@ export async function questionInTransaction(
   db: DbClient,
   ctx: SessionContext,
   id: string,
+  ownSession = false,
 ): Promise<QuestionResult> {
   const rows = await db.query<Record<string, unknown>>(
-    `SELECT result FROM question_runs q WHERE q.id=$1 AND q.workspace_id=$2 AND ($3='owner' OR q.session_id=$4)`,
-    [id, ctx.workspaceId, ctx.role, ctx.sessionId],
+    `SELECT result FROM question_runs q WHERE q.id=$1 AND q.workspace_id=$2 AND (($3='owner' AND NOT $5::boolean) OR q.session_id=$4)`,
+    [id, ctx.workspaceId, ctx.role, ctx.sessionId, ownSession],
   );
   if (!rows.rows[0]) throw new AppError("not_found", 404, "질문을 찾을 수 없습니다.");
   const result = QuestionResultSchema.parse(rows.rows[0]["result"]);
@@ -49,10 +50,14 @@ export async function questionInTransaction(
   }
   return { ...result, isOutdated };
 }
-export async function getQuestion(ctx: SessionContext, id: string): Promise<QuestionResult> {
+export async function getQuestion(
+  ctx: SessionContext,
+  id: string,
+  ownSession = false,
+): Promise<QuestionResult> {
   return transaction(async (db) => {
     await assertSession(db, ctx);
-    return questionInTransaction(db, ctx, z.uuid().parse(id));
+    return questionInTransaction(db, ctx, z.uuid().parse(id), ownSession);
   });
 }
 // 앞 대화로 인정하는 것은 이 세션이 한 질문뿐이다. 없는 id와 다른 세션의 id는 버린다.
@@ -124,12 +129,14 @@ export async function ask(
   if (last && !aiOff) {
     const done = await reserve();
     if (done) return done;
-    const rewritten = (await reserveGlobalAi())
-      ? await rewriteQuestion(history, parsed.question)
-      : null;
+    const rewritten = await rewriteQuestion(history, parsed.question);
     if (rewritten && rewritten !== parsed.question) understoodAs = rewritten;
     // 고쳐 쓰지 못하면 바로 앞 질문의 글을 붙여 찾는다.
-    searchText = rewritten ?? `${last.question} ${parsed.question}`.slice(0, 1000);
+    searchText =
+      rewritten ??
+      [last.question.slice(0, Math.max(0, 999 - parsed.question.length)), parsed.question]
+        .filter(Boolean)
+        .join(" ");
   }
   const candidates = await retrieve(ctx, searchText, parsed.manualId);
   let result: QuestionResult = {
@@ -160,11 +167,18 @@ export async function ask(
         searchResults: [...candidates],
       };
     } else {
+      const needsAnswerQuota = operationId !== null;
       if (!operationId) {
         const done = await reserve();
         if (done) return done;
       }
       try {
+        if (needsAnswerQuota && !(await reserveGlobalAi()))
+          throw new AppError(
+            "daily_limit",
+            429,
+            "오늘의 AI 사용 한도에 도달했습니다. 검색된 자료를 직접 확인하세요.",
+          );
         const answer = await generateAnswer(candidates, searchText);
         const ids = new Set(
           [...answer.claims, ...answer.procedure].flatMap((claim) => claim.evidenceIds),

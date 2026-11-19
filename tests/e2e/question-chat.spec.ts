@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { loadExample, signUpAndVerify } from "./helpers";
+import { loadExample, signUpAndVerify, turnOnLinkSharing } from "./helpers";
 
 test("a manual's question box keeps a chat of several questions and answers", async ({ page }) => {
   await signUpAndVerify(page);
@@ -75,4 +75,45 @@ test("the floating question window opens anywhere on the manual and keeps the co
   await page.reload();
   await page.getByRole("button", { name: "질문하기", exact: true }).click();
   await expect(page.getByRole("button", { name: "새 대화" })).toHaveCount(0);
+});
+
+test("a reader conversation is not automatically restored in the owner's session", async ({
+  page,
+}) => {
+  await signUpAndVerify(page);
+  await loadExample(page);
+  await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
+  const ownerUrl = page.url();
+  await page.getByLabel("원본과 업무 내용을 확인했습니다.").check();
+  await page.getByLabel("미확인 항목이 남아 있음을 확인했습니다.").check();
+  await page.getByRole("button", { name: "검수 완료·버전 게시" }).click();
+  const sharedUrl = await turnOnLinkSharing(page);
+  await page.goto(sharedUrl);
+  await page.getByRole("button", { name: "질문하기", exact: true }).click();
+  await page
+    .getByLabel("업무 질문", { exact: true })
+    .fill("후임자 세션에서만 확인할 계정 발급 질문");
+  const saved = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/questions" &&
+      response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "근거 찾아 질문하기" }).click();
+  const id = (await (await saved).json()).id as string;
+  await expect(
+    page.getByRole("log", { name: "질문과 답변" }).locator(".chat-answer .badge"),
+  ).toBeVisible();
+  const restored = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === `/api/questions/${id}` && url.searchParams.get("conversation") === "1";
+  });
+  await page.goto(ownerUrl);
+  expect((await restored).status()).toBe(404);
+  await page.getByRole("button", { name: "질문하기", exact: true }).click();
+  await expect(
+    page.getByText("후임자 세션에서만 확인할 계정 발급 질문", { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "새 대화" })).toHaveCount(0);
+  // 일반 소유자 조회 계약은 그대로이며 자동 대화 복원만 현재 세션으로 제한한다.
+  expect((await page.request.get(`/api/questions/${id}`)).status()).toBe(200);
 });

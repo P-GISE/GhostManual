@@ -103,7 +103,7 @@ export async function finishOperation(
     );
   });
 }
-// 질문 고쳐 쓰기처럼 문서함 한도는 이미 센 요청의 추가 호출: 서비스 전체 한도에서만 1회를 뺀다.
+// 질문 고쳐 쓰기 뒤 답변 생성처럼 이미 예약한 요청의 추가 호출은 서비스 전체 한도에서만 센다.
 export async function reserveGlobalAi(): Promise<boolean> {
   return transaction(async (db) => {
     await db.query("SELECT pg_advisory_xact_lock(782402)");

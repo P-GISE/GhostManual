@@ -128,7 +128,7 @@ export function QuestionForm({
     let active = true;
     void Promise.all(
       storedIds(storageKey).map((id) =>
-        read(`/api/questions/${id}`, resultSchema, reader).catch(() => null),
+        read(`/api/questions/${id}?conversation=1`, resultSchema, reader).catch(() => null),
       ),
     ).then((results) => {
       if (!active) return;
