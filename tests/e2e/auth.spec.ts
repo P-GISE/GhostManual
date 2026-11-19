@@ -1,5 +1,14 @@
 import { expect, test } from "@playwright/test";
-import { logIn, password, resetLink, signUp, signUpAndVerify, verificationLink } from "./helpers";
+import {
+  loadExample,
+  logIn,
+  password,
+  resetLink,
+  signUp,
+  signUpAndVerify,
+  turnOnLinkSharing,
+  verificationLink,
+} from "./helpers";
 
 test("sign up, verify by mail, log out and log back in", async ({ page }) => {
   await page.goto("/");
@@ -162,4 +171,51 @@ test("a shared link survives the pending terms redirect", async ({ page }) => {
   );
   await page.goto("/share#pending-terms-link");
   await expect(page).toHaveURL(/\/welcome\?next=%2Fshare%23pending-terms-link$/);
+});
+
+test("logout revokes both browser sessions and allows retry after a server error", async ({
+  page,
+  request,
+}) => {
+  await signUpAndVerify(page);
+  await loadExample(page);
+  await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
+  await page.getByLabel("원본과 업무 내용을 확인했습니다.").check();
+  await page.getByLabel("미확인 항목이 남아 있음을 확인했습니다.").check();
+  await page.getByRole("button", { name: "검수 완료·버전 게시" }).click();
+  await page.goto(await turnOnLinkSharing(page));
+  await expect(
+    page.getByRole("heading", { name: "신입 구성원 업무 계정 발급", level: 1 }),
+  ).toBeVisible();
+  const cookies = await page.context().cookies();
+  const sessionStatus = async (name: string, reader: boolean) => {
+    const cookie = cookies.find((entry) => entry.name === name);
+    if (!cookie) throw new Error("Missing synthetic browser session");
+    return (
+      await request.get("/api/session", {
+        headers: {
+          cookie: `${name}=${cookie.value}`,
+          ...(reader ? { "x-ghost-role": "reader" } : {}),
+        },
+      })
+    ).status();
+  };
+  expect(await sessionStatus("gm_owner", false)).toBe(200);
+  expect(await sessionStatus("gm_reader", true)).toBe(200);
+  await page.goto("/manuals");
+  await page.route("**/api/auth/logout", (route) => route.fulfill({ status: 503 }), { times: 1 });
+  const logout = page.getByRole("button", { name: "로그아웃" });
+  await logout.click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "로그아웃하지 못했습니다." }),
+  ).toBeVisible();
+  await logout.click();
+  await expect(page).toHaveURL(/\/$/);
+  expect(
+    (await page.context().cookies()).filter(
+      ({ name }) => name === "gm_owner" || name === "gm_reader",
+    ),
+  ).toHaveLength(0);
+  expect(await sessionStatus("gm_owner", false)).toBe(401);
+  expect(await sessionStatus("gm_reader", true)).toBe(401);
 });
