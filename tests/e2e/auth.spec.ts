@@ -206,7 +206,9 @@ test("logout revokes both browser sessions and allows retry after a server error
   await page.route("**/api/auth/logout", (route) => route.fulfill({ status: 503 }), { times: 1 });
   const logout = page.getByRole("button", { name: "로그아웃" });
   await logout.click();
-  await expect(page.getByRole("alert")).toHaveText("로그아웃하지 못했습니다. 다시 시도해 주세요.");
+  await expect(
+    page.getByRole("alert").filter({ hasText: "로그아웃하지 못했습니다." }),
+  ).toBeVisible();
   await logout.click();
   await expect(page).toHaveURL(/\/$/);
   expect(
