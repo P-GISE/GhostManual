@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { http } from "../lib/client";
+import { CHAT_STORAGE_PREFIX } from "./QuestionForm";
 
 // Remounted per path (key) so the name refreshes after login or logout.
 function AccountMenu() {
@@ -31,6 +32,13 @@ function AccountMenu() {
   async function logout() {
     setBusy(true);
     await http.post("/api/auth/logout").catch(() => {});
+    // 로그아웃하면 이 브라우저에 기억해 둔 대화(질문 id)도 지운다.
+    try {
+      for (const key of Object.keys(localStorage))
+        if (key.startsWith(CHAT_STORAGE_PREFIX)) localStorage.removeItem(key);
+    } catch {
+      // 저장소를 쓸 수 없으면 지울 것도 없다.
+    }
     window.location.assign("/");
   }
   return name ? (

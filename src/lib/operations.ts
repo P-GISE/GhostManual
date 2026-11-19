@@ -103,6 +103,22 @@ export async function finishOperation(
     );
   });
 }
+// 질문 고쳐 쓰기 뒤 답변 생성처럼 이미 예약한 요청의 추가 호출은 서비스 전체 한도에서만 센다.
+export async function reserveGlobalAi(): Promise<boolean> {
+  return transaction(async (db) => {
+    await db.query("SELECT pg_advisory_xact_lock(782402)");
+    const day = "(now() AT TIME ZONE 'UTC')::date";
+    const count = await db.query<{ attempts: number }>(
+      `SELECT attempts FROM usage_counters WHERE day=${day} AND scope='global' AND kind='all'`,
+    );
+    if ((count.rows[0]?.attempts ?? 0) >= Number(process.env["AI_DAILY_LIMIT"] ?? 100))
+      return false;
+    await db.query(
+      `INSERT INTO usage_counters(day,scope,kind,attempts) VALUES(${day},'global','all',1) ON CONFLICT(day,scope,kind) DO UPDATE SET attempts=usage_counters.attempts+1`,
+    );
+    return true;
+  });
+}
 // Counts one change-question AI call against the global and per-workspace daily limits; false when used up.
 export const reserveChangeAi = (ctx: SessionContext) => reserveDailyAi(ctx, "change", 30);
 // 양식 읽기(항목 정리)는 문서함당 하루 5회.

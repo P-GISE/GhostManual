@@ -41,8 +41,8 @@ O=소유자 쿠키, R=공유 독자 쿠키. 모든 ID는 서버의 workspace 범
 | POST /api/shares | O, {manualId}, 검수본·최신 원본 필요 | 201 shareId·1회 표시 공유 URL·만료 | 공유 / src/app/api/shares/route.ts |
 | DELETE /api/shares/:id | O | 200 {deleted:true}, 공유 취소·독자 세션 접근 차단 | 공유 취소 / src/app/api/shares/[id]/route.ts |
 | POST /api/share | 무인증, {token} | 200 manualId·expiresAt·독자 쿠키 | 공유 진입 / src/app/api/share/route.ts |
-| POST /api/questions | O 또는 R, {question,manualId?}, Idempotency-Key | 200 QuestionResult 또는 202 operationId | 질문 / src/app/api/questions/route.ts |
-| GET /api/questions/:id | O 또는 생성한 R | 200 답변·근거·오래됨 표시 | 결과 / src/app/api/questions/[id]/route.ts |
+| POST /api/questions | O 또는 R, {question,manualId?,after?(앞 질문 id 최대 3개)}, Idempotency-Key | 200 QuestionResult 또는 202 operationId | 질문 / src/app/api/questions/route.ts |
+| GET /api/questions/:id | O 또는 생성한 R | 200 답변·근거·오래됨 표시. ?conversation=1은 O도 현재 세션 소유 기록만 허용(미소유 404) | 결과 / src/app/api/questions/[id]/route.ts |
 | GET /api/evidence/:id | O 또는 해당 답변의 R | 200 근거 원문·위치·당시 버전 | 출처 패널 / src/app/api/evidence/[id]/route.ts |
 
 신규 생성 요청은 한정된 시간 안에서 동기 처리한다. 동일 Idempotency-Key 재전송 시 저장된 결과를 재사용하고 processing이면 202를 반환한다. durable background worker가 있다는 의미가 아니다. 처리 중은 202로 알리고 문서함 확인·동일 키 재전송으로 결과를 재사용한다. 별도 operation GET은 아직 제공하지 않는다.

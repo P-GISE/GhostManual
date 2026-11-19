@@ -14,9 +14,9 @@ import {
 } from "../lib/client";
 import { blockingSections, toSections } from "../lib/sections";
 import { FileHistory } from "./FileHistory";
+import { ManualChat } from "./ManualChat";
 import { ManualContent } from "./ManualContent";
 import { ManualVersionComparison } from "./ManualVersionComparison";
-import { QuestionForm } from "./QuestionForm";
 
 const sharingSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("private") }),
@@ -328,8 +328,7 @@ export function ManualDetail({
         {!reader && manual.publishedVersion && (
           <ManualVersionComparison id={id} latest={manual.publishedVersion} />
         )}
-        <h2>이 매뉴얼에 질문</h2>
-        <QuestionForm manualId={id} reader={reader} />
+        <ManualChat manualId={id} reader={reader} title={content.title} />
       </div>
     </>
   );
