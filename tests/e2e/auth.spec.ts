@@ -150,6 +150,7 @@ test("leaving terms logs out without deleting the account", async ({ page }) => 
       json: { name: "기존 사용자", email: "existing@example.com", newAccount: true },
     });
   });
+  await page.goto( /manuals);
   await page.route("**/api/auth/logout", async (route) => {
     logouts++;
     await route.fulfill({ json: { loggedOut: true } });
@@ -202,6 +203,7 @@ test("logout revokes both browser sessions and allows retry after a server error
   };
   expect(await sessionStatus("gm_owner", false)).toBe(200);
   expect(await sessionStatus("gm_reader", true)).toBe(200);
+  await page.goto( /manuals);
   await page.route("**/api/auth/logout", (route) => route.fulfill({ status: 503 }), { times: 1 });
   const logout = page.getByRole("button", { name: "로그아웃" });
   await logout.click();
