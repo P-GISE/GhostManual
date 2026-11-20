@@ -142,9 +142,11 @@ export async function login(rawEmail: string, password: string) {
     };
   });
 }
-export async function logout(ctx: SessionContext): Promise<void> {
+export async function logout(tokens: readonly string[]): Promise<void> {
+  const hashes = tokens.filter((token) => tokenPattern.test(token)).map(tokenHash);
+  if (hashes.length === 0) return;
   await transaction(async (db) => {
-    await db.query("DELETE FROM sessions WHERE id=$1", [ctx.sessionId]);
+    await db.query("DELETE FROM sessions WHERE token_hash = ANY($1::text[])", [hashes]);
   });
 }
 export const FILE_QUOTA_BYTES = 104857600;

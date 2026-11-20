@@ -22,7 +22,8 @@ test("an owner uploads two workbook versions, answers questions and sees the cha
   await page.getByRole("button", { name: "새 버전 올리기" }).click();
   await page.getByLabel("새 버전 엑셀 파일").setInputFiles(fixture("정산_1030.xlsx"));
   await page.getByRole("button", { name: "올리고 비교하기" }).click();
-  await expect(page.getByRole("status")).toContainText("v2를 저장했습니다");
+  // 화면에 상태 알림이 둘 이상 뜨는 순간이 있어 글로 골라 찾는다.
+  await expect(page.getByRole("status").filter({ hasText: "v2를 저장했습니다" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "v1과 비교해 바뀐 부분 3건" })).toBeVisible();
   await expect(page.getByText(/'원본' F2:F40의 수식을/)).toBeVisible();
   const cells = page.getByText("칸별 변경 보기 (이전 값 → 새 값)");
@@ -110,7 +111,8 @@ test("demo: publish a manual from workbook versions and a successor sees the cha
   await page.getByRole("button", { name: "새 버전 올리기" }).click();
   await page.getByLabel("새 버전 엑셀 파일").setInputFiles(fixture("정산_1030.xlsx"));
   await page.getByRole("button", { name: "올리고 비교하기" }).click();
-  await expect(page.getByRole("status")).toContainText("v2를 저장했습니다");
+  // 화면에 상태 알림이 둘 이상 뜨는 순간이 있어 글로 골라 찾는다.
+  await expect(page.getByRole("status").filter({ hasText: "v2를 저장했습니다" })).toBeVisible();
   const formula = page.getByRole("group").filter({ hasText: "수식을" }).first();
   await formula.getByLabel("답변").fill("반품(음수)을 합계에서 빼야 해서 바꿨습니다.");
   await formula.getByRole("button", { name: "답변 저장" }).click();
@@ -234,7 +236,8 @@ test("a delayed answer does not switch back to an older selection", async ({ pag
   await page.getByRole("button", { name: "새 버전 올리기" }).click();
   await page.getByLabel("새 버전 엑셀 파일").setInputFiles(fixture("정산_1030.xlsx"));
   await page.getByRole("button", { name: "올리고 비교하기" }).click();
-  await expect(page.getByRole("status")).toContainText("v2를 저장했습니다");
+  // 화면에 상태 알림이 둘 이상 뜨는 순간이 있어 글로 골라 찾는다.
+  await expect(page.getByRole("status").filter({ hasText: "v2를 저장했습니다" })).toBeVisible();
   let release = () => {};
   const gate = new Promise<void>((resolve) => {
     release = resolve;

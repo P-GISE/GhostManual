@@ -4,12 +4,14 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { http } from "../lib/client";
+import { CHAT_STORAGE_PREFIX } from "./QuestionForm";
 
 // Remounted per path (key) so the name refreshes after login or logout.
 function AccountMenu() {
   const [name, setName] = useState<string | null>(null);
   const [admin, setAdmin] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [logoutFailed, setLogoutFailed] = useState(false);
   useEffect(() => {
     let active = true;
     http
@@ -30,7 +32,21 @@ function AccountMenu() {
   }, []);
   async function logout() {
     setBusy(true);
-    await http.post("/api/auth/logout").catch(() => {});
+    setLogoutFailed(false);
+    try {
+      await http.post("/api/auth/logout");
+    } catch {
+      setLogoutFailed(true);
+      setBusy(false);
+      return;
+    }
+    // 로그아웃하면 이 브라우저에 기억해 둔 대화(질문 id)도 지운다.
+    try {
+      for (const key of Object.keys(localStorage))
+        if (key.startsWith(CHAT_STORAGE_PREFIX)) localStorage.removeItem(key);
+    } catch {
+      // 저장소를 쓸 수 없으면 지울 것도 없다.
+    }
     window.location.assign("/");
   }
   return name ? (
@@ -42,6 +58,7 @@ function AccountMenu() {
       <button type="button" className="secondary" disabled={busy} onClick={logout}>
         로그아웃
       </button>
+      {logoutFailed && <span role="alert">로그아웃하지 못했습니다. 다시 시도해 주세요.</span>}
     </span>
   ) : (
     <Link href="/login">로그인</Link>

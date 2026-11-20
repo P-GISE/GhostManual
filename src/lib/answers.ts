@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { workspaceAiAllowed } from "./admin.ts";
-import { generateAnswer } from "./ai.ts";
+import { generateAnswer, type PreviousTurn, rewriteQuestion } from "./ai.ts";
 import { EvidenceCandidateSchema } from "./ai-schemas.ts";
 import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
-import { finishOperation, payloadHash, reserveAiAttempt } from "./operations.ts";
+import { finishOperation, payloadHash, reserveAiAttempt, reserveGlobalAi } from "./operations.ts";
 import { retrieve } from "./retrieval.ts";
 import { QuestionInputSchema } from "./schemas.ts";
 import { assertSession } from "./session.ts";
@@ -23,16 +23,19 @@ export const QuestionResultSchema = z.object({
   insufficientEvidence: z.boolean().nullable(),
   limitations: z.array(z.string()),
   isOutdated: z.boolean(),
+  // 이어지는 질문을 AI가 고쳐 쓴 글. 고쳐 쓰지 않았으면 null(이전 기록에는 없다).
+  understoodAs: z.string().nullable().default(null),
 });
 export type QuestionResult = z.infer<typeof QuestionResultSchema>;
 export async function questionInTransaction(
   db: DbClient,
   ctx: SessionContext,
   id: string,
+  ownSession = false,
 ): Promise<QuestionResult> {
   const rows = await db.query<Record<string, unknown>>(
-    `SELECT result FROM question_runs q WHERE q.id=$1 AND q.workspace_id=$2 AND ($3='owner' OR q.session_id=$4)`,
-    [id, ctx.workspaceId, ctx.role, ctx.sessionId],
+    `SELECT result FROM question_runs q WHERE q.id=$1 AND q.workspace_id=$2 AND (($3='owner' AND NOT $5::boolean) OR q.session_id=$4)`,
+    [id, ctx.workspaceId, ctx.role, ctx.sessionId, ownSession],
   );
   if (!rows.rows[0]) throw new AppError("not_found", 404, "질문을 찾을 수 없습니다.");
   const result = QuestionResultSchema.parse(rows.rows[0]["result"]);
@@ -47,10 +50,36 @@ export async function questionInTransaction(
   }
   return { ...result, isOutdated };
 }
-export async function getQuestion(ctx: SessionContext, id: string): Promise<QuestionResult> {
+export async function getQuestion(
+  ctx: SessionContext,
+  id: string,
+  ownSession = false,
+): Promise<QuestionResult> {
   return transaction(async (db) => {
     await assertSession(db, ctx);
-    return questionInTransaction(db, ctx, z.uuid().parse(id));
+    return questionInTransaction(db, ctx, z.uuid().parse(id), ownSession);
+  });
+}
+// 앞 대화로 인정하는 것은 이 세션이 한 질문뿐이다. 없는 id와 다른 세션의 id는 버린다.
+async function previousTurns(ctx: SessionContext, ids: readonly string[]): Promise<PreviousTurn[]> {
+  if (!ids.length) return [];
+  return transaction(async (db) => {
+    await assertSession(db, ctx);
+    const { rows } = await db.query<{ id: string; result: unknown }>(
+      "SELECT id,result FROM question_runs WHERE id=ANY($1::uuid[]) AND workspace_id=$2 AND session_id=$3",
+      [ids, ctx.workspaceId, ctx.sessionId],
+    );
+    return ids.flatMap((id) => {
+      const row = rows.find((entry) => entry.id === id);
+      if (!row) return [];
+      const result = QuestionResultSchema.parse(row.result);
+      return [
+        {
+          question: result.understoodAs ?? result.question,
+          answer: [result.answer, ...result.procedure.map((step) => step.text)].join("\n"),
+        },
+      ];
+    });
   });
 }
 export async function ask(
@@ -80,8 +109,36 @@ export async function ask(
       "이 요청은 처리 중이거나 실패했습니다. 새로운 요청 키를 사용하세요.",
     );
   }
-  const candidates = await retrieve(ctx, parsed.question, parsed.manualId);
+  const history = await previousTurns(ctx, parsed.after ?? []);
+  const blocked = !(await workspaceAiAllowed(ctx.workspaceId));
+  const aiOff =
+    process.env["AI_ENABLED"] !== "true" || !process.env["ANTHROPIC_API_KEY"] || blocked;
   let operationId: string | null = null;
+  // 한도를 세고 요청을 예약한다. 같은 요청이 이미 끝났으면 그 결과를 돌려준다.
+  const reserve = async (): Promise<QuestionResult | null> => {
+    const operation = await reserveAiAttempt(ctx, { kind: "question", key, payloadHash: hash });
+    operationId = operation.id;
+    if (operation.status === "complete")
+      return getQuestion(ctx, QuestionResultSchema.parse(operation.result).id);
+    if (!operation.isNew) throw new AppError("request_pending", 202, "같은 요청이 처리 중입니다.");
+    return null;
+  };
+  let searchText = parsed.question;
+  let understoodAs: string | null = null;
+  const last = history.at(-1);
+  if (last && !aiOff) {
+    const done = await reserve();
+    if (done) return done;
+    const rewritten = await rewriteQuestion(history, parsed.question);
+    if (rewritten && rewritten !== parsed.question) understoodAs = rewritten;
+    // 고쳐 쓰지 못하면 바로 앞 질문의 글을 붙여 찾는다.
+    searchText =
+      rewritten ??
+      [last.question.slice(0, Math.max(0, 999 - parsed.question.length)), parsed.question]
+        .filter(Boolean)
+        .join(" ");
+  }
+  const candidates = await retrieve(ctx, searchText, parsed.manualId);
   let result: QuestionResult = {
     id: newId(),
     question: parsed.question,
@@ -94,10 +151,10 @@ export async function ask(
     insufficientEvidence: true,
     limitations: ["담당자에게 확인할 자료를 요청하세요."],
     isOutdated: false,
+    understoodAs,
   };
   if (candidates.length) {
-    const blocked = !(await workspaceAiAllowed(ctx.workspaceId));
-    if (process.env["AI_ENABLED"] !== "true" || !process.env["ANTHROPIC_API_KEY"] || blocked) {
+    if (aiOff) {
       result = {
         ...result,
         status: "unavailable",
@@ -110,14 +167,19 @@ export async function ask(
         searchResults: [...candidates],
       };
     } else {
-      const operation = await reserveAiAttempt(ctx, { kind: "question", key, payloadHash: hash });
-      operationId = operation.id;
-      if (operation.status === "complete")
-        return getQuestion(ctx, QuestionResultSchema.parse(operation.result).id);
-      if (!operation.isNew)
-        throw new AppError("request_pending", 202, "같은 요청이 처리 중입니다.");
+      const needsAnswerQuota = operationId !== null;
+      if (!operationId) {
+        const done = await reserve();
+        if (done) return done;
+      }
       try {
-        const answer = await generateAnswer(candidates, parsed.question);
+        if (needsAnswerQuota && !(await reserveGlobalAi()))
+          throw new AppError(
+            "daily_limit",
+            429,
+            "오늘의 AI 사용 한도에 도달했습니다. 검색된 자료를 직접 확인하세요.",
+          );
+        const answer = await generateAnswer(candidates, searchText);
         const ids = new Set(
           [...answer.claims, ...answer.procedure].flatMap((claim) => claim.evidenceIds),
         );

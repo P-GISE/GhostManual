@@ -58,12 +58,17 @@ export async function requestSession(
     request.headers.get("x-ghost-role") === "reader" ||
     new URL(request.url).searchParams.get("view") === "shared";
   const name = reader ? "gm_reader" : "gm_owner";
-  const cookie = request.headers
-    .get("cookie")
-    ?.split(";")
-    .map((c) => c.trim())
-    .find((c) => c.startsWith(name + "="));
-  return requireSession(cookie?.slice(name.length + 1) ?? "", options);
+  return requireSession(readCookie(request, name), options);
+}
+export function readCookie(request: Request, name: "gm_owner" | "gm_reader"): string {
+  return (
+    request.headers
+      .get("cookie")
+      ?.split(";")
+      .map((cookie) => cookie.trim())
+      .find((cookie) => cookie.startsWith(name + "="))
+      ?.slice(name.length + 1) ?? ""
+  );
 }
 export function sessionCookie(token: string, expiresAt: Date, reader = false) {
   return `${reader ? "gm_reader" : "gm_owner"}=${token}; Path=/; HttpOnly; SameSite=Lax; Expires=${expiresAt.toUTCString()}${process.env["APP_ORIGIN"]?.startsWith("https:") ? "; Secure" : ""}`;
