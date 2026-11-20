@@ -21,7 +21,7 @@ export async function claimDocumentJob(): Promise<DocumentJob | null> {
   return transaction(async (db) => {
     await db.query("SELECT pg_advisory_xact_lock(782402)");
     await db.query(
-      `UPDATE document_jobs j SET status='failed',lease_token=NULL,lease_until=NULL WHERE j.status IN ('queued','processing') AND NOT EXISTS(SELECT 1 FROM sessions se JOIN workspaces w ON w.id=se.workspace_id LEFT JOIN users u ON u.id=se.user_id WHERE se.id=j.session_id AND se.workspace_id=j.workspace_id AND se.role='owner' AND se.expires_at>now() AND w.expires_at>now() AND (se.user_id IS NULL OR u.terms_agreed_at IS NOT NULL))`,
+      `UPDATE document_jobs j SET status='failed',lease_token=NULL,lease_until=NULL WHERE j.status IN ('queued','processing') AND NOT EXISTS(SELECT 1 FROM sessions se JOIN workspaces w ON w.id=se.workspace_id LEFT JOIN users u ON u.id=se.user_id WHERE se.id=j.session_id AND se.workspace_id=j.workspace_id AND se.role='owner' AND se.expires_at>now() AND w.expires_at>now() AND (se.user_id IS NULL OR (u.terms_agreed_at IS NOT NULL AND (w.user_id=se.user_id OR EXISTS (SELECT 1 FROM workspace_members wm WHERE wm.workspace_id=w.id AND wm.user_id=se.user_id)))))`,
     );
     await db.query(
       "UPDATE document_jobs SET status='failed',lease_token=NULL,lease_until=NULL WHERE status='processing' AND lease_until<=now() AND attempts>=3",
