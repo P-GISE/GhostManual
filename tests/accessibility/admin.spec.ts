@@ -49,6 +49,7 @@ for (const failEvents of [false, true]) {
         "/api/admin/users": [self, target],
         "/api/admin/usage": { days: [{ day: "2026-11-05", total: 0 }], dailyLimit: 100 },
         "/api/admin/events": [],
+        "/api/workspaces": [],
       };
       if (!(path in values)) throw new Error("Unexpected route");
       await route.fulfill({ json: values[path] });

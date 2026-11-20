@@ -174,6 +174,7 @@ async function profile(db: DbClient, ctx: SessionContext) {
     })
     .parse(result.rows[0]);
   return {
+    id: ctx.userId,
     name: row.name,
     email: row.email,
     department: row.department,
