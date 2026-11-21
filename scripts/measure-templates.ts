@@ -151,6 +151,8 @@ try {
     });
     // 초안 측정은 항목 추출 결과와 섞이지 않게 사람이 정한 항목으로 확정한다.
     await updateTemplate(ctx, id, { items: template.expected });
+    // MEASURE_READ_ONLY=1이면 항목 정리만 잰다(AI 3회).
+    if (process.env["MEASURE_READ_ONLY"] === "1") continue;
     for (const task of tasks) {
       const source = await createSource(ctx, task);
       const generated = await generateDraft(ctx, {

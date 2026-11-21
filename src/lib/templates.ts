@@ -118,7 +118,7 @@ export async function readTemplate(ctx: SessionContext, id: string, candidateIds
     { candidates: chosen.map((candidate, index) => ({ n: index + 1, text: candidate?.name })) },
     45000,
     8000,
-    `${instructions} candidates는 회사 인수인계 양식에서 꺼낸 글 조각입니다. 매뉴얼에서 채울 항목 목록으로 정리하세요. 제목, 번호가 붙은 줄, 표의 머리 칸을 항목으로 보세요. 결재란, 기관명, 날짜, 서명란과 이미 작성된 값으로 보이는 조각은 빼세요. 괄호 설명이나 작성 요령은 그 항목의 guide에 넣으세요. 여러 줄을 나열하는 항목은 kind를 list로, 그 밖은 text로 하세요. 받은 조각에 없는 항목을 만들지 말고, 항목마다 근거가 된 조각의 n을 from에 적으세요.`,
+    `${instructions} candidates는 회사 인수인계 양식에서 꺼낸 글 조각입니다. 매뉴얼에서 채울 항목 목록으로 정리하세요. 제목, 번호가 붙은 줄, 표의 머리 칸을 항목으로 보세요. 결재란, 기관명, 날짜, 서명란과 이미 작성된 값으로 보이는 조각은 빼세요. 문서 전체의 제목과, 아래 항목을 묶기만 하는 장·절 제목(예: 제1장 업무 개요)도 빼세요. 사람·부서·날짜를 적는 칸의 이름(예: 소속, 작성일, 인계자, 인수자, 담당)은 업무 내용을 적는 항목이 아니므로 빼세요. 괄호 설명이나 작성 요령은 그 항목의 guide에 넣으세요. 여러 줄을 나열하는 항목은 kind를 list로, 그 밖은 text로 하세요. 받은 조각에 없는 항목을 만들지 말고, 항목마다 근거가 된 조각의 n을 from에 적으세요.`,
   );
   return {
     items: output.items
