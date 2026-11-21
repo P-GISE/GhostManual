@@ -72,6 +72,7 @@ test("workspace and document surfaces remain aligned with synthetic API data", a
       [`/api/manuals/${manual.id}/versions`]: [manual.published],
       "/api/shares": [],
       "/api/templates": [],
+      "/api/workspaces": [],
       "/api/me": { name: "합성 사용자", email: "synthetic@example.com" },
       "/api/session":
         request.headers()["x-ghost-role"] === "reader"

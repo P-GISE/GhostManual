@@ -13,7 +13,14 @@ export type RevisionId = z.infer<typeof RevisionIdSchema>;
 export function newId() {
   return randomUUID();
 }
-export type SessionContext = { workspaceId: WorkspaceId; sessionId: SessionId; expiresAt: Date } & (
+// userId: 로그인한 계정(계정 없는 예전 임시 문서함은 null). teamRole: 팀 문서함에서의 역할(개인 문서함과 공유 독자는 null).
+export type SessionContext = {
+  workspaceId: WorkspaceId;
+  sessionId: SessionId;
+  expiresAt: Date;
+  userId: string | null;
+  teamRole: "admin" | "member" | null;
+} & (
   | { role: "owner"; shareId: null; manualId: null }
   | { role: "reader"; shareId: string; manualId: ManualId }
 );

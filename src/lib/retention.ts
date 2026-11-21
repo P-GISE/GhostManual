@@ -12,6 +12,9 @@ export async function removeWorkspace(db: DbClient, id: string) {
   await db.query("DELETE FROM workspaces WHERE id=$1", [id]);
 }
 export async function deleteWorkspace(owner: SessionContext): Promise<void> {
+  // 팀 문서함은 팀 이름을 확인하는 팀 삭제로만 지운다(teams.ts의 deleteTeam).
+  if (owner.teamRole !== null)
+    throw new AppError("forbidden", 403, "팀 문서함은 팀 설정에서 삭제하세요.");
   await transaction(async (db) => {
     await assertSession(db, owner, true);
     await removeWorkspace(db, owner.workspaceId);
@@ -20,11 +23,13 @@ export async function deleteWorkspace(owner: SessionContext): Promise<void> {
 export async function deleteSource(owner: SessionContext, id: string): Promise<void> {
   await transaction(async (db) => {
     await assertSession(db, owner, true);
-    const found = await db.query(
-      "SELECT id FROM sources WHERE id=$1 AND workspace_id=$2 FOR UPDATE",
+    const found = await db.query<{ created_by: string | null }>(
+      "SELECT created_by FROM sources WHERE id=$1 AND workspace_id=$2 FOR UPDATE",
       [id, owner.workspaceId],
     );
-    if (!found.rowCount) throw new AppError("not_found", 404, "자료를 찾을 수 없습니다.");
+    if (!found.rows[0]) throw new AppError("not_found", 404, "자료를 찾을 수 없습니다.");
+    if (owner.teamRole === "member" && found.rows[0].created_by !== owner.userId)
+      throw new AppError("forbidden", 403, "올린 사람과 팀 관리자만 이 업무를 삭제할 수 있습니다.");
     await db.query(
       `DELETE FROM question_runs WHERE workspace_id=$1 AND (
         id IN (SELECT question_id FROM evidence WHERE source_id=$2)

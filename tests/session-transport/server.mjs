@@ -64,6 +64,9 @@ async function api(request, scenario) {
         expires_at: expires,
         share_id: null,
         manual_id: null,
+        user_id: null,
+        team_role: null,
+        member: true,
       });
       const result = json({ expiresAt: expires });
       if (scenario !== "missing-cookie")

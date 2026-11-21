@@ -10,7 +10,7 @@ export async function assertTemplateOwner(db: DbClient, ctx: SessionContext) {
   if (ctx.role !== "owner") throw missing();
   await assertSession(db, ctx, true);
   const account = await db.query(
-    "SELECT 1 FROM sessions s JOIN workspaces w ON w.id=s.workspace_id JOIN users u ON u.id=s.user_id AND u.id=w.user_id WHERE s.id=$1 AND u.terms_agreed_at IS NOT NULL",
+    `SELECT 1 FROM sessions s JOIN workspaces w ON w.id=s.workspace_id JOIN users u ON u.id=s.user_id WHERE s.id=$1 AND u.terms_agreed_at IS NOT NULL AND (w.user_id=s.user_id OR EXISTS (SELECT 1 FROM workspace_members wm WHERE wm.workspace_id=w.id AND wm.user_id=s.user_id))`,
     [ctx.sessionId],
   );
   if (!account.rowCount) throw new AppError("unauthorized", 401, "양식을 관리하려면 로그인하세요.");
@@ -76,15 +76,17 @@ export async function getTemplate(ctx: SessionContext, id: string) {
 export async function deleteTemplate(ctx: SessionContext, id: string) {
   return transaction(async (db) => {
     await assertTemplateOwner(db, ctx);
-    if (
-      !(
-        await db.query("DELETE FROM manual_templates WHERE workspace_id=$1 AND id=$2", [
-          ctx.workspaceId,
-          id,
-        ])
-      ).rowCount
-    )
-      throw missing();
+    const found = await db.query<{ created_by: string | null }>(
+      "SELECT created_by FROM manual_templates WHERE workspace_id=$1 AND id=$2 FOR UPDATE",
+      [ctx.workspaceId, id],
+    );
+    if (!found.rows[0]) throw missing();
+    if (ctx.teamRole === "member" && found.rows[0].created_by !== ctx.userId)
+      throw new AppError("forbidden", 403, "올린 사람과 팀 관리자만 이 양식을 삭제할 수 있습니다.");
+    await db.query("DELETE FROM manual_templates WHERE workspace_id=$1 AND id=$2", [
+      ctx.workspaceId,
+      id,
+    ]);
   });
 }
 
@@ -97,9 +99,10 @@ type TemplateJob = {
 
 const authorizedJob = `EXISTS (
   SELECT 1 FROM sessions s JOIN workspaces w ON w.id=s.workspace_id
-  JOIN users u ON u.id=s.user_id AND u.id=w.user_id
+  JOIN users u ON u.id=s.user_id
   WHERE s.id=j.session_id AND s.workspace_id=j.workspace_id AND s.role='owner'
     AND s.expires_at>now() AND w.expires_at>now() AND u.terms_agreed_at IS NOT NULL
+    AND (w.user_id=s.user_id OR EXISTS (SELECT 1 FROM workspace_members wm WHERE wm.workspace_id=w.id AND wm.user_id=s.user_id))
 )`;
 
 export async function runTemplateJob() {
