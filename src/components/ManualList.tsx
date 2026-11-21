@@ -305,7 +305,11 @@ export function ManualList() {
                   className="task-select"
                   aria-label={`${t.manual?.draft.title ?? t.source.title} 선택`}
                   checked={selected.includes(t.source.id)}
-                  disabled={busy}
+                  // 팀원은 다른 사람이 올린 업무를 지울 수 없어 고를 수도 없다.
+                  disabled={busy || !t.source.canDelete}
+                  title={
+                    t.source.canDelete ? undefined : "올린 사람과 팀 관리자만 삭제할 수 있습니다."
+                  }
                   onChange={(e) => toggle(t.source.id, e.target.checked)}
                 />
                 <span className={`task-icon ${t.source.kind}`} aria-hidden="true">
@@ -327,6 +331,7 @@ export function ManualList() {
                         : "텍스트"}{" "}
                       · 버전 {t.source.revision}개
                     </span>
+                    {t.source.createdByName && <span>올린 사람 {t.source.createdByName}</span>}
                     <Link href={`/sources/${t.source.id}`}>원본 보기</Link>
                     {t.manual?.provenance === "example" && <span>합성 예제</span>}
                   </p>

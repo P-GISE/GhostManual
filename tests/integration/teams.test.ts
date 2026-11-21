@@ -124,7 +124,19 @@ it("lets members edit everything but delete only what they uploaded", async () =
     title: "팀원이 올린 업무",
   });
   // 팀원 누구나 팀의 업무를 보고 매뉴얼을 쓰고 게시한다. 게시본에는 게시한 사람의 이름이 남는다.
-  expect((await getSource(memberInTeam, byAdmin.id)).title).toBe(exampleSource.title);
+  expect(await getSource(memberInTeam, byAdmin.id)).toMatchObject({
+    title: exampleSource.title,
+    canDelete: false,
+    createdByName: "사용자",
+  });
+  expect((await getSource(memberInTeam, byMember.id)).canDelete).toBe(true);
+  expect((await getSource(adminInTeam, byMember.id)).canDelete).toBe(true);
+  // 개인 문서함에서는 올린 사람을 따로 보이지 않는다.
+  const personal = await createSource(member.ctx, exampleSource);
+  expect(await getSource(member.ctx, personal.id)).toMatchObject({
+    canDelete: true,
+    createdByName: null,
+  });
   const draft = await saveDraft(memberInTeam, byAdmin.revisionId, exampleDraft);
   const published = await publishManual(memberInTeam, draft.id, 1, exampleDraft.unknowns);
   expect(

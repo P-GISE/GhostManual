@@ -17,6 +17,8 @@ const source = {
   fileType: null,
   uploadedByName: null,
   uploadedByDepartment: null,
+  createdByName: null,
+  canDelete: true,
 };
 const draft = {
   title: "발급",
