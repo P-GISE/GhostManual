@@ -25,7 +25,7 @@ export async function reserveAiAttempt(
   return transaction(async (db) => {
     await db.query("SELECT pg_advisory_xact_lock(782402)");
     await assertSession(db, ctx, input.kind === "generate");
-    if (!(await workspaceAiAllowed(ctx.workspaceId, db)))
+    if (!(await workspaceAiAllowed(ctx.workspaceId, db, ctx.role === "owner" ? ctx.userId : null)))
       throw new AppError(
         "ai_blocked",
         403,
@@ -128,7 +128,8 @@ async function reserveDailyAi(ctx: SessionContext, kind: string, max: number): P
     await db.query("SELECT pg_advisory_xact_lock(782402)");
     await assertSession(db, ctx, true);
     // Blocked accounts keep the rule-based questions; only the AI wording is skipped.
-    if (!(await workspaceAiAllowed(ctx.workspaceId, db))) return false;
+    if (!(await workspaceAiAllowed(ctx.workspaceId, db, ctx.role === "owner" ? ctx.userId : null)))
+      return false;
     const day = "(now() AT TIME ZONE 'UTC')::date";
     const scopes = [
       { scope: "global", kind: "all", max: Number(process.env["AI_DAILY_LIMIT"] ?? 100) },

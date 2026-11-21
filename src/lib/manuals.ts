@@ -212,7 +212,7 @@ export async function publishManual(
       throw new AppError("review_required", 422, "미확인 항목을 확인한 뒤 게시하세요.");
     const version = (current.publishedVersion ?? 0) + 1;
     await db.query(
-      "INSERT INTO manual_versions(id,workspace_id,manual_id,version,source_revision_id,content,provenance,acknowledged_unknowns,history) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+      "INSERT INTO manual_versions(id,workspace_id,manual_id,version,source_revision_id,content,provenance,acknowledged_unknowns,history,published_by_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,(SELECT u.name FROM users u WHERE u.id=$10::uuid))",
       [
         newId(),
         ctx.workspaceId,
@@ -223,6 +223,7 @@ export async function publishManual(
         current.provenance,
         JSON.stringify(acknowledgements),
         await fileHistory(db, ctx, row.sourceId, row.revision),
+        ctx.userId,
       ],
     );
     await db.query("UPDATE manuals SET published_version=$1,needs_review=false WHERE id=$2", [

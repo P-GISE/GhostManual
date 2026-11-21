@@ -174,7 +174,28 @@ export const http = ky.create({
   hooks: {
     afterResponse: [
       async ({ response }) => {
-        if (response.status !== 403 || typeof window === "undefined") return;
+        if (typeof window === "undefined") return;
+        // 팀에서 나갔거나 내보내진 뒤의 팀 세션: 내 문서함으로 전환하고 문서함을 다시 연다.
+        if (response.status === 401) {
+          const left = await response
+            .clone()
+            .json()
+            .catch(() => null);
+          if (
+            z.object({ error: z.object({ code: z.literal("workspace_left") }) }).safeParse(left)
+              .success
+          ) {
+            await fetch("/api/session/workspace", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ workspaceId: null }),
+              credentials: "same-origin",
+            });
+            window.location.assign("/manuals");
+          }
+          return;
+        }
+        if (response.status !== 403) return;
         const body = await response
           .clone()
           .json()

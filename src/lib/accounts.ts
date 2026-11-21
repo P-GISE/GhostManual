@@ -18,7 +18,7 @@ export const SignupSchema = z.strictObject({
   next: z.string().max(2048).optional(),
   agreed: z.literal(true),
 });
-const SESSION_DAYS = 30;
+export const SESSION_DAYS = 30;
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const invalidLink = () =>
   new AppError("invalid_link", 400, "인증 링크가 만료됐거나 이미 사용됐습니다.");
@@ -174,6 +174,7 @@ async function profile(db: DbClient, ctx: SessionContext) {
     })
     .parse(result.rows[0]);
   return {
+    id: ctx.userId,
     name: row.name,
     email: row.email,
     department: row.department,
