@@ -14,7 +14,9 @@ import {
 } from "../lib/client";
 import { type RequestStage, requestDiagnostic } from "../lib/request-diagnostic";
 import { RequestDiagnostics, useRequestDiagnostics } from "./RequestDiagnostics";
+import { useWorkspaceName } from "./Teams";
 export function ManualList() {
+  const workspaceName = useWorkspaceName();
   const { record } = useRequestDiagnostics();
   const mounted = useRef(false);
   const [manuals, setManuals] = useState<Manual[]>([]);
@@ -176,7 +178,7 @@ export function ManualList() {
     <>
       <div className="section-heading">
         <div>
-          <span className="eyebrow">내 문서함</span>
+          <span className="eyebrow">{workspaceName}</span>
           <h1>업무 문서함</h1>
           <p className="muted">
             업무 하나에 원본 파일과 매뉴얼이 함께 있습니다. 오른쪽 버튼이 지금 할 일입니다.
