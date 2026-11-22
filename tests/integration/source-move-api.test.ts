@@ -155,3 +155,57 @@ it("denies expired, pending-consent and reader sessions at the elevated boundary
     expect((await getSource(owner.ctx, source.id)).id).toBe(source.id);
   }
 });
+
+it("rechecks membership or logout after waiting for the workspace lock", async () => {
+  for (const change of ["membership", "logout"]) {
+    const owner = await signedInUser(mail);
+    const team = await createTeam(owner.ctx, "경쟁 검증 팀");
+    const source = await createSource(owner.ctx, exampleSource);
+    const blocker = await pool.connect();
+    const mover = await pool.connect();
+    let pending: Promise<{ code?: string }> | undefined;
+    try {
+      await blocker.query("BEGIN");
+      await blocker.query("SELECT id FROM workspaces WHERE id=$1 FOR UPDATE", [
+        change === "membership" ? team.id : owner.ctx.workspaceId,
+      ]);
+      const pid = (await mover.query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
+      pending = mover
+        .query("SELECT public.move_personal_source_for_session($1,$2,$3)", [
+          owner.token,
+          source.id,
+          team.id,
+        ])
+        .then(
+          () => ({}),
+          (error: { code: string }) => error,
+        );
+      await expect
+        .poll(
+          async () =>
+            (await pool.query("SELECT wait_event_type FROM pg_stat_activity WHERE pid=$1", [pid]))
+              .rows[0]?.wait_event_type,
+        )
+        .toBe("Lock");
+      if (change === "membership") {
+        await blocker.query("DELETE FROM workspace_members WHERE workspace_id=$1 AND user_id=$2", [
+          team.id,
+          owner.ctx.userId,
+        ]);
+      } else {
+        await blocker.query("DELETE FROM sessions WHERE id=$1", [owner.ctx.sessionId]);
+      }
+      await blocker.query("COMMIT");
+      expect((await pending).code).toBe(change === "membership" ? "42501" : "28000");
+      expect(
+        (await pool.query("SELECT workspace_id FROM sources WHERE id=$1", [source.id])).rows[0]
+          .workspace_id,
+      ).toBe(owner.ctx.workspaceId);
+    } finally {
+      await blocker.query("ROLLBACK");
+      if (pending) await pending;
+      blocker.release();
+      mover.release();
+    }
+  }
+});
