@@ -18,6 +18,7 @@ it("moves history and links atomically and removes only related AI questions", a
   const linkToken = randomBytes(32).toString("base64url");
   const tokenHash = createHash("sha256").update(linkToken).digest("hex");
   const ownerSession = id();
+  const ownerBearer = randomBytes(32).toString("base64url");
   const readerSession = id();
   const byEvidence = id();
   const byJson = id();
@@ -102,7 +103,7 @@ it("moves history and links atomically and removes only related AI questions", a
       readerSession,
       personal,
       user,
-      ownerSession,
+      createHash("sha256").update(ownerBearer).digest("hex"),
       readerSession,
       share,
     );
@@ -158,7 +159,8 @@ it("moves history and links atomically and removes only related AI questions", a
     const questions = () =>
       rows("SELECT id FROM question_runs WHERE workspace_id=$1 ORDER BY id", personal);
     const originalQuestions = await questions();
-    const move = () => q("SELECT move_personal_source($1,$2,$3)", user, source, team);
+    const move = () =>
+      q("SELECT move_personal_source_for_session($1,$2,$3)", ownerBearer, source, team);
     await q("SAVEPOINT unauthorized");
     await expect(
       q("SELECT move_personal_source($1,$2,$3)", id(), source, team),
