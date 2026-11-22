@@ -82,3 +82,64 @@ test("a team admin invites a member, both work in the team library, and a remove
   await expect(page.getByText("신입이 올린 업무").first()).toBeVisible();
   await context.close();
 });
+
+for (const loseResponse of [false, true]) {
+  test(`moves a personal source with response loss=${loseResponse}`, async ({ page }) => {
+    await signUpAndVerify(page, undefined, "이동 담당자");
+    await page.goto("/teams");
+    await page.getByLabel("팀 이름").fill("업무 이동 팀");
+    await page.getByRole("button", { name: "팀 문서함 만들기" }).click();
+    await expect(page.getByRole("heading", { name: "업무 이동 팀", level: 1 })).toBeVisible();
+    await page.goto("/sources/new");
+    await page.getByLabel("자료 제목").fill("옮길 합성 업무");
+    await page
+      .getByLabel("업무 내용", { exact: true })
+      .fill("승인을 확인한 뒤 계정을 발급하고 결과를 기록합니다. ".repeat(10));
+    await page.getByRole("button", { name: "원본 등록", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "옮길 합성 업무" })).toBeVisible();
+    const sourceUrl = page.url();
+    const move = page.getByRole("region", { name: "팀 문서함으로 업무 이동" });
+    await expect(move).toBeVisible();
+    const submit = move.getByRole("button", { name: "이 업무를 팀으로 옮기기" });
+    await expect(submit).toBeDisabled();
+    await move.getByLabel("옮길 팀 문서함").selectOption({ label: "업무 이동 팀" });
+    await expect(submit).toBeDisabled();
+    await move.getByRole("checkbox").check();
+    let release!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let intercepted = false;
+    await page.route("**/api/sources/*/move", async (route) => {
+      intercepted = true;
+      await ready;
+      const response = await route.fetch();
+      expect(response.status()).toBe(200);
+      if (loseResponse) await route.abort("failed");
+      else await route.fulfill({ response });
+    });
+    await submit.click();
+    try {
+      await expect.poll(() => intercepted).toBe(true);
+      await expect(page.getByRole("button", { name: "원본 수정", exact: true })).toBeDisabled();
+    } finally {
+      release();
+    }
+    if (loseResponse) {
+      await expect(submit).toBeDisabled();
+      await page.getByRole("button", { name: "선택한 팀에서 업무 확인" }).click();
+    } else {
+      await expect(page.getByRole("heading", { name: "팀 문서함으로 옮겼습니다" })).toBeVisible();
+      await page.getByRole("button", { name: "팀 문서함에서 열기" }).click();
+    }
+    await expect(page).toHaveURL(sourceUrl);
+    await expect(page.getByRole("heading", { name: "옮길 합성 업무" })).toBeVisible();
+    await expect(page.getByLabel("문서함 전환").locator("option:checked")).toHaveText(
+      "업무 이동 팀",
+    );
+    await expect(page.getByRole("region", { name: "팀 문서함으로 업무 이동" })).toHaveCount(0);
+    await page.getByLabel("문서함 전환").selectOption({ label: "내 문서함" });
+    await expect(page.getByRole("heading", { name: "업무 문서함", level: 1 })).toBeVisible();
+    await expect(page.getByText("옮길 합성 업무")).toHaveCount(0);
+  });
+}

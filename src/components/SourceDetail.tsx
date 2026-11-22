@@ -16,6 +16,8 @@ import {
 import { type ManualDraft, SourceInputSchema } from "../lib/schemas";
 import { FileVersions } from "./FileVersions";
 import { SourceDelete } from "./SourceDelete";
+import { SourceMove } from "./SourceMove";
+import { switchWorkspace } from "./Teams";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 
 const readyTemplatesSchema = z.array(
@@ -48,6 +50,7 @@ export function SourceDetail({
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [movedTarget, setMovedTarget] = useState("");
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   // 확정된 양식이 있으면 "매뉴얼 만들기"에서 고른다. 기본 양식이 먼저 선택돼 있다.
   const [templates, setTemplates] = useState<z.infer<typeof readyTemplatesSchema>>([]);
@@ -56,6 +59,9 @@ export function SourceDetail({
   const [templatesError, setTemplatesError] = useState("");
   const [templateAttempt, setTemplateAttempt] = useState(0);
   const sourceReady = source?.id === id;
+  useEffect(() => {
+    if (id !== source?.id) setMovedTarget("");
+  }, [id, source?.id]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: 재시도 버튼이 같은 목록 요청을 다시 실행한다.
   useEffect(() => {
     if (reader || !sourceReady) return;
@@ -232,6 +238,34 @@ export function SourceDetail({
       setBusy(false);
     }
   }
+  if (movedTarget)
+    return (
+      <section aria-label="업무 이동 완료">
+        <h1>팀 문서함으로 옮겼습니다</h1>
+        <p>관련 AI 질문 기록은 삭제됐습니다. 공유 링크는 계속 사용할 수 있습니다.</p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            setError("");
+            try {
+              await switchWorkspace(movedTarget, `/sources/${id}`);
+            } catch (error) {
+              setError(await message(error));
+              setBusy(false);
+            }
+          }}
+        >
+          팀 문서함에서 열기
+        </button>
+        {error && (
+          <p role="alert" className="error">
+            {error}
+          </p>
+        )}
+      </section>
+    );
   if (!source)
     return (
       <>
@@ -321,6 +355,9 @@ export function SourceDetail({
         <p className="notice" role="status">
           문서 확인이 완료되기 전에는 매뉴얼을 만들거나 게시할 수 없습니다.
         </p>
+      )}
+      {!reader && (
+        <SourceMove id={id} disabled={busy || editing} onBusy={setBusy} onMoved={setMovedTarget} />
       )}
       {busy && <p role="status">요청을 처리하고 있습니다.</p>}
       {source.canDelete ? (
@@ -428,7 +465,12 @@ export function SourceDetail({
                   </section>
                 ))}
               {!reader && (
-                <button type="button" className="secondary" onClick={() => setEditing(true)}>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => setEditing(true)}
+                >
                   원본 수정
                 </button>
               )}
