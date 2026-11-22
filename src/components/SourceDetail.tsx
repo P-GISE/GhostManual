@@ -465,7 +465,12 @@ export function SourceDetail({
                   </section>
                 ))}
               {!reader && (
-                <button type="button" className="secondary" onClick={() => setEditing(true)}>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => setEditing(true)}
+                >
                   원본 수정
                 </button>
               )}

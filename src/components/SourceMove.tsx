@@ -1,7 +1,9 @@
 "use client";
+import { HTTPError } from "ky";
 import { useEffect, useId, useState } from "react";
 import { z } from "zod";
 import { http, message, read } from "../lib/client";
+import { switchWorkspace } from "./Teams";
 
 const workspaces = z.array(
   z.object({
@@ -26,6 +28,7 @@ export function SourceMove({
   const [target, setTarget] = useState("");
   const [confirm, setConfirm] = useState(false);
   const [error, setError] = useState("");
+  const [uncertain, setUncertain] = useState(false);
   useEffect(() => {
     let active = true;
     read("/api/workspaces", workspaces)
@@ -43,12 +46,14 @@ export function SourceMove({
     if (!confirm || !target) return;
     onBusy(true);
     setError("");
+    setUncertain(false);
     try {
       await http.post(`/api/sources/${id}/move`, {
         json: { targetWorkspaceId: target, acknowledgeAiHistoryDeletion: true },
       });
       onMoved(target);
     } catch (error) {
+      setUncertain(!(error instanceof HTTPError));
       setError(await message(error));
     } finally {
       onBusy(false);
@@ -69,6 +74,7 @@ export function SourceMove({
         onChange={(event) => {
           setTarget(event.target.value);
           setConfirm(false);
+          setUncertain(false);
         }}
       >
         <option value="">팀을 선택하세요</option>
@@ -95,6 +101,30 @@ export function SourceMove({
       >
         이 업무를 팀으로 옮기기
       </button>
+      {uncertain && (
+        <>
+          <p>
+            응답을 받지 못했습니다. 선택한 팀에서 업무를 확인하세요. 업무가 없으면 개인 문서함으로
+            돌아와 다시 시도하세요.
+          </p>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={async () => {
+              onBusy(true);
+              try {
+                await switchWorkspace(target, `/sources/${id}`);
+              } catch (error) {
+                setError(await message(error));
+              } finally {
+                onBusy(false);
+              }
+            }}
+          >
+            선택한 팀에서 업무 확인
+          </button>
+        </>
+      )}
       {error && (
         <p role="alert" className="error">
           {error}
