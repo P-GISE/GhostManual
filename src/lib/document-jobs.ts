@@ -17,11 +17,13 @@ export type DocumentJob = {
   format: DocumentFormat;
   bytes: Buffer;
 };
+const authorizedUploader = `(se.user_id IS NULL OR (u.terms_agreed_at IS NOT NULL AND (w.user_id=se.user_id OR EXISTS (SELECT 1 FROM workspace_members wm WHERE wm.workspace_id=w.id AND wm.user_id=se.user_id))))`;
+
 export async function claimDocumentJob(): Promise<DocumentJob | null> {
   return transaction(async (db) => {
     await db.query("SELECT pg_advisory_xact_lock(782402)");
     await db.query(
-      `UPDATE document_jobs j SET status='failed',lease_token=NULL,lease_until=NULL WHERE j.status IN ('queued','processing') AND NOT EXISTS(SELECT 1 FROM sessions se JOIN workspaces w ON w.id=se.workspace_id LEFT JOIN users u ON u.id=se.user_id WHERE se.id=j.session_id AND se.workspace_id=j.workspace_id AND se.role='owner' AND se.expires_at>now() AND w.expires_at>now() AND (se.user_id IS NULL OR u.terms_agreed_at IS NOT NULL))`,
+      `UPDATE document_jobs j SET status='failed',lease_token=NULL,lease_until=NULL WHERE j.status IN ('queued','processing') AND NOT EXISTS(SELECT 1 FROM sessions se JOIN workspaces w ON w.id=se.workspace_id LEFT JOIN users u ON u.id=se.user_id WHERE se.id=j.session_id AND se.workspace_id=j.workspace_id AND se.role='owner' AND se.expires_at>now() AND w.expires_at>now() AND ${authorizedUploader})`,
     );
     await db.query(
       "UPDATE document_jobs SET status='failed',lease_token=NULL,lease_until=NULL WHERE status='processing' AND lease_until<=now() AND attempts>=3",
@@ -42,7 +44,7 @@ export async function claimDocumentJob(): Promise<DocumentJob | null> {
         format: DocumentFormat;
         bytes: Buffer;
       }>(
-        `SELECT j.id,j.workspace_id AS "workspaceId",j.revision_id AS "revisionId",f.file_type AS format,f.content AS bytes FROM document_jobs j JOIN source_files f ON f.revision_id=j.revision_id JOIN workspaces w ON w.id=j.workspace_id JOIN sessions se ON se.id=j.session_id AND se.workspace_id=j.workspace_id LEFT JOIN users u ON u.id=se.user_id WHERE (j.status='queued' OR (j.status='processing' AND j.lease_until<=now())) AND j.attempts<3 AND w.expires_at>now() AND se.expires_at>now() AND se.role='owner' AND (se.user_id IS NULL OR u.terms_agreed_at IS NOT NULL) ORDER BY j.created_at FOR UPDATE OF j SKIP LOCKED LIMIT 1`,
+        `SELECT j.id,j.workspace_id AS "workspaceId",j.revision_id AS "revisionId",f.file_type AS format,f.content AS bytes FROM document_jobs j JOIN source_files f ON f.revision_id=j.revision_id JOIN workspaces w ON w.id=j.workspace_id JOIN sessions se ON se.id=j.session_id AND se.workspace_id=j.workspace_id LEFT JOIN users u ON u.id=se.user_id WHERE (j.status='queued' OR (j.status='processing' AND j.lease_until<=now())) AND j.attempts<3 AND w.expires_at>now() AND se.expires_at>now() AND se.role='owner' AND ${authorizedUploader} ORDER BY j.created_at FOR UPDATE OF j SKIP LOCKED LIMIT 1`,
       )
     ).rows[0];
     if (!row) return null;
@@ -67,7 +69,7 @@ export async function completeDocumentJob(
     if (!workspace.rowCount) return false;
     const row = (
       await db.query<{ source_id: string; revision: number; current: number }>(
-        `SELECT r.source_id,r.revision,s.revision AS current FROM document_jobs j JOIN source_revisions r ON r.id=j.revision_id JOIN sources s ON s.id=r.source_id JOIN sessions se ON se.id=j.session_id AND se.workspace_id=j.workspace_id LEFT JOIN users u ON u.id=se.user_id WHERE j.id=$1 AND j.workspace_id=$2 AND j.revision_id=$3 AND j.status='processing' AND j.lease_token=$4 AND j.lease_until>now() AND se.role='owner' AND se.expires_at>now() AND (se.user_id IS NULL OR u.terms_agreed_at IS NOT NULL) FOR UPDATE OF j`,
+        `SELECT r.source_id,r.revision,s.revision AS current FROM document_jobs j JOIN source_revisions r ON r.id=j.revision_id JOIN sources s ON s.id=r.source_id JOIN sessions se ON se.id=j.session_id AND se.workspace_id=j.workspace_id JOIN workspaces w ON w.id=j.workspace_id LEFT JOIN users u ON u.id=se.user_id WHERE j.id=$1 AND j.workspace_id=$2 AND j.revision_id=$3 AND j.status='processing' AND j.lease_token=$4 AND j.lease_until>now() AND se.role='owner' AND se.expires_at>now() AND ${authorizedUploader} FOR UPDATE OF j`,
         [job.id, job.workspaceId, job.revisionId, job.token],
       )
     ).rows[0];

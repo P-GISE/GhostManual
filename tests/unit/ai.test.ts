@@ -205,9 +205,10 @@ it("does not retry timed out requests", async () => {
   stall = true;
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("fixture address unavailable");
-  setAITransportForTest({ baseURL: `http://127.0.0.1:${address.port}/v1`, timeout: 30 });
+  // 30ms로 두면 바쁜 기계에서 요청이 서버에 닿기도 전에 시간이 다 돼 calls가 0으로 남는다.
+  setAITransportForTest({ baseURL: `http://127.0.0.1:${address.port}/v1`, timeout: 500 });
   await expect(generateManual(source)).rejects.toMatchObject({ code: "ai_timeout" });
-  expect(calls).toBe(1);
+  await vi.waitFor(() => expect(calls).toBe(1));
 });
 it("rejects fixture configuration outside test", () => {
   vi.stubEnv("NODE_ENV", "production");

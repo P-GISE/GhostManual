@@ -110,7 +110,11 @@ export async function ask(
     );
   }
   const history = await previousTurns(ctx, parsed.after ?? []);
-  const blocked = !(await workspaceAiAllowed(ctx.workspaceId));
+  const blocked = !(await workspaceAiAllowed(
+    ctx.workspaceId,
+    undefined,
+    ctx.role === "owner" ? ctx.userId : null,
+  ));
   const aiOff =
     process.env["AI_ENABLED"] !== "true" || !process.env["ANTHROPIC_API_KEY"] || blocked;
   let operationId: string | null = null;

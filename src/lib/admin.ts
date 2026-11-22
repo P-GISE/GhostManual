@@ -196,18 +196,25 @@ export async function adminEvents(ctx: SessionContext, limit: number) {
   });
 }
 // The workspace owner's settings: guest (non-account) workspaces keep the defaults.
-async function ownerSettings(db: Pick<DbClient, "query">, workspaceId: string) {
+// 팀 문서함에는 주인 계정이 없다. AI 허용은 요청한 계정(requesterId)의 설정을 보고, 저장 한도는 기본값을 쓴다.
+async function ownerSettings(
+  db: Pick<DbClient, "query">,
+  workspaceId: string,
+  requesterId: string | null = null,
+) {
   const row = await db.query<{ ai_allowed: boolean; storage_limit_bytes: string | null }>(
-    "SELECT u.ai_allowed,u.storage_limit_bytes FROM workspaces w JOIN users u ON u.id=w.user_id WHERE w.id=$1",
-    [workspaceId],
+    "SELECT u.ai_allowed,CASE WHEN w.user_id IS NULL THEN NULL ELSE u.storage_limit_bytes END AS storage_limit_bytes FROM workspaces w JOIN users u ON u.id=COALESCE(w.user_id,$2::uuid) WHERE w.id=$1",
+    [workspaceId, requesterId],
   );
   return row.rows[0];
 }
+// requesterId: 팀 문서함에서 요청한 계정. 공유 독자의 질문에는 넘기지 않는다(계정별 차단을 적용하지 않는다).
 export async function workspaceAiAllowed(
   workspaceId: string,
   db: Pick<DbClient, "query"> = pool,
+  requesterId: string | null = null,
 ): Promise<boolean> {
-  return (await ownerSettings(db, workspaceId))?.ai_allowed ?? true;
+  return (await ownerSettings(db, workspaceId, requesterId))?.ai_allowed ?? true;
 }
 export async function workspaceStorageLimit(db: DbClient, workspaceId: string): Promise<number> {
   const limit = (await ownerSettings(db, workspaceId))?.storage_limit_bytes;
