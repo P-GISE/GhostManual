@@ -111,3 +111,49 @@ test("template polling recovers after a temporary server error", async ({ page }
   expect(attempts).toBeGreaterThan(1);
   await expect(page.locator(".error[role=alert]")).toHaveCount(0);
 });
+
+test("template save locks item edits and failure retains navigation protection", async ({
+  page,
+}) => {
+  await signUpAndVerify(page);
+  const id = crypto.randomUUID();
+  const stored = {
+    id,
+    name: "합성 양식",
+    status: "ready",
+    isDefault: true,
+    extraction: null,
+    items: [{ id: "completion", name: "완료 기준", guide: "", kind: "text" }],
+  };
+  let release = () => {};
+  const response = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/templates/" + id, async (route) => {
+    if (route.request().method() === "PATCH") {
+      await response;
+      await route.fulfill({ status: 503, json: { error: { message: "시험 저장 실패" } } });
+    } else await route.fulfill({ json: stored });
+  });
+  await page.goto("/templates/" + id);
+  await page.getByLabel("항목 1 이름").fill("유지할 항목");
+  await page.getByRole("button", { name: "항목 확정", exact: true }).click();
+  try {
+    await expect(page.getByLabel("항목 1 이름")).toBeDisabled();
+    await expect(page.getByLabel("항목 1 작성 안내")).toBeDisabled();
+    await expect(page.getByLabel("항목 1 형태")).toBeDisabled();
+    await expect(page.getByRole("button", { name: "항목 추가", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "항목 1 지우기", exact: true })).toBeDisabled();
+  } finally {
+    release();
+  }
+  await expect(page.getByText("시험 저장 실패", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("항목 1 이름")).toBeEnabled();
+  await expect(page.getByLabel("항목 1 이름")).toHaveValue("유지할 항목");
+  page.once("dialog", async (dialog) => {
+    expect(dialog.type()).toBe("confirm");
+    await dialog.dismiss();
+  });
+  await page.getByRole("link", { name: "양식 목록", exact: true }).click();
+  await expect(page).toHaveURL("/templates/" + id);
+});
