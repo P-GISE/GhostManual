@@ -24,6 +24,10 @@ const SourceViewSchema = z.object({
     .optional(),
   uploadedByName: z.string().nullable(),
   uploadedByDepartment: z.string().nullable(),
+  // 팀 문서함에서만 채운다: 이 업무를 처음 올린 사람의 당시 이름.
+  createdByName: z.string().nullable(),
+  // 팀원은 본인이 올린 업무만 지울 수 있다. 화면이 삭제 조작을 숨기는 데 쓰고, 실제 검사는 삭제 API가 한다.
+  canDelete: z.boolean(),
 });
 export type SourceView = z.infer<typeof SourceViewSchema>;
 export const fileReadonly = () =>
@@ -80,11 +84,16 @@ export async function sourceInTransaction(
   revision?: number,
 ): Promise<SourceView> {
   const found = await db.query<Record<string, unknown>>(
-    `SELECT s.id,r.id AS "revisionId",r.revision,r.title,r.text,r.created_at AS "createdAt",s.kind,s.file_type AS "fileType",r.uploaded_by_name AS "uploadedByName",r.uploaded_by_department AS "uploadedByDepartment" FROM sources s JOIN source_revisions r ON r.source_id=s.id AND r.revision=COALESCE($3,s.revision) WHERE s.id=$1 AND s.workspace_id=$2 AND ($4::uuid IS NULL OR EXISTS(SELECT 1 FROM manuals m WHERE m.id=$4 AND m.source_id=s.id AND m.published_version IS NOT NULL AND m.needs_review=false AND EXISTS(SELECT 1 FROM manual_versions mv WHERE mv.manual_id=m.id AND mv.version=m.published_version AND mv.source_revision_id=r.id)))`,
+    `SELECT s.id,r.id AS "revisionId",r.revision,r.title,r.text,r.created_at AS "createdAt",s.kind,s.file_type AS "fileType",r.uploaded_by_name AS "uploadedByName",r.uploaded_by_department AS "uploadedByDepartment",s.created_by AS "createdBy",(SELECT first.uploaded_by_name FROM source_revisions first WHERE first.source_id=s.id AND first.revision=1) AS "firstUploader" FROM sources s JOIN source_revisions r ON r.source_id=s.id AND r.revision=COALESCE($3,s.revision) WHERE s.id=$1 AND s.workspace_id=$2 AND ($4::uuid IS NULL OR EXISTS(SELECT 1 FROM manuals m WHERE m.id=$4 AND m.source_id=s.id AND m.published_version IS NOT NULL AND m.needs_review=false AND EXISTS(SELECT 1 FROM manual_versions mv WHERE mv.manual_id=m.id AND mv.version=m.published_version AND mv.source_revision_id=r.id)))`,
     [id, ctx.workspaceId, revision ?? null, ctx.manualId],
   );
   if (!found.rows[0]) throw new AppError("not_found", 404, "자료를 찾을 수 없습니다.");
-  const source = SourceViewSchema.parse(found.rows[0]);
+  const { createdBy, firstUploader, ...row } = found.rows[0];
+  const source = SourceViewSchema.parse({
+    ...row,
+    createdByName: ctx.teamRole ? (firstUploader ?? null) : null,
+    canDelete: ctx.role === "owner" && (ctx.teamRole !== "member" || createdBy === ctx.userId),
+  });
   if (source.kind === "file" && source.fileType !== "xlsx") {
     const state = await db.query(
       `SELECT j.status, r.reason, COALESCE(r.coverage,'[]'::jsonb) AS coverage,r.id AS "resultId" FROM document_jobs j LEFT JOIN document_results r ON r.revision_id=j.revision_id WHERE j.revision_id=$1`,
