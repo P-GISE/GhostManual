@@ -49,6 +49,23 @@ it("counts failures toward five daily workspace generations", async () => {
   ).rejects.toMatchObject({ httpStatus: 429 });
 });
 
+it("skips workspace ceilings but keeps the global one when AI_WORKSPACE_LIMITS is off", async () => {
+  vi.stubEnv("AI_WORKSPACE_LIMITS", "off");
+  const ctx = await requireSession((await createWorkspace()).token);
+  for (let n = 0; n < 6; n++) {
+    const lease = await reserveAiAttempt(ctx, {
+      kind: "generate",
+      key: newId(),
+      payloadHash: String(n),
+    });
+    await finishOperation(lease.id, { errorCode: "timeout" });
+  }
+  vi.stubEnv("AI_DAILY_LIMIT", "1");
+  await expect(
+    reserveAiAttempt(ctx, { kind: "generate", key: newId(), payloadHash: "over" }),
+  ).rejects.toMatchObject({ code: "daily_limit", httpStatus: 429 });
+});
+
 it("shares the twenty-question ceiling across sessions of one workspace", async () => {
   const { freshToken, tokenHash } = await import("../../src/lib/session.ts");
   const ctx = await requireSession((await createWorkspace()).token);
