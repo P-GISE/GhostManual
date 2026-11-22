@@ -61,7 +61,11 @@ export async function reserveAiAttempt(
     const day = "(now() AT TIME ZONE 'UTC')::date";
     const scopes = [
       { scope: "global", kind: "all", max: Number(process.env["AI_DAILY_LIMIT"] ?? 100) },
-      { scope: ctx.workspaceId, kind: input.kind, max: input.kind === "generate" ? 5 : 20 },
+      {
+        scope: ctx.workspaceId,
+        kind: input.kind,
+        max: workspaceMax(input.kind === "generate" ? 5 : 20),
+      },
     ];
     for (const quota of scopes) {
       const count = await db.query<Record<string, unknown>>(
@@ -87,6 +91,9 @@ export async function reserveAiAttempt(
     return { ...operationSchema.parse(result.rows[0]), isNew: true };
   });
 }
+// 시연 기간처럼 문서함별 하루 한도를 잠시 풀 때 쓴다. 서비스 전체 한도(AI_DAILY_LIMIT)는 그대로 적용된다.
+const workspaceMax = (max: number) =>
+  process.env["AI_WORKSPACE_LIMITS"] === "off" ? Number.POSITIVE_INFINITY : max;
 export async function finishOperation(
   id: string,
   outcome: { result?: unknown; errorCode?: string },
@@ -133,7 +140,7 @@ async function reserveDailyAi(ctx: SessionContext, kind: string, max: number): P
     const day = "(now() AT TIME ZONE 'UTC')::date";
     const scopes = [
       { scope: "global", kind: "all", max: Number(process.env["AI_DAILY_LIMIT"] ?? 100) },
-      { scope: ctx.workspaceId, kind, max },
+      { scope: ctx.workspaceId, kind, max: workspaceMax(max) },
     ];
     for (const quota of scopes) {
       const count = await db.query<{ attempts: number }>(
