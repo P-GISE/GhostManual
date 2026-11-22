@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { http, message, read } from "../lib/client";
+import { useWorkspaceName } from "./Teams";
 
 export const templateStatusText = {
   reading: "읽는 중",
@@ -22,6 +23,7 @@ const listSchema = z.array(
   }),
 );
 export function TemplateList() {
+  const workspaceName = useWorkspaceName();
   const router = useRouter();
   const [templates, setTemplates] = useState<z.infer<typeof listSchema> | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -50,7 +52,7 @@ export function TemplateList() {
   }
   return (
     <>
-      <span className="eyebrow">내 문서함</span>
+      <span className="eyebrow">{workspaceName}</span>
       <h1>양식</h1>
       <p className="muted">
         회사에서 쓰는 인수인계 양식을 등록하면 그 양식의 항목에 맞춰 매뉴얼을 만들 수 있습니다.

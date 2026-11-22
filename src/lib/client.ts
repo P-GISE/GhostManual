@@ -32,6 +32,8 @@ export const fileTypeLabels: Record<string, string> = {
   pdf: "PDF",
 };
 export const sourceSchema = z.object({
+  createdByName: z.string().nullable().default(null),
+  canDelete: z.boolean().default(true),
   id: z.uuid(),
   revisionId: z.uuid(),
   revision: z.number(),
