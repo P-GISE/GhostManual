@@ -63,6 +63,9 @@ test("a team admin invites a member, both work in the team library, and a remove
   await page.getByLabel("문서함 전환").selectOption({ label: "정산팀" });
   await expect(page.getByLabel("문서함 전환").locator("option:checked")).toHaveText("정산팀");
   await expect(page.getByText("신입이 올린 업무").first()).toBeVisible();
+  await expect(page.getByText("올린 사람 신입", { exact: true })).toBeVisible();
+  // 문서함 머리글도 팀 이름으로 바뀐다.
+  await expect(page.locator(".eyebrow").filter({ hasText: "정산팀" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
   // 내보내면 신입은 다음 요청에서 내 문서함으로 돌아가고, 올린 업무는 팀에 남는다.

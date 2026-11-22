@@ -20,6 +20,17 @@ export async function switchWorkspace(workspaceId: string | null, to = "/manuals
   window.location.assign(to);
 }
 
+// 지금 보고 있는 문서함의 이름. 팀 문서함이면 팀 이름, 아니면(또는 아직 모르면) "내 문서함".
+export function useWorkspaceName() {
+  const [name, setName] = useState("내 문서함");
+  useEffect(() => {
+    read("/api/workspaces", workspacesSchema)
+      .then((list) => setName(list.find((workspace) => workspace.current)?.name ?? "내 문서함"))
+      .catch(() => {});
+  }, []);
+  return name;
+}
+
 // 상단 메뉴의 문서함 전환. 속한 팀이 없으면 "팀 문서함" 링크만 보인다.
 export function WorkspaceSwitch() {
   const [workspaces, setWorkspaces] = useState<z.infer<typeof workspacesSchema>>([]);

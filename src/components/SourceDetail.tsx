@@ -323,12 +323,16 @@ export function SourceDetail({
         </p>
       )}
       {busy && <p role="status">요청을 처리하고 있습니다.</p>}
-      <SourceDelete
-        confirmed={deleteConfirmed}
-        disabled={busy || editing}
-        onConfirm={setDeleteConfirmed}
-        onDelete={remove}
-      />
+      {source.canDelete ? (
+        <SourceDelete
+          confirmed={deleteConfirmed}
+          disabled={busy || editing}
+          onConfirm={setDeleteConfirmed}
+          onDelete={remove}
+        />
+      ) : (
+        <p className="help">이 업무는 올린 사람과 팀 관리자만 삭제할 수 있습니다.</p>
+      )}
     </aside>
   );
   if (source.kind === "file")
