@@ -61,7 +61,12 @@ it("freezes the file change history into the published version", async () => {
     skipped: false,
   });
   await answerQuestion(ctx, v1.id, 2, question.id, { answer: "나중에 고친 답변" });
+  await pool.query(
+    "UPDATE revision_questions SET followup_checked_at=now(),followup_question='나중에 만든 후속 질문' WHERE id=$1",
+    [question.id],
+  );
   const after = await getManual(ctx, draft.id);
+  expect(after.published?.history?.revisions[1]?.questions[0]).not.toHaveProperty("followup");
   expect(after.published?.history?.revisions[1]?.questions[0]?.answer).toBe("거래처별 보고용");
 });
 it("keeps history null for text manuals", async () => {
