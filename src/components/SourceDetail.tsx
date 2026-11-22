@@ -421,6 +421,7 @@ export function SourceDetail({
               <label htmlFor="title">제목</label>
               <input
                 id="title"
+                disabled={busy}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 maxLength={120}
@@ -428,6 +429,7 @@ export function SourceDetail({
               <label htmlFor="text">원본 내용</label>
               <textarea
                 id="text"
+                disabled={busy}
                 rows={18}
                 value={text}
                 onChange={(e) => setText(e.target.value)}

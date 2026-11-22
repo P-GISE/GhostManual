@@ -124,6 +124,7 @@ export function ManualEditor({ id }: { readonly id: string }) {
           </p>
           <label>
             <input
+              disabled={busy}
               type="checkbox"
               checked={reviewedSource}
               onChange={(event) => setReviewedSource(event.target.checked)}
@@ -166,6 +167,7 @@ export function ManualEditor({ id }: { readonly id: string }) {
                   <button
                     type="button"
                     className="secondary"
+                    disabled={busy}
                     aria-label={`${section.name} 답하기`}
                     onClick={() => document.getElementById(section.id)?.focus()}
                   >
@@ -175,6 +177,7 @@ export function ManualEditor({ id }: { readonly id: string }) {
                     <button
                       type="button"
                       className="secondary"
+                      disabled={busy}
                       aria-label={`${section.name} 해당 없음`}
                       onClick={() => setDraft(withSection(draft, section.id, null))}
                     >
@@ -191,6 +194,7 @@ export function ManualEditor({ id }: { readonly id: string }) {
         <section className="editor-form">
           <label htmlFor="manual-title">매뉴얼 제목</label>
           <input
+            disabled={busy}
             id="manual-title"
             value={draft.title}
             maxLength={120}
@@ -203,6 +207,7 @@ export function ManualEditor({ id }: { readonly id: string }) {
             <div key={section.id}>
               <label htmlFor={section.id}>{section.name}</label>
               <textarea
+                disabled={busy}
                 id={section.id}
                 rows={section.kind === "list" ? 4 : 3}
                 value={
@@ -242,6 +247,7 @@ export function ManualEditor({ id }: { readonly id: string }) {
           <div>
             <label htmlFor="unknowns">미확인 항목</label>
             <textarea
+              disabled={busy}
               id="unknowns"
               rows={4}
               value={draft.unknowns.join("\n")}
@@ -263,6 +269,7 @@ export function ManualEditor({ id }: { readonly id: string }) {
         </section>
         <aside>
           <ManualCitationPanel
+            disabled={busy}
             source={source}
             draft={draft}
             setDraft={setDraft}

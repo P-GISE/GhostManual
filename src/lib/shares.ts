@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
-import { assertSession, freshToken, tokenHash } from "./session.ts";
+import { assertSession, freshToken, lockAccountSession, tokenHash } from "./session.ts";
 import {
   ManualIdSchema,
   newId,
@@ -80,7 +80,7 @@ export async function exchangeShare(token: string, viewer: SessionContext) {
     const userId = account.rows[0]?.user_id;
     if (!userId) throw loginRequired();
     const result = await db.query<Record<string, unknown>>(
-      `SELECT sh.id,sh.workspace_id,sh.manual_id,LEAST(sh.expires_at,w.expires_at,now()+interval '30 days') AS expires_at FROM shares sh JOIN workspaces w ON w.id=sh.workspace_id JOIN manuals m ON m.id=sh.manual_id WHERE sh.token_hash=$1 AND sh.revoked_at IS NULL AND sh.expires_at>now() AND w.expires_at>now() AND m.published_version IS NOT NULL AND m.needs_review=false FOR UPDATE OF w`,
+      `SELECT sh.id,sh.workspace_id,sh.manual_id,LEAST(sh.expires_at,w.expires_at,now()+interval '30 days') AS expires_at FROM shares sh JOIN workspaces w ON w.id=sh.workspace_id JOIN manuals m ON m.id=sh.manual_id WHERE sh.token_hash=$1 AND sh.revoked_at IS NULL AND sh.expires_at>now() AND w.expires_at>now() AND m.published_version IS NOT NULL AND m.needs_review=false`,
       [tokenHash(token)],
     );
     const row = result.rows[0];
@@ -93,6 +93,14 @@ export async function exchangeShare(token: string, viewer: SessionContext) {
         expires_at: z.date(),
       })
       .parse(row);
+    await lockAccountSession(db, viewer, share.workspace_id);
+    // Sharing may have been revoked while waiting for the workspace locks.
+    const live = await db.query(
+      "SELECT sh.id FROM shares sh JOIN manuals m ON m.id=sh.manual_id JOIN workspaces w ON w.id=sh.workspace_id WHERE sh.id=$1 AND sh.workspace_id=$2 AND sh.manual_id=$3 AND sh.revoked_at IS NULL AND sh.expires_at>now() AND w.expires_at>now() AND m.published_version IS NOT NULL AND m.needs_review=false",
+      [share.id, share.workspace_id, share.manual_id],
+    );
+    if (!live.rowCount)
+      throw new AppError("share_unavailable", 401, "공유가 만료되거나 취소됐습니다.");
     const sessionToken = freshToken(),
       sessionId = SessionIdSchema.parse(newId());
     await db.query(

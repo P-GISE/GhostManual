@@ -8,7 +8,9 @@ export function ManualCitationPanel({
   draft,
   setDraft,
   invalidReferences,
+  disabled,
 }: {
+  readonly disabled: boolean;
   readonly source: Source;
   readonly draft: ManualDraft;
   readonly setDraft: Dispatch<SetStateAction<ManualDraft | null>>;
@@ -35,6 +37,7 @@ export function ManualCitationPanel({
             <div>
               <label htmlFor={`quote-${index}`}>현재 원본의 인용 문장</label>
               <textarea
+                disabled={disabled}
                 id={`quote-${index}`}
                 value={ref.quote}
                 onChange={(event) =>
@@ -48,6 +51,7 @@ export function ManualCitationPanel({
               />
               <label htmlFor={`paragraph-${index}`}>원본 문단 번호</label>
               <input
+                disabled={disabled}
                 id={`paragraph-${index}`}
                 value={ref.paragraphId}
                 onChange={(event) =>
@@ -61,6 +65,7 @@ export function ManualCitationPanel({
               />
               <button
                 type="button"
+                disabled={disabled}
                 className="secondary"
                 onClick={() =>
                   setDraft({

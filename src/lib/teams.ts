@@ -4,7 +4,7 @@ import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
 import { sendMail } from "./mailer.ts";
 import { removeWorkspace } from "./retention.ts";
-import { freshToken, tokenHash } from "./session.ts";
+import { freshToken, lockAccountSession, tokenHash } from "./session.ts";
 import { newId, type SessionContext } from "./types.ts";
 
 export const TeamNameSchema = z.string().trim().min(1).max(40);
@@ -51,6 +51,7 @@ async function assertOtherAdmin(db: DbClient, teamId: string, userId: string) {
 export async function listWorkspaces(ctx: SessionContext) {
   const userId = account(ctx);
   return transaction(async (db) => {
+    await lockAccountSession(db, ctx);
     const { rows } = await db.query<{ id: string; name: string | null; role: string | null }>(
       `SELECT w.id,w.team_name AS name,m.role FROM workspaces w
         LEFT JOIN workspace_members m ON m.workspace_id=w.id AND m.user_id=$1
@@ -66,7 +67,7 @@ export async function createTeam(ctx: SessionContext, input: unknown) {
   const name = TeamNameSchema.parse(input);
   return transaction(async (db) => {
     // 같은 사람이 동시에 여러 번 만들어도 개수 제한이 지켜지도록 계정 행을 잠근다.
-    await db.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [userId]);
+    await lockAccountSession(db, ctx, ctx.workspaceId, true);
     const count = await db.query<{ count: number }>(
       "SELECT count(*)::int AS count FROM workspace_members WHERE user_id=$1 AND role='admin'",
       [userId],
@@ -124,6 +125,7 @@ export async function renameTeam(ctx: SessionContext, teamId: string, input: unk
   const userId = account(ctx);
   const name = TeamNameSchema.parse(input);
   await transaction(async (db) => {
+    await lockAccountSession(db, ctx, teamId);
     await lockTeam(db, userId, teamId, true);
     await db.query("UPDATE workspaces SET team_name=$2 WHERE id=$1", [teamId, name]);
   });
@@ -134,6 +136,7 @@ export async function renameTeam(ctx: SessionContext, teamId: string, input: unk
 export async function deleteTeam(ctx: SessionContext, teamId: string, confirmName: unknown) {
   const userId = account(ctx);
   await transaction(async (db) => {
+    await lockAccountSession(db, ctx, teamId);
     const team = await lockTeam(db, userId, teamId, true);
     if (confirmName !== team.name)
       throw new AppError("invalid_input", 422, "팀 이름을 정확히 입력하세요.");
@@ -144,6 +147,7 @@ export async function deleteTeam(ctx: SessionContext, teamId: string, confirmNam
 export async function listMembers(ctx: SessionContext, teamId: string) {
   const userId = account(ctx);
   return transaction(async (db) => {
+    await lockAccountSession(db, ctx, teamId);
     const team = await lockTeam(db, userId, teamId);
     const admin = team.role === "admin";
     const members = await db.query(
@@ -176,6 +180,7 @@ export async function changeRole(
 ) {
   const userId = account(ctx);
   await transaction(async (db) => {
+    await lockAccountSession(db, ctx, teamId);
     await lockTeam(db, userId, teamId, true);
     if (role === "member") await assertOtherAdmin(db, teamId, targetId);
     const updated = await db.query(
@@ -190,6 +195,7 @@ export async function changeRole(
 export async function removeMember(ctx: SessionContext, teamId: string, targetId: string) {
   const userId = account(ctx);
   await transaction(async (db) => {
+    await lockAccountSession(db, ctx, teamId);
     await lockTeam(db, userId, teamId, targetId !== userId);
     const target = await db.query<{ role: string }>(
       "SELECT role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2",
@@ -212,6 +218,7 @@ export async function inviteMember(ctx: SessionContext, teamId: string, input: u
   const email = EmailSchema.parse(input);
   const token = freshToken();
   const invite = await transaction(async (db) => {
+    await lockAccountSession(db, ctx, teamId);
     const team = await lockTeam(db, userId, teamId, true);
     const already = await db.query(
       "SELECT 1 FROM workspace_members m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=$1 AND u.email=$2",
@@ -257,6 +264,7 @@ export async function inviteMember(ctx: SessionContext, teamId: string, input: u
 export async function cancelInvite(ctx: SessionContext, teamId: string, inviteId: string) {
   const userId = account(ctx);
   await transaction(async (db) => {
+    await lockAccountSession(db, ctx, teamId);
     await lockTeam(db, userId, teamId, true);
     const removed = await db.query(
       "DELETE FROM workspace_invites WHERE id=$1 AND workspace_id=$2 AND accepted_at IS NULL",
@@ -283,8 +291,14 @@ export async function acceptInvite(ctx: SessionContext, token: unknown) {
     );
     const invite = found.rows[0];
     if (!invite) throw invalid();
+    await lockAccountSession(db, ctx, invite.workspace_id);
+    const live = await db.query(
+      "SELECT id FROM workspace_invites WHERE id=$1 AND token_hash=$2 AND accepted_at IS NULL AND expires_at>now() FOR UPDATE",
+      [invite.id, tokenHash(parsed.data)],
+    );
+    if (!live.rowCount) throw invalid();
     const team = await db.query<{ team_name: string }>(
-      "SELECT team_name FROM workspaces WHERE id=$1 AND team_name IS NOT NULL FOR UPDATE",
+      "SELECT team_name FROM workspaces WHERE id=$1 AND team_name IS NOT NULL",
       [invite.workspace_id],
     );
     const user = await db.query<{ email: string }>(

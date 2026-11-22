@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { http, message } from "../lib/client";
 import { templateStatusText } from "./TemplateList";
+import { useUnsavedChanges } from "./useUnsavedChanges";
 
 const itemShape = { name: z.string(), guide: z.string(), kind: z.enum(["text", "list"]) };
 const templateSchema = z.object({
@@ -34,6 +35,11 @@ export function TemplateDetail({ id }: { readonly id: string }) {
   // 편집 중인 항목. null이면 후보 확인 단계다.
   const [items, setItems] = useState<Item[] | null>(null);
   const [saved, setSaved] = useState("");
+  useUnsavedChanges(
+    !!template &&
+      items !== null &&
+      (template.status !== "ready" || JSON.stringify(items) !== JSON.stringify(template.items)),
+  );
   const reading = !template || template.status === "reading";
   useEffect(() => {
     if (!reading) return;
@@ -164,7 +170,7 @@ export function TemplateDetail({ id }: { readonly id: string }) {
         </p>
       )}
       {template.status === "failed" && !items && (
-        <button type="button" className="secondary" onClick={() => setItems([])}>
+        <button type="button" className="secondary" disabled={busy} onClick={() => setItems([])}>
           직접 입력
         </button>
       )}
@@ -183,12 +189,18 @@ export function TemplateDetail({ id }: { readonly id: string }) {
                 글만 AI로 보냅니다. 지금 {checked.length}개를 골랐습니다.
               </p>
               <div className="actions">
-                <button type="button" className="secondary" onClick={() => setUnchecked([])}>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => setUnchecked([])}
+                >
                   전체 선택
                 </button>
                 <button
                   type="button"
                   className="secondary"
+                  disabled={busy}
                   onClick={() => setUnchecked(candidates.map((c) => c.candidateId))}
                 >
                   전체 해제
@@ -200,6 +212,7 @@ export function TemplateDetail({ id }: { readonly id: string }) {
                     <label className="check">
                       <input
                         type="checkbox"
+                        disabled={busy}
                         checked={!unchecked.includes(candidate.candidateId)}
                         onChange={(event) =>
                           setUnchecked(
@@ -256,6 +269,7 @@ export function TemplateDetail({ id }: { readonly id: string }) {
                 <label htmlFor={`item-name-${index}`}>항목 {index + 1} 이름</label>
                 <input
                   id={`item-name-${index}`}
+                  disabled={busy}
                   value={item.name}
                   maxLength={80}
                   onChange={(event) => edit(index, { name: event.target.value })}
@@ -263,6 +277,7 @@ export function TemplateDetail({ id }: { readonly id: string }) {
                 <label htmlFor={`item-guide-${index}`}>항목 {index + 1} 작성 안내</label>
                 <textarea
                   id={`item-guide-${index}`}
+                  disabled={busy}
                   rows={2}
                   value={item.guide}
                   maxLength={500}
@@ -271,6 +286,7 @@ export function TemplateDetail({ id }: { readonly id: string }) {
                 <label htmlFor={`item-kind-${index}`}>항목 {index + 1} 형태</label>
                 <select
                   id={`item-kind-${index}`}
+                  disabled={busy}
                   value={item.kind}
                   onChange={(event) =>
                     edit(index, { kind: event.target.value === "list" ? "list" : "text" })
@@ -283,7 +299,7 @@ export function TemplateDetail({ id }: { readonly id: string }) {
                   <button
                     type="button"
                     className="secondary"
-                    disabled={index === 0}
+                    disabled={busy || index === 0}
                     aria-label={`항목 ${index + 1} 위로`}
                     onClick={() => move(index, index - 1)}
                   >
@@ -292,7 +308,7 @@ export function TemplateDetail({ id }: { readonly id: string }) {
                   <button
                     type="button"
                     className="secondary"
-                    disabled={index === items.length - 1}
+                    disabled={busy || index === items.length - 1}
                     aria-label={`항목 ${index + 1} 아래로`}
                     onClick={() => move(index, index + 1)}
                   >
@@ -301,6 +317,7 @@ export function TemplateDetail({ id }: { readonly id: string }) {
                   <button
                     type="button"
                     className="secondary"
+                    disabled={busy}
                     aria-label={`항목 ${index + 1} 지우기`}
                     onClick={() => setItems(items.filter((_, at) => at !== index))}
                   >
@@ -314,7 +331,7 @@ export function TemplateDetail({ id }: { readonly id: string }) {
             <button
               type="button"
               className="secondary"
-              disabled={items.length >= 30}
+              disabled={busy || items.length >= 30}
               onClick={() => setItems([...items, { name: "", guide: "", kind: "text" }])}
             >
               항목 추가
@@ -329,7 +346,12 @@ export function TemplateDetail({ id }: { readonly id: string }) {
               {busy ? "저장 중…" : "항목 확정"}
             </button>
             {template.status !== "ready" && candidates.length > 0 && (
-              <button type="button" className="secondary" onClick={() => setItems(null)}>
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy}
+                onClick={() => setItems(null)}
+              >
                 후보로 돌아가기
               </button>
             )}

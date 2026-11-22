@@ -35,6 +35,7 @@ export function useWorkspaceName() {
 export function WorkspaceSwitch() {
   const [workspaces, setWorkspaces] = useState<z.infer<typeof workspacesSchema>>([]);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   useEffect(() => {
     read("/api/workspaces", workspacesSchema)
       .then(setWorkspaces)
@@ -43,26 +44,37 @@ export function WorkspaceSwitch() {
   }, []);
   if (workspaces.length < 2) return null;
   return (
-    <label className="workspace-switch">
-      <span className="visually-hidden">문서함 전환</span>
-      <select
-        value={workspaces.find((workspace) => workspace.current)?.id ?? ""}
-        disabled={busy}
-        onChange={(event) => {
-          setBusy(true);
-          const personal = workspaces.find((workspace) => workspace.name === null)?.id;
-          void switchWorkspace(event.target.value === personal ? null : event.target.value).catch(
-            () => setBusy(false),
-          );
-        }}
-      >
-        {workspaces.map((workspace) => (
-          <option key={workspace.id} value={workspace.id}>
-            {workspace.name ?? "내 문서함"}
-          </option>
-        ))}
-      </select>
-    </label>
+    <>
+      <label className="workspace-switch">
+        <span className="visually-hidden">문서함 전환</span>
+        <select
+          value={workspaces.find((workspace) => workspace.current)?.id ?? ""}
+          disabled={busy}
+          onChange={(event) => {
+            setBusy(true);
+            setError("");
+            const personal = workspaces.find((workspace) => workspace.name === null)?.id;
+            void switchWorkspace(event.target.value === personal ? null : event.target.value).catch(
+              async (e) => {
+                setError(await message(e));
+                setBusy(false);
+              },
+            );
+          }}
+        >
+          {workspaces.map((workspace) => (
+            <option key={workspace.id} value={workspace.id}>
+              {workspace.name ?? "내 문서함"}
+            </option>
+          ))}
+        </select>
+      </label>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </>
   );
 }
 
