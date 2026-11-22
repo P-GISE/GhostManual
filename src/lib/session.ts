@@ -94,9 +94,10 @@ export async function assertSession(db: DbClient, ctx: SessionContext, ownerOnly
     [ctx.workspaceId],
   );
   if (!w.rowCount) throw new AppError("unauthorized", 401, "작업 공간이 만료됐습니다.");
-  const s = await db.query(
-    `SELECT s.id FROM sessions s JOIN workspaces w ON w.id=s.workspace_id LEFT JOIN shares sh ON sh.id=s.share_id LEFT JOIN manuals m ON m.id=sh.manual_id WHERE s.id=$1 AND s.workspace_id=$2 AND s.expires_at>now() AND s.role=$3 AND ${sessionMember} AND (s.role='owner' OR (sh.id=$4 AND sh.revoked_at IS NULL AND sh.expires_at>now() AND m.published_version IS NOT NULL AND m.needs_review=false AND sh.manual_id=$5))`,
+  const s = await db.query<{ team_role: SessionContext["teamRole"] }>(
+    `SELECT (SELECT wm.role FROM workspace_members wm WHERE wm.workspace_id=s.workspace_id AND wm.user_id=s.user_id AND s.role='owner') AS team_role FROM sessions s JOIN workspaces w ON w.id=s.workspace_id LEFT JOIN shares sh ON sh.id=s.share_id LEFT JOIN manuals m ON m.id=sh.manual_id WHERE s.id=$1 AND s.workspace_id=$2 AND s.expires_at>now() AND s.role=$3 AND ${sessionMember} AND (s.role='owner' OR (sh.id=$4 AND sh.revoked_at IS NULL AND sh.expires_at>now() AND m.published_version IS NOT NULL AND m.needs_review=false AND sh.manual_id=$5))`,
     [ctx.sessionId, ctx.workspaceId, ctx.role, ctx.shareId, ctx.manualId],
   );
-  if (!s.rowCount) throw new AppError("unauthorized", 401, "세션 또는 공유가 만료됐습니다.");
+  if (!s.rows[0]) throw new AppError("unauthorized", 401, "세션 또는 공유가 만료됐습니다.");
+  return s.rows[0].team_role;
 }

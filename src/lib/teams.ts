@@ -86,7 +86,7 @@ export async function createTeam(ctx: SessionContext, input: unknown) {
   });
 }
 
-// 전환은 세션의 문서함을 바꾸지 않고 대상 문서함의 세션을 새로 만든다. 이전 세션은 만료까지 남는다.
+// 이전 세션 행은 질문과 작업을 위해 보존하고 브라우저 토큰만 폐기한다.
 // 팀에서 내보내진 직후에도 내 문서함으로 돌아올 수 있도록, 토큰의 계정만 확인하고 현재 문서함의 팀원인지는 보지 않는다.
 export async function switchWorkspace(token: string, workspaceId: string | null) {
   if (!/^[A-Za-z0-9_-]{43}$/.test(token))
@@ -111,6 +111,11 @@ export async function switchWorkspace(token: string, workspaceId: string | null)
       `INSERT INTO sessions(id,workspace_id,token_hash,role,user_id,expires_at) VALUES($1,$2,$3,'owner',$4,now()+interval '${SESSION_DAYS} days') RETURNING expires_at`,
       [newId(), id, tokenHash(next), userId],
     );
+    const revoked = await db.query(
+      "UPDATE sessions SET token_hash=$2 WHERE token_hash=$1 AND role='owner' AND expires_at>now()",
+      [tokenHash(token), tokenHash(freshToken())],
+    );
+    if (!revoked.rowCount) throw new AppError("unauthorized", 401, "로그인이 필요합니다.");
     return { token: next, expiresAt: z.date().parse(created.rows[0]?.expires_at), workspaceId: id };
   });
 }

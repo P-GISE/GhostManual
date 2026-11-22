@@ -22,13 +22,13 @@ export async function deleteWorkspace(owner: SessionContext): Promise<void> {
 }
 export async function deleteSource(owner: SessionContext, id: string): Promise<void> {
   await transaction(async (db) => {
-    await assertSession(db, owner, true);
+    const teamRole = await assertSession(db, owner, true);
     const found = await db.query<{ created_by: string | null }>(
       "SELECT created_by FROM sources WHERE id=$1 AND workspace_id=$2 FOR UPDATE",
       [id, owner.workspaceId],
     );
     if (!found.rows[0]) throw new AppError("not_found", 404, "자료를 찾을 수 없습니다.");
-    if (owner.teamRole === "member" && found.rows[0].created_by !== owner.userId)
+    if (teamRole === "member" && found.rows[0].created_by !== owner.userId)
       throw new AppError("forbidden", 403, "올린 사람과 팀 관리자만 이 업무를 삭제할 수 있습니다.");
     await db.query(
       `DELETE FROM question_runs WHERE workspace_id=$1 AND (

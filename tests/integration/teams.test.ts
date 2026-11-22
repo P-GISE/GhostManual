@@ -1,6 +1,10 @@
 import { afterAll, expect, it } from "vitest";
+import { login } from "../../src/lib/accounts.ts";
 import { workspaceAiAllowed, workspaceStorageLimit } from "../../src/lib/admin.ts";
 import { pool, transaction } from "../../src/lib/db.ts";
+import { claimDocumentJob, completeDocumentJob } from "../../src/lib/document-jobs.ts";
+import { readDocument } from "../../src/lib/documents/read.ts";
+import { createFileSource } from "../../src/lib/file-sources.ts";
 import { publishManual, saveDraft } from "../../src/lib/manuals.ts";
 import { deleteSource, deleteWorkspace } from "../../src/lib/retention.ts";
 import { requireSession } from "../../src/lib/session.ts";
@@ -116,7 +120,8 @@ it("lets members edit everything but delete only what they uploaded", async () =
   await inviteMember(admin.ctx, team.id, member.email);
   await acceptInvite(member.ctx, inviteToken(member.email));
   const adminInTeam = await inTeam(admin.token, team.id);
-  const memberInTeam = await inTeam(member.token, team.id);
+  const memberSession = await switchWorkspace(member.token, team.id);
+  const memberInTeam = await requireSession(memberSession.token);
 
   const byAdmin = await createSource(adminInTeam, exampleSource);
   const byMember = await createSource(memberInTeam, {
@@ -159,6 +164,19 @@ it("lets members edit everything but delete only what they uploaded", async () =
   await expect(deleteTemplate(memberInTeam, template.id)).rejects.toMatchObject({
     httpStatus: 403,
   });
+  await changeRole(adminInTeam, team.id, member.userId, "admin");
+  const demoted = await requireSession(memberSession.token);
+  const otherTemplate = await registerTemplate(
+    adminInTeam,
+    "다른 양식.docx",
+    pack(docx(wp("인계 사유"))),
+  );
+  await changeRole(adminInTeam, team.id, member.userId, "member");
+  await expect(deleteSource(demoted, byAdmin.id)).rejects.toMatchObject({ httpStatus: 403 });
+  await expect(deleteTemplate(demoted, otherTemplate.id)).rejects.toMatchObject({
+    httpStatus: 403,
+  });
+  await deleteTemplate(adminInTeam, otherTemplate.id);
   await deleteTemplate(adminInTeam, template.id);
 
   // AI 차단은 요청한 계정 기준, 저장 한도는 팀이면 100 MiB 고정.
@@ -191,13 +209,14 @@ it("keeps one admin, ends the session of a removed member and deletes a team by 
   const memberSession = await switchWorkspace(member.token, team.id);
   await removeMember(admin.ctx, team.id, member.userId);
   await expect(requireSession(memberSession.token)).rejects.toMatchObject({ httpStatus: 401 });
-  await expect(switchWorkspace(member.token, team.id)).rejects.toMatchObject({ httpStatus: 404 });
+  await expect(switchWorkspace(member.token, team.id)).rejects.toMatchObject({ httpStatus: 401 });
   expect((await getSource(adminInTeam, kept.id)).id).toBe(kept.id);
 
   // 세션이 남아 있는 채로 팀원 자격만 사라진 경우: 요청은 막히고, 같은 토큰으로 내 문서함에 돌아올 수 있다.
   await inviteMember(admin.ctx, team.id, member.email);
   await acceptInvite(member.ctx, inviteToken(member.email));
-  const stale = await switchWorkspace(member.token, team.id);
+  const fresh = await login(member.email, "correct horse 9");
+  const stale = await switchWorkspace(fresh.token, team.id);
   const staleCtx = await requireSession(stale.token);
   await pool.query("DELETE FROM workspace_members WHERE workspace_id=$1 AND user_id=$2", [
     team.id,
@@ -226,4 +245,34 @@ it("limits a person to five teams they manage", async () => {
   for (let index = 0; index < 5; index++) await createTeam(admin.ctx, `팀 ${index + 1}`);
   await expect(createTeam(admin.ctx, "여섯 번째")).rejects.toMatchObject({ code: "team_limit" });
   await expect(createTeam(admin.ctx, "")).rejects.toThrow();
+});
+
+it("rejects document completion after membership is removed while the session still exists", async () => {
+  const admin = await person();
+  const member = await person();
+  const team = await createTeam(admin.ctx, "문서팀");
+  await inviteMember(admin.ctx, team.id, member.email);
+  await acceptInvite(member.ctx, inviteToken(member.email));
+  const memberInTeam = await inTeam(member.token, team.id);
+  const bytes = new TextEncoder().encode("name,value\nA,1");
+  const file = await createFileSource(memberInTeam, {
+    title: "CSV 업무",
+    fileName: "sample.csv",
+    bytes,
+  });
+  const job = await claimDocumentJob();
+  if (!job || job.revisionId !== file.revisionId) throw new Error("Missing test document job");
+  try {
+    await pool.query("DELETE FROM workspace_members WHERE workspace_id=$1 AND user_id=$2", [
+      team.id,
+      member.userId,
+    ]);
+    expect(await completeDocumentJob(job, readDocument("csv", bytes))).toBe(false);
+    expect(
+      (await pool.query("SELECT id FROM document_results WHERE revision_id=$1", [file.revisionId]))
+        .rowCount,
+    ).toBe(0);
+  } finally {
+    await deleteTeam(admin.ctx, team.id, "문서팀");
+  }
 });
