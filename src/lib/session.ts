@@ -106,7 +106,7 @@ export async function assertSession(db: DbClient, ctx: SessionContext, ownerOnly
 export async function lockAccountSession(
   db: DbClient,
   ctx: SessionContext,
-  targetId = ctx.workspaceId,
+  targetId: string = ctx.workspaceId,
   lockUser = false,
 ) {
   await db.query("SELECT id FROM workspaces WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE", [
