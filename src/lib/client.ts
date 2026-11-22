@@ -127,6 +127,7 @@ export const publishedSchema = z.object({
   acknowledgedUnknowns: z.array(z.string()),
   history: z
     .object({
+      v: z.literal(1).optional(),
       revisions: z.array(
         z.object({
           revision: z.number(),
