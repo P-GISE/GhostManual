@@ -143,3 +143,30 @@ for (const loseResponse of [false, true]) {
     await expect(page.getByText("옮길 합성 업무")).toHaveCount(0);
   });
 }
+
+test("workspace switch failure is shown and leaves the current workspace selected", async ({
+  page,
+}) => {
+  await signUpAndVerify(page);
+  const personal = crypto.randomUUID();
+  const team = crypto.randomUUID();
+  await page.route("**/api/workspaces", (route) =>
+    route.fulfill({
+      json: [
+        { id: personal, name: null, role: null, current: true },
+        { id: team, name: "접근이 회수된 팀", role: "member", current: false },
+      ],
+    }),
+  );
+  await page.route("**/api/session/workspace", (route) =>
+    route.fulfill({
+      status: 403,
+      json: { error: { message: "팀 접근 권한이 없습니다." } },
+    }),
+  );
+  await page.goto("/manuals");
+  await page.getByLabel("문서함 전환").selectOption(team);
+  await expect(page.getByText("팀 접근 권한이 없습니다.", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("문서함 전환")).toBeEnabled();
+  await expect(page.getByLabel("문서함 전환")).toHaveValue(personal);
+});
