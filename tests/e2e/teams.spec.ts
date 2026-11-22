@@ -126,6 +126,7 @@ for (const loseResponse of [false, true]) {
       release();
     }
     if (loseResponse) {
+      await expect(submit).toBeDisabled();
       await page.getByRole("button", { name: "선택한 팀에서 업무 확인" }).click();
     } else {
       await expect(page.getByRole("heading", { name: "팀 문서함으로 옮겼습니다" })).toBeVisible();

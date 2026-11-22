@@ -53,7 +53,7 @@ export function SourceMove({
       });
       onMoved(target);
     } catch (error) {
-      setUncertain(!(error instanceof HTTPError));
+      setUncertain(!(error instanceof HTTPError) || error.response.status >= 500);
       setError(await message(error));
     } finally {
       onBusy(false);
@@ -70,7 +70,7 @@ export function SourceMove({
       <select
         id={fieldId}
         value={target}
-        disabled={disabled}
+        disabled={disabled || uncertain}
         onChange={(event) => {
           setTarget(event.target.value);
           setConfirm(false);
@@ -88,7 +88,7 @@ export function SourceMove({
         <input
           type="checkbox"
           checked={confirm}
-          disabled={disabled || !target}
+          disabled={disabled || uncertain || !target}
           onChange={(event) => setConfirm(event.target.checked)}
         />
         관련 AI 질문·답변 기록이 영구 삭제되고 기존 공유 독자 세션이 종료되는 것을 확인했습니다.
@@ -96,7 +96,7 @@ export function SourceMove({
       <button
         type="button"
         className="secondary"
-        disabled={disabled || !target || !confirm}
+        disabled={disabled || uncertain || !target || !confirm}
         onClick={move}
       >
         이 업무를 팀으로 옮기기
