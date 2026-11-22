@@ -154,6 +154,10 @@ it("moves history and links atomically and removes only related AI questions", a
           rev,
         )
       )[0];
+    await q(
+      "UPDATE revision_questions SET followup_checked_at=now(),followup_question='구체적인 이유는?',followup_answer='합성 후속 답',followup_answered_at=now() WHERE id=$1",
+      history,
+    );
     const before = await snapshots();
     expect(before).toBeDefined();
     const questions = () =>

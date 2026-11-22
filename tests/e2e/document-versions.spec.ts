@@ -126,6 +126,13 @@ test("published document Reader cannot request owner-only previous content", asy
   const origin = new URL(url).origin;
   const { context, page: reader } = await openAsNewReader(browser, url, page.viewportSize());
   try {
+    // Navigation can finish before the client exchanges the share token.
+    await expect
+      .poll(
+        async () => (await context.cookies(origin)).some((cookie) => cookie.name === "gm_reader"),
+        { timeout: 15000 },
+      )
+      .toBe(true);
     const response = await reader.request.get(
       `${origin}/api/sources/${sourceId}/revisions/2/document?view=shared`,
     );

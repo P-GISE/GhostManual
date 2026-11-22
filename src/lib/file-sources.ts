@@ -9,7 +9,7 @@ import { type DbClient, transaction } from "./db.ts";
 import { assertDocumentReady, registerDocument } from "./document-sources.ts";
 import { AppError } from "./errors.ts";
 import { fileStem } from "./file-stem.ts";
-import { type ManualDraft, ManualDraftSchema } from "./schemas.ts";
+import { FollowupHistorySchema, type ManualDraft, ManualDraftSchema } from "./schemas.ts";
 import { assertSession } from "./session.ts";
 import { assertSourceWrite, type SourceView, sourceInTransaction, uploader } from "./sources.ts";
 import { newId, type SessionContext } from "./types.ts";
@@ -625,7 +625,12 @@ export const FileHistorySchema = z.object({
         z.object({ kind: z.string(), sheet: z.string().nullable(), range: z.string().nullable() }),
       ),
       questions: z.array(
-        z.object({ question: z.string(), answer: z.string().nullable(), skipped: z.boolean() }),
+        z.object({
+          question: z.string(),
+          answer: z.string().nullable(),
+          skipped: z.boolean(),
+          followup: FollowupHistorySchema.nullable().optional(),
+        }),
       ),
     }),
   ),

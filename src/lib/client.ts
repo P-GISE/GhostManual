@@ -1,6 +1,6 @@
 import ky, { HTTPError } from "ky";
 import { z } from "zod";
-import { ManualDraftSchema } from "./schemas";
+import { FollowupHistorySchema, ManualDraftSchema } from "./schemas";
 
 export const fileTypeSchema = z.enum([
   "xlsx",
@@ -127,6 +127,7 @@ export const publishedSchema = z.object({
   acknowledgedUnknowns: z.array(z.string()),
   history: z
     .object({
+      v: z.literal(1).optional(),
       revisions: z.array(
         z.object({
           revision: z.number(),
@@ -144,7 +145,12 @@ export const publishedSchema = z.object({
             }),
           ),
           questions: z.array(
-            z.object({ question: z.string(), answer: z.string().nullable(), skipped: z.boolean() }),
+            z.object({
+              question: z.string(),
+              answer: z.string().nullable(),
+              skipped: z.boolean(),
+              followup: FollowupHistorySchema.nullable().optional(),
+            }),
           ),
         }),
       ),
