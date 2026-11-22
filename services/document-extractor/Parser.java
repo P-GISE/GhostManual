@@ -1,3 +1,5 @@
+import java.awt.Color;
+import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -120,6 +122,120 @@ public final class Parser {
       if(dict instanceof COSStream stream){try(InputStream in=stream.createInputStream()){byte[] buffer=new byte[8192];int n;while((n=in.read(buffer))!=-1){expanded+=n;if(expanded>20*1024*1024)throw new Limit();}}}
     }else if(value instanceof COSArray array)for(COSBase item:array)inspectPdf(item,visited,depth+1);
   }
+  static boolean dark(int rgb) {
+    return ((rgb>>16)&255)+((rgb>>8)&255)+(rgb&255)<420;
+  }
+  static List<Integer> rules(int[] ink,int first,int last,int span) {
+    List<Integer> result=new ArrayList<>();
+    for(int i=first;i<=last;i++){
+      if(ink[i]*100<span*85)continue;
+      int start=i;
+      while(i<last && ink[i+1]*100>=span*85)i++;
+      result.add((start+i)/2);
+    }
+    return result;
+  }
+  static String ocrPage(BufferedImage page) throws Exception {
+    int width=page.getWidth(),height=page.getHeight();
+    int[] columns=new int[width],rows=new int[height],pixels=new int[width];
+    int left=width,right=-1,top=height,bottom=-1;
+    for(int y=0;y<height;y++){
+      page.getRGB(0,y,width,1,pixels,0,width);
+      for(int x=0;x<width;x++){
+        if(!dark(pixels[x]))continue;
+        columns[x]++;rows[y]++;
+        left=Math.min(left,x);right=Math.max(right,x);
+        top=Math.min(top,y);bottom=y;
+      }
+    }
+    if(right<left)return "";
+    int inkWidth=right-left+1,inkHeight=bottom-top+1;
+    List<Integer> vertical=rules(columns,left,right,inkHeight);
+    List<Integer> horizontal=rules(rows,top,bottom,inkWidth);
+    // shortcut: detect fully ruled grids only, extend when merged or borderless cells are supported.
+    if(vertical.size()>=3 && horizontal.size()>=3 && (vertical.size()-1)*(horizontal.size()-1)<=16
+        && vertical.get(0)-left<=8 && right-vertical.get(vertical.size()-1)<=8
+        && horizontal.get(0)-top<=8 && bottom-horizontal.get(horizontal.size()-1)<=8
+        && spaced(vertical) && spaced(horizontal)){
+      StringJoiner table=new StringJoiner("\n","","\n");
+      for(int row=1;row<horizontal.size();row++){
+        StringJoiner cells=new StringJoiner("\t");
+        for(int col=1;col<vertical.size();col++){
+          cells.add(ocrCell(page,vertical.get(col-1)+5,horizontal.get(row-1)+5,
+              vertical.get(col)-5,horizontal.get(row)-5));
+        }
+        table.add(cells.toString());
+      }
+      return table.toString();
+    }
+    int gutterStart=-1,gutterEnd=-1;
+    for(int x=left+1;x<right;x++){
+      if(columns[x]!=0)continue;
+      int start=x;
+      while(x<right && columns[x]==0)x++;
+      int center=(start+x)/2;
+      if(x-start>=width/20 && center>=width*2/5 && center<=width*3/5
+          && start-left>=width/5 && right-x>=width/5 && x-start>gutterEnd-gutterStart){
+        gutterStart=start;gutterEnd=x;
+      }
+    }
+    if(gutterStart>=0){
+      return ocrRegion(page,left,top,gutterStart,bottom+1,"6").strip()
+          +"\n\n"+ocrRegion(page,gutterEnd,top,right+1,bottom+1,"6").strip()+"\n";
+    }
+    return runOcr(page,"11");
+  }
+  static boolean spaced(List<Integer> rules) {
+    for(int i=1;i<rules.size();i++)if(rules.get(i)-rules.get(i-1)<24)return false;
+    return true;
+  }
+  static String ocrCell(BufferedImage page,int left,int top,int right,int bottom) throws Exception {
+    List<int[]> lines=new ArrayList<>();
+    int start=-1,last=-1;
+    for(int y=top;y<bottom;y++){
+      boolean ink=false;
+      for(int x=left;x<right && !ink;x++)ink=dark(page.getRGB(x,y));
+      if(!ink)continue;
+      if(y-last>8 && start>=0){
+        lines.add(new int[]{start,last+1});
+        start=-1;
+      }
+      if(start<0)start=y;
+      last=y;
+    }
+    if(start<0)return "";
+    if(lines.isEmpty())return ocrRegion(page,left,top,right,bottom,"7").strip();
+    lines.add(new int[]{start,last+1});
+    if(lines.size()>3)return ocrRegion(page,left,top,right,bottom,"6").strip().replace('\n',' ');
+    StringJoiner text=new StringJoiner(" ");
+    for(int[] line:lines)text.add(ocrRegion(page,left,line[0],right,line[1],"7").strip());
+    return text.toString();
+  }
+  static String ocrRegion(BufferedImage page,int left,int top,int right,int bottom,String mode) throws Exception {
+    int padding=12;
+    var crop=new BufferedImage(right-left+2*padding,bottom-top+2*padding,BufferedImage.TYPE_INT_RGB);
+    var graphics=crop.createGraphics();
+    try{
+      graphics.setColor(Color.WHITE);graphics.fillRect(0,0,crop.getWidth(),crop.getHeight());
+      graphics.drawImage(page.getSubimage(left,top,right-left,bottom-top),padding,padding,null);
+    }finally{graphics.dispose();}
+    return runOcr(crop,mode);
+  }
+  static String runOcr(BufferedImage raster,String mode) throws Exception {
+    Path image=Path.of("/tmp/page.png");
+    ImageIO.write(raster,"png",image.toFile());
+    Process process=new ProcessBuilder("/usr/bin/tesseract",image.toString(),"stdout","-l","kor+eng","--psm",mode)
+        .redirectError(ProcessBuilder.Redirect.DISCARD).start();
+    try{
+      byte[] result=process.getInputStream().readNBytes(800001);
+      if(result.length>800000)throw new Limit();
+      if(!process.waitFor(60,TimeUnit.SECONDS) || process.exitValue()!=0)throw new IOException();
+      return new String(result,StandardCharsets.UTF_8);
+    }finally{
+      if(process.isAlive())process.destroyForcibly();
+      Files.deleteIfExists(image);
+    }
+  }
   static void pdf(byte[] bytes) throws Exception {
     try(PDDocument doc=Loader.loadPDF(bytes)){
       if(doc.isEncrypted())throw new Unsafe();
@@ -132,13 +248,7 @@ public final class Parser {
           ocr.set(true); System.out.println("mode\tocr"); System.out.flush();
           var box=doc.getPage(i).getCropBox();
           if(box.getWidth()<=0 || box.getHeight()<=0 || (box.getWidth()*150/72)*(box.getHeight()*150/72)>10000000)throw new Limit();
-          Path image=Path.of("/tmp/page.png"); ImageIO.write(renderer.renderImageWithDPI(i,150),"png",image.toFile());
-          Process process=new ProcessBuilder("/usr/bin/tesseract",image.toString(),"stdout","-l","kor+eng","--psm","3").redirectError(ProcessBuilder.Redirect.DISCARD).start();
-          byte[] result=process.getInputStream().readNBytes(800001);
-          if(result.length>800000){process.destroyForcibly();throw new Limit();}
-          if(!process.waitFor(60,TimeUnit.SECONDS)){process.destroyForcibly();throw new IOException();}
-          if(process.exitValue()!=0)throw new IOException();
-          text=new String(result,StandardCharsets.UTF_8); Files.delete(image);
+          text=ocrPage(renderer.renderImageWithDPI(i,150));
         }
         emit("page","page/"+(i+1),text);
       }
