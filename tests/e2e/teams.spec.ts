@@ -32,7 +32,9 @@ test("a team admin invites a member, both work in the team library, and a remove
   await page.getByLabel("팀 이름").fill("정산팀");
   await page.getByRole("button", { name: "팀 문서함 만들기" }).click();
   await expect(page.getByRole("heading", { name: "정산팀", level: 1 })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "팀원 1명" })).toBeVisible();
+  // 만든 직후에는 안내와 초대가 먼저 나온다.
+  await expect(page.getByText("정산팀 문서함을 만들었습니다.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "새 업무 등록" })).toBeVisible();
 
   // 초대받을 사람이 먼저 가입해 둔다. 초대는 그 이메일 주소에 묶인다.
   const memberEmail = uniqueEmail();
@@ -59,6 +61,9 @@ test("a team admin invites a member, both work in the team library, and a remove
 
   // 팀장은 내 문서함에서는 그 업무가 안 보이고, 팀 문서함으로 전환하면 보인다.
   await page.goto("/manuals");
+  await page.getByLabel("문서함 전환").selectOption({ label: "내 문서함" });
+  await expect(page.getByLabel("문서함 전환").locator("option:checked")).toHaveText("내 문서함");
+  await expect(page.getByRole("heading", { name: "업무 문서함", level: 1 })).toBeVisible();
   await expect(page.getByText("신입이 올린 업무")).toHaveCount(0);
   await page.getByLabel("문서함 전환").selectOption({ label: "정산팀" });
   await expect(page.getByLabel("문서함 전환").locator("option:checked")).toHaveText("정산팀");
@@ -71,9 +76,18 @@ test("a team admin invites a member, both work in the team library, and a remove
   // 내보내면 신입은 다음 요청에서 내 문서함으로 돌아가고, 올린 업무는 팀에 남는다.
   await page.getByRole("link", { name: "팀", exact: true }).click();
   await page.getByRole("link", { name: "정산팀" }).click();
+  // 팀 화면은 업무 탭으로 열리고, 초대와 팀원은 "팀원·초대" 탭에 있다.
+  await expect(page.getByRole("tab", { name: "업무" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tabpanel").getByText("신입이 올린 업무").first()).toBeVisible();
+  await page.getByRole("tab", { name: "팀원·초대" }).click();
+  await expect(page).toHaveURL(/\?tab=members$/);
+  await expect(page.getByLabel("초대할 사람의 이메일")).toBeVisible();
   await expect(page.getByRole("heading", { name: "팀원 2명" })).toBeVisible();
   await page.getByRole("button", { name: "신입 내보내기" }).click();
   await expect(page.getByRole("heading", { name: "팀원 1명" })).toBeVisible();
+  await page.getByRole("tab", { name: "팀 설정" }).click();
+  await expect(page.getByRole("button", { name: "팀 나가기" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "이 팀 문서함 삭제" })).toBeDisabled();
   await memberPage.goto("/manuals");
   await expect(memberPage.getByRole("heading", { name: "업무 문서함", level: 1 })).toBeVisible();
   await expect(memberPage.getByText("신입이 올린 업무")).toHaveCount(0);
@@ -90,6 +104,9 @@ for (const loseResponse of [false, true]) {
     await page.getByLabel("팀 이름").fill("업무 이동 팀");
     await page.getByRole("button", { name: "팀 문서함 만들기" }).click();
     await expect(page.getByRole("heading", { name: "업무 이동 팀", level: 1 })).toBeVisible();
+    // 팀을 만들면 그 팀으로 전환된다. 개인 업무를 만들려고 내 문서함으로 돌아간다.
+    await page.getByLabel("문서함 전환").selectOption({ label: "내 문서함" });
+    await expect(page.getByRole("heading", { name: "업무 문서함", level: 1 })).toBeVisible();
     await page.goto("/sources/new");
     await page.getByLabel("자료 제목").fill("옮길 합성 업무");
     await page

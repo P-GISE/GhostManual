@@ -15,8 +15,10 @@ import {
 import { type RequestStage, requestDiagnostic } from "../lib/request-diagnostic";
 import { RequestDiagnostics, useRequestDiagnostics } from "./RequestDiagnostics";
 import { useWorkspaceName } from "./Teams";
-export function ManualList() {
+// embedded: 팀 화면의 "업무" 탭 안에 넣을 때. 화면 제목은 팀 화면이 갖는다.
+export function ManualList({ embedded = false }: { readonly embedded?: boolean } = {}) {
   const workspaceName = useWorkspaceName();
+  const Heading = embedded ? "h2" : "h1";
   const { record } = useRequestDiagnostics();
   const mounted = useRef(false);
   const [manuals, setManuals] = useState<Manual[]>([]);
@@ -149,7 +151,7 @@ export function ManualList() {
   if (loadError) {
     return (
       <section className="panel">
-        <h1>업무 문서함</h1>
+        <Heading>업무 문서함</Heading>
         <p className="error" role="alert">
           {loadError.message}
         </p>
@@ -178,8 +180,8 @@ export function ManualList() {
     <>
       <div className="section-heading">
         <div>
-          <span className="eyebrow">{workspaceName}</span>
-          <h1>업무 문서함</h1>
+          {!embedded && <span className="eyebrow">{workspaceName}</span>}
+          <Heading>{embedded ? "업무" : "업무 문서함"}</Heading>
           <p className="muted">
             업무 하나에 원본 파일과 매뉴얼이 함께 있습니다. 오른쪽 버튼이 지금 할 일입니다.
           </p>
