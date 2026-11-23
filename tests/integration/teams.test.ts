@@ -1,5 +1,5 @@
 import { afterAll, expect, it } from "vitest";
-import { login } from "../../src/lib/accounts.ts";
+import { login, logout } from "../../src/lib/accounts.ts";
 import { workspaceAiAllowed, workspaceStorageLimit } from "../../src/lib/admin.ts";
 import { pool, transaction } from "../../src/lib/db.ts";
 import { claimDocumentJob, completeDocumentJob } from "../../src/lib/document-jobs.ts";
@@ -274,5 +274,89 @@ it("rejects document completion after membership is removed while the session st
     ).toBe(0);
   } finally {
     await deleteTeam(admin.ctx, team.id, "문서팀");
+  }
+});
+
+it("rejects a cancelled invite after acceptance waits for the team lock", async () => {
+  const admin = await person();
+  const member = await person();
+  const team = await createTeam(admin.ctx, "Invite race");
+  const invite = await inviteMember(admin.ctx, team.id, member.email);
+  const token = inviteToken(member.email);
+  const blocker = await pool.connect();
+  let pending: Promise<unknown> | undefined;
+  try {
+    await blocker.query("BEGIN");
+    await blocker.query("SELECT id FROM workspaces WHERE id=$1 FOR UPDATE", [team.id]);
+    const pid = (await blocker.query("SELECT pg_backend_pid() AS pid")).rows[0].pid as number;
+    pending = acceptInvite(member.ctx, token).catch((error: unknown) => error);
+    await expect
+      .poll(
+        async () =>
+          Number(
+            (
+              await pool.query(
+                "SELECT count(*) AS n FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))",
+                [pid],
+              )
+            ).rows[0].n,
+          ),
+        { timeout: 5000 },
+      )
+      .toBeGreaterThan(0);
+    await blocker.query("DELETE FROM workspace_invites WHERE id=$1", [invite.id]);
+    await blocker.query("COMMIT");
+    expect(await pending).toMatchObject({ httpStatus: 404 });
+    expect(
+      (
+        await pool.query("SELECT 1 FROM workspace_members WHERE workspace_id=$1 AND user_id=$2", [
+          team.id,
+          member.userId,
+        ])
+      ).rowCount,
+    ).toBe(0);
+  } finally {
+    await blocker.query("ROLLBACK");
+    blocker.release();
+    await pending;
+  }
+});
+
+it("rejects a queued team mutation after its session is logged out", async () => {
+  const admin = await person();
+  const team = await createTeam(admin.ctx, "Session race");
+  const blocker = await pool.connect();
+  let pending: Promise<unknown> | undefined;
+  try {
+    await blocker.query("BEGIN");
+    await blocker.query("SELECT id FROM workspaces WHERE id=$1 FOR UPDATE", [team.id]);
+    const pid = (await blocker.query("SELECT pg_backend_pid() AS pid")).rows[0].pid as number;
+    pending = renameTeam(admin.ctx, team.id, "Changed").catch((error: unknown) => error);
+    await expect
+      .poll(
+        async () =>
+          Number(
+            (
+              await pool.query(
+                "SELECT count(*) AS n FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))",
+                [pid],
+              )
+            ).rows[0].n,
+          ),
+        { timeout: 5000 },
+      )
+      .toBeGreaterThan(0);
+    await logout([admin.token]);
+    await blocker.query("COMMIT");
+    expect(await pending).toMatchObject({ httpStatus: 401 });
+    expect(
+      (await pool.query("SELECT team_name FROM workspaces WHERE id=$1", [team.id])).rows[0]
+        .team_name,
+    ).toBe("Session race");
+    await expect(createTeam(admin.ctx, "Stale")).rejects.toMatchObject({ httpStatus: 401 });
+  } finally {
+    await blocker.query("ROLLBACK");
+    blocker.release();
+    await pending;
   }
 });

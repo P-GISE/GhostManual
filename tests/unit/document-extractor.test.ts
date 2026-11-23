@@ -70,6 +70,17 @@ describe("external document boundary", () => {
     ])
       expect(() => validateExtraction(value, "pdf")).toThrow();
   });
+  it("accepts 5000 valid blocks and rejects the next block", () => {
+    const value = valid();
+    value.snapshot.blocks = Array.from({ length: 5000 }, (_, i) => ({
+      kind: "paragraph",
+      path: `paragraph/${i + 1}`,
+      text: "x",
+    }));
+    expect(validateExtraction(value, "pdf").snapshot?.blocks).toHaveLength(5000);
+    value.snapshot.blocks.push({ kind: "paragraph", path: "paragraph/5001", text: "x" });
+    expect(() => validateExtraction(value, "pdf")).toThrow();
+  });
   it("rejects excess pages, characters, blocks and raw error reasons", () => {
     const pages = valid();
     pages.snapshot.blocks = Array.from({ length: 21 }, (_, i) => ({
@@ -82,7 +93,7 @@ describe("external document boundary", () => {
     const blocks = valid();
     blocks.snapshot.blocks = Array.from({ length: 5001 }, () => ({
       kind: "paragraph",
-      path: "p",
+      path: "paragraph/1",
       text: "x",
     }));
     for (const value of [

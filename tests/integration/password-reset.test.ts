@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import {
   confirmPasswordReset,
   login,
@@ -7,6 +7,7 @@ import {
   verifyEmail,
 } from "../../src/lib/accounts.ts";
 import { pool } from "../../src/lib/db.ts";
+import * as passwords from "../../src/lib/passwords.ts";
 import { limitRequest } from "../../src/lib/rate-limit.ts";
 import { requireSession, tokenHash } from "../../src/lib/session.ts";
 import { mailsTo, setupFileMail, uniqueEmail, verificationToken } from "./mail-helper.ts";
@@ -94,4 +95,45 @@ it("limits reset requests per IP and hour", async () => {
   });
   for (let i = 0; i < 5; i++) await limitRequest(request, "reset");
   await expect(limitRequest(request, "reset")).rejects.toMatchObject({ httpStatus: 429 });
+});
+
+it("rejects an old-password login whose verification overlaps a completed reset", async () => {
+  const { email } = await verifiedUser();
+  await requestPasswordReset(email);
+  const token = resetToken(email);
+  let verified!: () => void;
+  let resume!: () => void;
+  const reached = new Promise<void>((resolve) => {
+    verified = resolve;
+  });
+  const gate = new Promise<void>((resolve) => {
+    resume = resolve;
+  });
+  const original = passwords.verifyPassword;
+  const spy = vi.spyOn(passwords, "verifyPassword").mockImplementationOnce(async (...args) => {
+    const valid = await original(...args);
+    verified();
+    await gate;
+    return valid;
+  });
+  const pending = login(email, password).catch((error: unknown) => error);
+  try {
+    await reached;
+    await confirmPasswordReset(token, fresh);
+    resume();
+    expect(await pending).toMatchObject({ httpStatus: 401 });
+    expect(
+      (
+        await pool.query(
+          "SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id WHERE u.email=$1",
+          [email],
+        )
+      ).rowCount,
+    ).toBe(0);
+    expect((await login(email, fresh)).token).toBeTruthy();
+  } finally {
+    resume();
+    spy.mockRestore();
+    await pending;
+  }
 });

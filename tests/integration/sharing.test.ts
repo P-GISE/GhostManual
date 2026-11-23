@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { POST as exchangeRoute } from "../../src/app/api/share/route.ts";
 import { GET as sharingRoute } from "../../src/app/api/shares/route.ts";
+import { logout } from "../../src/lib/accounts.ts";
 import { pool } from "../../src/lib/db.ts";
 import { getManual, publishManual, saveDraft } from "../../src/lib/manuals.ts";
 import { createWorkspace, requireSession } from "../../src/lib/session.ts";
@@ -140,4 +141,46 @@ it("sharing state is visible only to the owner", async () => {
     }),
   );
   expect(response.status).toBe(404);
+});
+
+it("does not issue a reader session after the viewer logs out while exchange waits", async () => {
+  const { owner, manual } = await reviewed();
+  const token = await linkToken(owner, manual.id);
+  const viewer = await signedInUser(mail);
+  const blocker = await pool.connect();
+  let pending: Promise<unknown> | undefined;
+  try {
+    await blocker.query("BEGIN");
+    await blocker.query("SELECT id FROM workspaces WHERE id=$1 FOR UPDATE", [owner.workspaceId]);
+    const pid = (await blocker.query("SELECT pg_backend_pid() AS pid")).rows[0].pid as number;
+    pending = exchangeShare(token, viewer.ctx).catch((error: unknown) => error);
+    await expect
+      .poll(
+        async () =>
+          Number(
+            (
+              await pool.query(
+                "SELECT count(*) AS n FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))",
+                [pid],
+              )
+            ).rows[0].n,
+          ),
+        { timeout: 5000 },
+      )
+      .toBeGreaterThan(0);
+    await logout([viewer.token]);
+    await blocker.query("COMMIT");
+    expect(await pending).toMatchObject({ httpStatus: 401 });
+    expect(
+      (
+        await pool.query("SELECT 1 FROM sessions WHERE user_id=$1 AND role='reader'", [
+          viewer.ctx.userId,
+        ])
+      ).rowCount,
+    ).toBe(0);
+  } finally {
+    await blocker.query("ROLLBACK");
+    blocker.release();
+    await pending;
+  }
 });

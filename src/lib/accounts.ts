@@ -136,6 +136,13 @@ export async function login(rawEmail: string, password: string) {
     if (!user?.password_hash || !valid) throw badCredentials();
     if (!user.email_verified_at)
       throw new AppError("unverified", 403, "이메일 인증을 먼저 완료하세요.");
+    // Match account deletion's workspace-before-user lock order, then reject stale credentials.
+    await db.query("SELECT id FROM workspaces WHERE user_id=$1 ORDER BY id FOR UPDATE", [user.id]);
+    const current = await db.query(
+      "SELECT id FROM users WHERE id=$1 AND password_hash=$2 AND email_verified_at IS NOT NULL FOR SHARE",
+      [user.id, user.password_hash],
+    );
+    if (!current.rowCount) throw badCredentials();
     return {
       ...(await openUserSession(db, user.id)),
       termsRequired: await termsPending(db, user.id),

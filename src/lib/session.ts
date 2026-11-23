@@ -101,3 +101,27 @@ export async function assertSession(db: DbClient, ctx: SessionContext, ownerOnly
   if (!s.rows[0]) throw new AppError("unauthorized", 401, "세션 또는 공유가 만료됐습니다.");
   return s.rows[0].team_role;
 }
+
+// Workspace locks precede account/session locks throughout team and share mutations.
+export async function lockAccountSession(
+  db: DbClient,
+  ctx: SessionContext,
+  targetId: string = ctx.workspaceId,
+  lockUser = false,
+) {
+  await db.query("SELECT id FROM workspaces WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE", [
+    [ctx.workspaceId, targetId],
+  ]);
+  if (ctx.role !== "owner" || !ctx.userId)
+    throw new AppError("unauthorized", 401, "로그인이 필요합니다.");
+  const user = await db.query(
+    `SELECT id FROM users WHERE id=$1 AND terms_agreed_at IS NOT NULL FOR ${lockUser ? "UPDATE" : "SHARE"}`,
+    [ctx.userId],
+  );
+  const session = await db.query(
+    `SELECT s.id FROM sessions s JOIN workspaces w ON w.id=s.workspace_id WHERE s.id=$1 AND s.user_id=$2 AND s.workspace_id=$3 AND s.role='owner' AND s.expires_at>now() AND w.expires_at>now() AND ${sessionMember} FOR SHARE OF s`,
+    [ctx.sessionId, ctx.userId, ctx.workspaceId],
+  );
+  if (!user.rowCount || !session.rowCount)
+    throw new AppError("unauthorized", 401, "로그인이 필요합니다.");
+}
