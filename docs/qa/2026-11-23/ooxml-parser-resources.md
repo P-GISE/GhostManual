@@ -6,7 +6,7 @@
 
 ## 실행 계획
 
-- 공유 서버에서는 fixture 생성·파싱·빌드·부하 실행을 하지 않는다. GitHub runner의 빌드된 검증 이미지에서만 실제 `/app/src/lib`를 호출한다.
+- 공유 서버에서는 fixture 생성·파싱·빌드·부하 실행을 하지 않는다. GitHub runner의 CI에서 빌드한 동일 이미지에서만 실제 `/app/src/lib`를 호출한다.
 - 기존 합성 fixture builder를 재사용한다. 작은 정상 입력, 20MiB 확장 근처의 적은 태그 텍스트, 각 파트 한도 안에서 총 태그가 많은 입력, 한도 초과 거부 입력을 구분한다. 파일·XML·확장 크기와 hash를 기록한다.
 - 2026-11-23 운영 inspect 기준 앱은384MiB·heap256MiB·0.75CPU·memorySwap총768MiB, 워커는192MiB·heap128MiB·0.25CPU·memorySwap총192MiB다. runner의 swap 가용성 차이는 별도로 표시한다.
 - 파싱마다 새 프로세스와 컨테이너를 사용한다. network none·읽기 전용·권한 제거·PID/core 제한을 적용하며 DB·운영 env·socket·실제 업무 자료는 제공하지 않는다. 합성 입력 생성은 측정 프로세스 밖에서 한다.
@@ -19,6 +19,10 @@
 2. GitHub 격리 실행 결과와 JSON artifact로 성공·안전 거부·자원 실패를 구분한다.
 3. 실패가 발견되면 원인을 좁히고 별도 회귀로 재현한 뒤 최소 수정한다. 정책을 느슨하게 바꾸거나 운영 자원을 자동 증설하지 않는다.
 4. workflow 변경은 배포 보호 트리의 검토 대상이다. 이 측정 PR만으로 운영 설정·보호 목록을 바꾸지 않는다.
+
+## 실행 도구
+
+호스트 runner는 `tests/performance/measure-native-documents.ts`이며 테스트 fixture가 제외된 Docker 빌드에 포함하지 않는다. 자식 측정기는 `scripts/native-document-probe-child.ts`에서 실제 이미지의 파서를 호출한다. Docker 빌드·자원 진단을 E2E 앞에 두지만 성공한 CI는 기존 모든 기능·접근성 검증도 통과해야 한다.
 
 ## 결과와 한계
 

@@ -5,7 +5,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { z } from "zod";
-import { docx, hwpx, pack, pptx } from "../tests/fixtures/documents/native/build.ts";
+import { docx, hwpx, pack, pptx } from "../fixtures/documents/native/build.ts";
 
 assert.equal(process.env["GITHUB_ACTIONS"], "true", "probe runs only on GitHub Actions");
 assert.equal(process.platform, "linux");
