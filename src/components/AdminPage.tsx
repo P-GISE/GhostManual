@@ -50,7 +50,7 @@ const limitOptions = [
   { label: "500 MB", value: 500 * MB },
   { label: "1 GB", value: 1024 * MB },
 ];
-function describe(e: AdminEvent) {
+function describeAuditEvent(e: AdminEvent) {
   const who = `${e.adminName ?? "삭제된 관리자"}가 ${e.targetName ?? "삭제된 사용자"}`;
   if (e.field === "admin") return `${who}${e.to ? "를 관리자로 지정" : "의 관리자 권한을 해제"}`;
   if (e.field === "aiAllowed") return `${who}의 AI 사용을 ${e.to ? "허용" : "차단"}`;
@@ -409,7 +409,7 @@ export function AdminPage() {
           <ul className="admin-events">
             {events.map((e) => (
               <li key={e.id}>
-                <span className="help">{kst(e.createdAt)}</span> {describe(e)}
+                <span className="help">{kst(e.createdAt)}</span> {describeAuditEvent(e)}
               </li>
             ))}
           </ul>
