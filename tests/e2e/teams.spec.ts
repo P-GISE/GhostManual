@@ -32,7 +32,9 @@ test("a team admin invites a member, both work in the team library, and a remove
   await page.getByLabel("팀 이름").fill("정산팀");
   await page.getByRole("button", { name: "팀 문서함 만들기" }).click();
   await expect(page.getByRole("heading", { name: "정산팀", level: 1 })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "팀원 1명" })).toBeVisible();
+  // 만든 직후에는 안내와 초대가 먼저 나온다.
+  await expect(page.getByText("정산팀 문서함을 만들었습니다.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "새 업무 등록" })).toBeVisible();
 
   // 초대받을 사람이 먼저 가입해 둔다. 초대는 그 이메일 주소에 묶인다.
   const memberEmail = uniqueEmail();
@@ -49,6 +51,20 @@ test("a team admin invites a member, both work in the team library, and a remove
   await expect(memberPage).toHaveURL(/\/manuals$/);
   await expect(memberPage.getByLabel("문서함 전환")).toHaveValue(/[0-9a-f-]{36}/);
   await expect(memberPage.getByLabel("문서함 전환").locator("option:checked")).toHaveText("정산팀");
+  const teamId = await memberPage.getByLabel("문서함 전환").inputValue();
+  await memberPage.goto(`/teams/${teamId}?created=1`);
+  await expect(memberPage.getByRole("heading", { name: "정산팀", level: 1 })).toBeVisible();
+  await expect(memberPage.getByLabel("초대할 사람의 이메일")).toHaveCount(0);
+  await expect(memberPage.getByText("정산팀 문서함을 만들었습니다.", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(memberPage.getByRole("tab", { name: "업무", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(
+    memberPage.getByRole("tabpanel").getByRole("heading", { name: "업무", exact: true }),
+  ).toBeVisible();
   await memberPage.goto("/sources/new");
   await memberPage.getByLabel("자료 제목").fill("신입이 올린 업무");
   await memberPage
@@ -59,6 +75,9 @@ test("a team admin invites a member, both work in the team library, and a remove
 
   // 팀장은 내 문서함에서는 그 업무가 안 보이고, 팀 문서함으로 전환하면 보인다.
   await page.goto("/manuals");
+  await page.getByLabel("문서함 전환").selectOption({ label: "내 문서함" });
+  await expect(page.getByLabel("문서함 전환").locator("option:checked")).toHaveText("내 문서함");
+  await expect(page.getByRole("heading", { name: "업무 문서함", level: 1 })).toBeVisible();
   await expect(page.getByText("신입이 올린 업무")).toHaveCount(0);
   await page.getByLabel("문서함 전환").selectOption({ label: "정산팀" });
   await expect(page.getByLabel("문서함 전환").locator("option:checked")).toHaveText("정산팀");
@@ -71,9 +90,18 @@ test("a team admin invites a member, both work in the team library, and a remove
   // 내보내면 신입은 다음 요청에서 내 문서함으로 돌아가고, 올린 업무는 팀에 남는다.
   await page.getByRole("link", { name: "팀", exact: true }).click();
   await page.getByRole("link", { name: "정산팀" }).click();
+  // 팀 화면은 업무 탭으로 열리고, 초대와 팀원은 "팀원·초대" 탭에 있다.
+  await expect(page.getByRole("tab", { name: "업무" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tabpanel").getByText("신입이 올린 업무").first()).toBeVisible();
+  await page.getByRole("tab", { name: "팀원·초대" }).click();
+  await expect(page).toHaveURL(/\?tab=members$/);
+  await expect(page.getByLabel("초대할 사람의 이메일")).toBeVisible();
   await expect(page.getByRole("heading", { name: "팀원 2명" })).toBeVisible();
   await page.getByRole("button", { name: "신입 내보내기" }).click();
   await expect(page.getByRole("heading", { name: "팀원 1명" })).toBeVisible();
+  await page.getByRole("tab", { name: "팀 설정" }).click();
+  await expect(page.getByRole("button", { name: "팀 나가기" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "이 팀 문서함 삭제" })).toBeDisabled();
   await memberPage.goto("/manuals");
   await expect(memberPage.getByRole("heading", { name: "업무 문서함", level: 1 })).toBeVisible();
   await expect(memberPage.getByText("신입이 올린 업무")).toHaveCount(0);
@@ -90,6 +118,9 @@ for (const loseResponse of [false, true]) {
     await page.getByLabel("팀 이름").fill("업무 이동 팀");
     await page.getByRole("button", { name: "팀 문서함 만들기" }).click();
     await expect(page.getByRole("heading", { name: "업무 이동 팀", level: 1 })).toBeVisible();
+    // 팀을 만들면 그 팀으로 전환된다. 개인 업무를 만들려고 내 문서함으로 돌아간다.
+    await page.getByLabel("문서함 전환").selectOption({ label: "내 문서함" });
+    await expect(page.getByRole("heading", { name: "업무 문서함", level: 1 })).toBeVisible();
     await page.goto("/sources/new");
     await page.getByLabel("자료 제목").fill("옮길 합성 업무");
     await page
@@ -169,4 +200,86 @@ test("workspace switch failure is shown and leaves the current workspace selecte
   await expect(page.getByText("팀 접근 권한이 없습니다.", { exact: true })).toBeVisible();
   await expect(page.getByLabel("문서함 전환")).toBeEnabled();
   await expect(page.getByLabel("문서함 전환")).toHaveValue(personal);
+});
+
+test("direct team entry rotates the personal session and selects exactly that team", async ({
+  page,
+  request,
+}) => {
+  await signUpAndVerify(page);
+  const response = await page.request.post("/api/workspaces", { data: { name: "직접 방문 팀" } });
+  expect(response.status()).toBe(201);
+  const team: { id: string } = await response.json();
+  const initialWorkspaces: { id: string; current: boolean }[] = await (
+    await page.request.get("/api/workspaces")
+  ).json();
+  const personal = initialWorkspaces.find((workspace) => workspace.current);
+  if (!personal) throw new Error("Missing personal workspace");
+  const oldCookie = (await page.context().cookies()).find((cookie) => cookie.name === "gm_owner");
+  if (!oldCookie) throw new Error("Missing personal session");
+  const oldSession = () =>
+    request.get("/api/session", { headers: { Cookie: `gm_owner=${oldCookie.value}` } });
+  expect((await oldSession()).status()).toBe(200);
+
+  await page.goto(`/teams/${team.id}`);
+  await expect(page.getByRole("heading", { name: "직접 방문 팀", level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole("tabpanel").getByRole("heading", { name: "업무", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("문서함 전환")).toHaveValue(team.id);
+  await expect(page.getByLabel("문서함 전환")).not.toHaveValue(personal.id);
+  const currentCookie = (await page.context().cookies()).find(
+    (cookie) => cookie.name === "gm_owner",
+  );
+  expect(Boolean(currentCookie && currentCookie.value !== oldCookie.value)).toBe(true);
+  expect((await oldSession()).status()).toBe(401);
+  const workspaces: { id: string; current: boolean }[] = await (
+    await page.request.get("/api/workspaces")
+  ).json();
+  expect(
+    workspaces.filter((workspace) => workspace.current).map((workspace) => workspace.id),
+  ).toEqual([team.id]);
+});
+
+test("direct team entry denied by the switch API never renders the personal works or forms", async ({
+  page,
+}) => {
+  await signUpAndVerify(page);
+  const response = await page.request.post("/api/workspaces", { data: { name: "전환 거부 팀" } });
+  expect(response.status()).toBe(201);
+  const team: { id: string } = await response.json();
+  const workspaces: { id: string; current: boolean }[] = await (
+    await page.request.get("/api/workspaces")
+  ).json();
+  const personal = workspaces.find((workspace) => workspace.current);
+  if (!personal) throw new Error("Missing personal workspace");
+  const listRequests: string[] = [];
+  await page.route(/\/api\/(sources|manuals|templates)(\?|$)/, async (route) => {
+    listRequests.push(new URL(route.request().url()).pathname);
+    await route.continue();
+  });
+  await page.route("**/api/session/workspace", (route) =>
+    route.fulfill({
+      status: 403,
+      json: { error: { message: "팀 접근 권한이 없습니다." } },
+    }),
+  );
+  await page.goto(`/teams/${team.id}?tab=forms`);
+  await expect(page.getByRole("alert")).toHaveText("팀 접근 권한이 없습니다.");
+  await expect(page.getByLabel("문서함 전환")).toHaveValue(personal.id);
+  await expect(page.getByRole("tab", { name: "양식", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByRole("tabpanel").getByRole("heading")).toHaveCount(0);
+  await expect(page.getByLabel("양식 파일")).toHaveCount(0);
+  await page.getByRole("tab", { name: "업무", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "업무", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByRole("tabpanel").getByRole("heading")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "새 업무 등록" })).toHaveCount(0);
+  await expect(page.getByRole("alert")).toHaveText("팀 접근 권한이 없습니다.");
+  expect(listRequests).toEqual([]);
 });
