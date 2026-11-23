@@ -197,7 +197,7 @@ export function TeamPage({ id }: { readonly id: string }) {
           {saved}
         </p>
       )}
-      {created ? (
+      {created && admin ? (
         <>
           <p className="notice">
             <strong>{team.name} 문서함을 만들었습니다.</strong> 함께 쓸 사람을 초대하거나 첫 업무를

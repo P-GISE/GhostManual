@@ -271,7 +271,7 @@ test("direct team entry denied by the switch API never renders the personal work
     }),
   );
   await page.goto(`/teams/${team.id}?tab=forms`);
-  await expect(page.getByRole("alert")).toHaveText("팀 접근 권한이 없습니다.");
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText("팀 접근 권한이 없습니다.");
   await expect(page.getByLabel("문서함 전환")).toHaveValue(personal.id);
   await expect(page.getByRole("tab", { name: "양식", exact: true })).toHaveAttribute(
     "aria-selected",
@@ -286,6 +286,6 @@ test("direct team entry denied by the switch API never renders the personal work
   );
   await expect(page.getByRole("tabpanel").getByRole("heading")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "새 업무 등록" })).toHaveCount(0);
-  await expect(page.getByRole("alert")).toHaveText("팀 접근 권한이 없습니다.");
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText("팀 접근 권한이 없습니다.");
   expect(listRequests).toEqual([]);
 });
