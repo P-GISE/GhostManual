@@ -113,7 +113,7 @@ export function TeamPage({ id }: { readonly id: string }) {
       </p>
     );
   const admin = team.role === "admin";
-  const home = () => void switchWorkspace(null, "/teams");
+  const home = () => window.location.assign("/teams");
   const waiting = (
     <p className="loading" role="status">
       이 팀 문서함으로 전환하고 있습니다.

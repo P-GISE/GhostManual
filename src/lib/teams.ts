@@ -87,6 +87,27 @@ export async function createTeam(ctx: SessionContext, input: unknown) {
   });
 }
 
+async function newAccountSession(db: DbClient, userId: string, workspaceId: string) {
+  const token = freshToken();
+  const created = await db.query<{ expires_at: Date }>(
+    `INSERT INTO sessions(id,workspace_id,token_hash,role,user_id,expires_at) VALUES($1,$2,$3,'owner',$4,now()+interval '${SESSION_DAYS} days') RETURNING expires_at`,
+    [newId(), workspaceId, tokenHash(token), userId],
+  );
+  return { token, expiresAt: z.date().parse(created.rows[0]?.expires_at), workspaceId };
+}
+
+async function lockExitHome(db: DbClient, ctx: SessionContext, teamId: string) {
+  if (ctx.workspaceId !== teamId) return null;
+  // Account deletion locks workspaces before users; acquire both before the session check too.
+  const locked = await db.query<{ id: string; user_id: string | null }>(
+    "SELECT id,user_id FROM workspaces WHERE id=$1 OR (user_id=$2 AND team_name IS NULL) ORDER BY id FOR UPDATE",
+    [teamId, ctx.userId],
+  );
+  const home = locked.rows.find((row) => row.user_id === ctx.userId)?.id;
+  if (!home) throw new AppError("unauthorized", 401, "로그인이 필요합니다.");
+  return home;
+}
+
 // 이전 세션 행은 질문과 작업을 위해 보존하고 브라우저 토큰만 폐기한다.
 // 팀에서 내보내진 직후에도 내 문서함으로 돌아올 수 있도록, 토큰의 계정만 확인하고 현재 문서함의 팀원인지는 보지 않는다.
 export async function switchWorkspace(token: string, workspaceId: string | null) {
@@ -107,17 +128,13 @@ export async function switchWorkspace(token: string, workspaceId: string | null)
     );
     const id = target.rows[0]?.id;
     if (!id) throw missing();
-    const next = freshToken();
-    const created = await db.query<{ expires_at: Date }>(
-      `INSERT INTO sessions(id,workspace_id,token_hash,role,user_id,expires_at) VALUES($1,$2,$3,'owner',$4,now()+interval '${SESSION_DAYS} days') RETURNING expires_at`,
-      [newId(), id, tokenHash(next), userId],
-    );
+    const next = await newAccountSession(db, userId, id);
     const revoked = await db.query(
       "UPDATE sessions SET token_hash=$2 WHERE token_hash=$1 AND role='owner' AND expires_at>now()",
       [tokenHash(token), tokenHash(freshToken())],
     );
     if (!revoked.rowCount) throw new AppError("unauthorized", 401, "로그인이 필요합니다.");
-    return { token: next, expiresAt: z.date().parse(created.rows[0]?.expires_at), workspaceId: id };
+    return next;
   });
 }
 
@@ -135,12 +152,14 @@ export async function renameTeam(ctx: SessionContext, teamId: string, input: unk
 // 팀의 모든 자료가 영구 삭제된다. 팀 이름을 그대로 입력해야 한다.
 export async function deleteTeam(ctx: SessionContext, teamId: string, confirmName: unknown) {
   const userId = account(ctx);
-  await transaction(async (db) => {
+  return transaction(async (db) => {
+    const home = await lockExitHome(db, ctx, teamId);
     await lockAccountSession(db, ctx, teamId);
     const team = await lockTeam(db, userId, teamId, true);
     if (confirmName !== team.name)
       throw new AppError("invalid_input", 422, "팀 이름을 정확히 입력하세요.");
     await removeWorkspace(db, teamId);
+    return home ? newAccountSession(db, userId, home) : null;
   });
 }
 
@@ -194,7 +213,8 @@ export async function changeRole(
 // 본인이면 나가기, 다른 사람이면 내보내기(관리자만). 자료는 팀에 남는다.
 export async function removeMember(ctx: SessionContext, teamId: string, targetId: string) {
   const userId = account(ctx);
-  await transaction(async (db) => {
+  return transaction(async (db) => {
+    const home = targetId === userId ? await lockExitHome(db, ctx, teamId) : null;
     await lockAccountSession(db, ctx, teamId);
     await lockTeam(db, userId, teamId, targetId !== userId);
     const target = await db.query<{ role: string }>(
@@ -209,6 +229,7 @@ export async function removeMember(ctx: SessionContext, teamId: string, targetId
     ]);
     // 떠난 사람의 팀 세션과 그 세션의 질문 기록(개인 기록)을 함께 지운다.
     await db.query("DELETE FROM sessions WHERE workspace_id=$1 AND user_id=$2", [teamId, targetId]);
+    return home ? newAccountSession(db, userId, home) : null;
   });
 }
 
