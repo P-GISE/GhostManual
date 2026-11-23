@@ -207,7 +207,10 @@ test("direct team entry rotates the personal session and selects exactly that te
   request,
 }) => {
   await signUpAndVerify(page);
-  const response = await page.request.post("/api/workspaces", { data: { name: "직접 방문 팀" } });
+  const response = await page.request.post("/api/workspaces", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { name: "직접 방문 팀" },
+  });
   expect(response.status()).toBe(201);
   const team: { id: string } = await response.json();
   const initialWorkspaces: { id: string; current: boolean }[] = await (
@@ -245,7 +248,10 @@ test("direct team entry denied by the switch API never renders the personal work
   page,
 }) => {
   await signUpAndVerify(page);
-  const response = await page.request.post("/api/workspaces", { data: { name: "전환 거부 팀" } });
+  const response = await page.request.post("/api/workspaces", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { name: "전환 거부 팀" },
+  });
   expect(response.status()).toBe(201);
   const team: { id: string } = await response.json();
   const workspaces: { id: string; current: boolean }[] = await (
