@@ -1055,7 +1055,7 @@ select {
 }
 .workspace-switch select {
   width: auto;
-  max-width: min(180px, 100%);
+  max-width: 180px;
   min-height: 38px;
   margin: 0;
   padding: 4px 28px 4px 10px;
