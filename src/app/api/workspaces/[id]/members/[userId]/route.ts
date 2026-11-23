@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { endpoint, json, readJson, requestSession } from "../../../../../../lib/http.ts";
+import {
+  endpoint,
+  json,
+  readJson,
+  requestSession,
+  sessionCookie,
+} from "../../../../../../lib/http.ts";
 import { changeRole, removeMember } from "../../../../../../lib/teams.ts";
 
 type Context = { params: Promise<{ id: string; userId: string }> };
@@ -18,7 +24,14 @@ export async function DELETE(request: Request, context: Context) {
   return endpoint(request, async () => {
     const ctx = await requestSession(request);
     const params = await context.params;
-    await removeMember(ctx, z.uuid().parse(params.id), z.uuid().parse(params.userId));
-    return json({ removed: true });
+    const session = await removeMember(
+      ctx,
+      z.uuid().parse(params.id),
+      z.uuid().parse(params.userId),
+    );
+    const response = json({ removed: true });
+    if (session)
+      response.headers.set("Set-Cookie", sessionCookie(session.token, session.expiresAt));
+    return response;
   });
 }

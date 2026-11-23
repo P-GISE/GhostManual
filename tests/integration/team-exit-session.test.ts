@@ -23,8 +23,8 @@ const request = (token: string, name?: string) =>
 function replacement(response: Response) {
   const cookie = response.headers.get("set-cookie") ?? "";
   expect(cookie.startsWith("gm_owner=")).toBe(true);
-  expect(cookie).toContain("HttpOnly");
-  expect(cookie).toContain("SameSite=Lax");
+  expect(cookie.includes("HttpOnly")).toBe(true);
+  expect(cookie.includes("SameSite=Lax")).toBe(true);
   return cookie.split(";")[0]?.slice("gm_owner=".length) ?? "";
 }
 
@@ -145,3 +145,68 @@ it("deleting another team does not rotate the caller's unrelated personal sessio
     workspaceId: admin.ctx.workspaceId,
   });
 });
+
+it("removing another member revokes their team session without rotating the admin cookie", async () => {
+  const admin = await signedInUser(mail);
+  const member = await signedInUser(mail);
+  const team = await createTeam(admin.ctx, "내보내기 팀");
+  await pool.query(
+    "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'member')",
+    [team.id, member.ctx.userId],
+  );
+  const active = await switchWorkspace(admin.token, team.id);
+  const other = await switchWorkspace(member.token, team.id);
+  const response = await leaveTeamRoute(request(active.token), {
+    params: Promise.resolve({ id: team.id, userId: member.ctx.userId ?? "" }),
+  });
+  expect(response.status).toBe(200);
+  expect(response.headers.has("set-cookie")).toBe(false);
+  await expect(requireSession(active.token)).resolves.toMatchObject({ workspaceId: team.id });
+  await expect(requireSession(other.token)).rejects.toMatchObject({ httpStatus: 401 });
+});
+
+it.each(["delete", "leave"] as const)(
+  "%s rolls back when its replacement session cannot be stored",
+  async (action) => {
+    const admin = await signedInUser(mail);
+    const member = await signedInUser(mail);
+    const team = await createTeam(admin.ctx, "복구 검증 팀");
+    await pool.query(
+      "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'admin')",
+      [team.id, member.ctx.userId],
+    );
+    const active = await switchWorkspace(admin.token, team.id);
+    const ctx = await requireSession(active.token);
+    const source = await createSource(ctx, exampleSource);
+    const constraint = `test_exit_${crypto.randomUUID().replaceAll("-", "")}`;
+    // A fixture-scoped insert failure must roll back the earlier destructive statements too.
+    await pool.query(
+      `ALTER TABLE sessions ADD CONSTRAINT ${constraint} CHECK (user_id <> '${ctx.userId}'::uuid OR workspace_id <> '${admin.ctx.workspaceId}'::uuid) NOT VALID`,
+    );
+    try {
+      const response =
+        action === "delete"
+          ? await deleteTeamRoute(request(active.token, team.name), {
+              params: Promise.resolve({ id: team.id }),
+            })
+          : await leaveTeamRoute(request(active.token), {
+              params: Promise.resolve({ id: team.id, userId: ctx.userId ?? "" }),
+            });
+      expect(response.status).toBe(503);
+      expect(response.headers.has("set-cookie")).toBe(false);
+      const unchanged = await requireSession(active.token);
+      expect(unchanged.workspaceId).toBe(team.id);
+      expect((await getSource(unchanged, source.id)).id).toBe(source.id);
+      expect(
+        (
+          await pool.query(
+            "SELECT role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2",
+            [team.id, ctx.userId],
+          )
+        ).rows[0]?.role,
+      ).toBe("admin");
+    } finally {
+      await pool.query(`ALTER TABLE sessions DROP CONSTRAINT ${constraint}`);
+    }
+  },
+);
