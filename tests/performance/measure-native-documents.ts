@@ -321,7 +321,7 @@ try {
             assertAbsent(`name=^/${name}$`);
           }
         }
-        const row = {
+        const row: Row = {
           format,
           scenario,
           profile,
