@@ -29,7 +29,7 @@ for (const action of ["delete", "leave"] as const) {
       // The synthetic file mail is read by the same helper used for verification links.
       const { readdirSync, readFileSync } = await import("node:fs");
       const { join } = await import("node:path");
-      const dir = process.env.E2E_MAIL_DIR ?? "";
+      const { E2E_MAIL_DIR: dir = "" } = process.env;
       const file = readdirSync(dir)
         .filter((name) => name.endsWith(`-${me.email}.txt`))
         .sort()
