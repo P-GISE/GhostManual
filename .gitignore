@@ -16,3 +16,6 @@ test-results/
 
 # Local AI cost measurement logs
 *.jsonl
+
+# Synthetic CI parser measurement summary
+/native-document-probe.json

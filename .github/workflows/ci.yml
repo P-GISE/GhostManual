@@ -63,6 +63,16 @@ jobs:
       - run: npm run test:accessibility
       - name: Build deployment image without credentials
         run: docker build --label org.opencontainers.image.revision=${{ github.sha }} -t ghostmanual:${{ github.sha }} .
+      - name: Measure native document parsing within production resource profiles
+        run: node scripts/measure-native-documents.ts ghostmanual:${{ github.sha }}
+      - name: Retain native parser measurement summary only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-document-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: native-document-probe.json
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Export verified deployment image
         if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/feat/ghostmanual-mvp')
         env:
