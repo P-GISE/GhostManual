@@ -20,6 +20,29 @@ const profiles = [
 ] as const;
 const scenarios = ["small", "expanded-text", "many-parts", "over-xml-part"] as const;
 const formats = ["docx", "hwpx", "pptx"] as const;
+const docxDiagnostics = [
+  { name: "single-text-512k", textBytes: 512 * 1024 },
+  { name: "single-text-1m", textBytes: MiB },
+  { name: "single-text-2m", textBytes: 2 * MiB },
+  { name: "flat-total-25000", totalTags: 25_000 },
+  { name: "flat-total-50000", totalTags: 50_000 },
+  { name: "flat-total-100000", totalTags: 100_000 },
+  { name: "mixed-xml-512k-tags-25000", totalXmlBytes: 512 * 1024, totalTags: 25_000 },
+  { name: "mixed-xml-1m-tags-50000", totalXmlBytes: MiB, totalTags: 50_000 },
+] as const;
+type Scenario = (typeof scenarios)[number] | (typeof docxDiagnostics)[number]["name"];
+const batches: readonly {
+  readonly format: (typeof formats)[number];
+  readonly scenarios: readonly Scenario[];
+}[] = [
+  ...formats.map((format) => ({ format, scenarios })),
+  { format: "docx", scenarios: docxDiagnostics.map((sample) => sample.name) },
+];
+const expectedCases = batches.reduce(
+  (sum, batch) => sum + batch.scenarios.length * profiles.length,
+  0,
+);
+assert.equal(expectedCases, 40);
 const childResult = z.object({
   status: z.string(),
   blocks: z.number().int().nonnegative(),
@@ -37,10 +60,11 @@ const containerState = z.object({
 });
 type Row = {
   readonly format: (typeof formats)[number];
-  readonly scenario: (typeof scenarios)[number];
+  readonly scenario: Scenario;
   readonly profile: (typeof profiles)[number];
   readonly compressedBytes: number;
   readonly expandedBytes: number;
+  readonly xmlBytes: number;
   readonly maxXmlPartBytes: number;
   readonly startTags: number;
   readonly maxPartTags: number;
@@ -79,8 +103,9 @@ function tagCount(text: string): number {
   return count;
 }
 try {
-  for (const format of formats) {
-    for (const scenario of scenarios) {
+  for (const batch of batches) {
+    const format = batch.format;
+    for (const scenario of batch.scenarios) {
       if (Date.now() >= deadline) {
         for (const profile of profiles) skipped.push(`${format}/${scenario}/${profile.name}`);
         continue;
@@ -96,12 +121,35 @@ try {
       } else if (scenario === "over-xml-part") {
         parts["customXml/oversize.xml"] = `<padding>${"x".repeat(10 * MiB)}</padding>`;
       }
+      const diagnostic = docxDiagnostics.find((sample) => sample.name === scenario);
+      if (diagnostic) {
+        assert.equal(format, "docx");
+        const baseXml = Object.entries(parts)
+          .filter(([name]) => /\.(xml|rels|hpf)$/i.test(name))
+          .map(([, text]) => text);
+        const baseXmlBytes = baseXml.reduce((sum, text) => sum + Buffer.byteLength(text), 0);
+        const baseTags = baseXml.reduce((sum, text) => sum + tagCount(text), 0);
+        const partTags = "textBytes" in diagnostic ? 1 : diagnostic.totalTags - baseTags;
+        const markupBytes = Buffer.byteLength("<padding></padding>") + (partTags - 1) * 4;
+        const fillBytes =
+          "textBytes" in diagnostic
+            ? diagnostic.textBytes
+            : "totalXmlBytes" in diagnostic
+              ? diagnostic.totalXmlBytes - baseXmlBytes - markupBytes
+              : 0;
+        assert(partTags > 0 && fillBytes >= 0);
+        parts["customXml/diagnostic.xml"] =
+          `<padding>${"<n/>".repeat(partTags - 1)}${"x".repeat(fillBytes)}</padding>`;
+      }
       const lengths = Object.entries(parts).map(([name, text]) => ({
         bytes: Buffer.byteLength(text),
         xml: /\.(xml|rels|hpf)$/i.test(name),
         tags: /\.(xml|rels|hpf)$/i.test(name) ? tagCount(text) : 0,
       }));
       const expandedBytes = lengths.reduce((sum, part) => sum + part.bytes, 0);
+      const xmlBytes = lengths
+        .filter((part) => part.xml)
+        .reduce((sum, part) => sum + part.bytes, 0);
       const maxXmlPartBytes = Math.max(
         ...lengths.filter((part) => part.xml).map((part) => part.bytes),
       );
@@ -113,6 +161,15 @@ try {
       assert.equal(maxXmlPartBytes > 10 * MiB, scenario === "over-xml-part");
       if (scenario === "expanded-text") assert(expandedBytes > 19 * MiB);
       if (scenario === "many-parts") assert(startTags > 3_000_000);
+      if (diagnostic) {
+        if ("textBytes" in diagnostic)
+          assert.equal(
+            maxXmlPartBytes,
+            diagnostic.textBytes + Buffer.byteLength("<padding></padding>"),
+          );
+        if ("totalTags" in diagnostic) assert.equal(startTags, diagnostic.totalTags);
+        if ("totalXmlBytes" in diagnostic) assert.equal(xmlBytes, diagnostic.totalXmlBytes);
+      }
       const input = join(directory, `${format}-${scenario}.zip`);
       writeFileSync(input, bytes, { mode: 0o444 });
       const sha256 = createHash("sha256").update(bytes).digest("hex");
@@ -235,6 +292,7 @@ try {
           profile,
           compressedBytes: bytes.length,
           expandedBytes,
+          xmlBytes,
           maxXmlPartBytes,
           startTags,
           maxPartTags,
@@ -255,6 +313,7 @@ try {
   const report = {
     version: 1,
     image,
+    expectedCases,
     runnerSwapTotalKiB: Number(
       readFileSync("/proc/meminfo", "utf8").match(/^SwapTotal:\s+(\d+)/m)?.[1] ?? 0,
     ),
@@ -271,6 +330,7 @@ try {
   };
   writeFileSync("native-document-probe.json", JSON.stringify(report, null, 2));
 }
+assert.equal(rows.length + skipped.length, expectedCases, "probe case accounting mismatch");
 assert.equal(skipped.length, 0, "probe watchdog left unmeasured cases");
 assert.equal(
   rows.filter((row) => row.outcome !== "passed").length,
