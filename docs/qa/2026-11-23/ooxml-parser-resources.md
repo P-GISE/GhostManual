@@ -56,3 +56,26 @@
 ## 구현 회귀
 
 새 기준의 테스트만 기준 코드에 적용한 [CI45113884324](https://github.com/P-GISE/GhostManual/actions/runs/45113884324)에서 신규12건 실패·265건 통과를 확인했다. 실패는 거부되어야 할 입력이 통과한 assertion이며 빌드·타임아웃 실패가 아니다. 구현은 XML rawbytes를 디코딩·validator·AST 전에 합산하고, 호출별 새 예산을 공유하며 Unicode 시작 이름도 포함하도록 검사한다. 정확 한도/초과·여러 파트·Unicode·호출 간 초기화·.rels/.hpf·작은CDATA/comment·비XML 분량 보존 회귀를 추가했다.
+
+## 검사되지 않은 DOCX 스타일 참조
+
+일반 `.xml`이 아닌 파일의 styles 관계는 업로드 형식 검사에서 존재 확인만 통과하고, 기존 `removeHiddenStyles`가 검사된 XML을 찾지 못하면 조용히 건너뛰었다. 정상 styles MIME·관계를 사용한 순수 합성 `styles.dat` 회귀의 [테스트-only CI45115272095](https://github.com/P-GISE/GhostManual/actions/runs/45115272095)에서 ready 결과가 반환되어 신규1건 실패·277건 통과로 재현했다. 실제 업무 자료에서의 발생을 확인한 것은 아니다.
+
+스타일 관계가 있지만 검사된 스타일 XML이 없으면 unsafeDocument로 거부하는 한 줄을 추가했다. styles 관계가 없는 정상 문서와 기존 `.xml` 스타일 처리는 유지한다. 업로드의 detectDocumentFormat은 통과할 수 있고 비동기 readDocument 추출이 rejected·snapshot:null로 종료되는 경계다. 미검사 스타일을 적용하지 않은 ready 결과를 저장하지 않으며, 기존 완료 snapshot을 자동 변경하지 않는다. 새 업무 범위를 추가하는 대신 이 재현 건까지만 보완하고 전체 회귀를 확인한다.
+
+## 자원 보완 후 46표본 결과
+
+[CI45115198130](https://github.com/P-GISE/GhostManual/actions/runs/45115198130)·commit d9d2b2e·artifact14791467778의 자원 측정 단계에서 **46/46건이 통과**했다. 허용24건과 안전 거부22건이며 OOM·watchdog·미측정0건이었다. 기존40개 입력의 XML/확장 바이트와 태그 수가 이전 실패 측정과 같음을 대조했고, 이전 OOM12건은 파싱 전 안전 거부로 바뀌었다. 이 결과는 해당 자원 측정 단계의 결과이며 최종 전체 CI 여부는 PR 최신 실행을 따른다.
+
+아래6건은 XML합계1,048,576bytes·시작후보100,000개와 비XML 분량을 포함한 전체확장20,971,520bytes를 동시에 채운 허용 경계다.
+
+| 형식 | profile | 최대RSS | 파싱 호출 시간 |
+|---|---|---|---|
+| docx | app | 167.8MiB | 798.9ms |
+| docx | worker | 165.6MiB | 2597.3ms |
+| hwpx | app | 158.1MiB | 806.5ms |
+| hwpx | worker | 159.7MiB | 2588.4ms |
+| pptx | app | 158.7MiB | 823.9ms |
+| pptx | worker | 161.9MiB | 2695.3ms |
+
+이는 parser 단독의 합성 표본 결과다. worker 전체의 DB 연결·TLS 자료·다음 작업과의 GC 중첩, Next.js 기본 RSS·동시 업로드는 포함하지 않아 서비스 전체 최대 부하 통과로 해석하지 않는다. 네이티브 자원 보완 및 검사되지 않은 스타일 거부는 아직 운영103db6f에 반영하지 않았다.

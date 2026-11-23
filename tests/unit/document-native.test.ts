@@ -137,6 +137,25 @@ it("excludes inherited hidden DOCX character and paragraph styles", () => {
   expect(JSON.stringify(r.snapshot)).not.toMatch(/SECRET/);
   expect(r.snapshot?.blocks.at(-1)?.text).toBe("Visible");
 });
+it("rejects uninspected DOCX styles even when the content type identifies XML", () => {
+  const parts: Record<string, string> = docx(
+    '<w:p><w:pPr><w:pStyle w:val="HiddenParagraph"/></w:pPr><w:r><w:t>PARAGRAPH_SECRET</w:t></w:r></w:p><w:p><w:r><w:rPr><w:rStyle w:val="Derived"/></w:rPr><w:t>STYLE_SECRET</w:t></w:r><w:r><w:t>Visible</w:t></w:r></w:p>',
+  );
+  const styles =
+    '<w:styles xmlns:w="w"><w:style w:type="character" w:styleId="Hidden"><w:rPr><w:vanish/></w:rPr></w:style><w:style w:type="character" w:styleId="Derived"><w:basedOn w:val="Hidden"/></w:style><w:style w:type="paragraph" w:styleId="HiddenParagraph"><w:rPr><w:vanish/></w:rPr></w:style></w:styles>';
+  const types = parts["[Content_Types].xml"];
+  if (!types) throw new Error("fixture content types missing");
+  parts["[Content_Types].xml"] = types.replace(
+    "</Types>",
+    '<Override PartName="/word/styles.dat" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>',
+  );
+  parts["word/styles.dat"] = styles;
+  parts["word/_rels/document.xml.rels"] =
+    '<Relationships><Relationship Id="style" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.dat"/></Relationships>';
+  const bytes = pack(parts);
+  expect(detectDocumentFormat("test.docx", bytes)).toBe("docx");
+  expect(readDocument("docx", bytes)).toMatchObject({ status: "rejected", snapshot: null });
+});
 it("preserves CDATA literal ampersands and decodes XML entities exactly once", () => {
   const r = readDocument(
     "docx",
