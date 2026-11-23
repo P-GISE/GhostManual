@@ -1,0 +1,79 @@
+# 대표 관리자 DB 단계 전환 Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task.
+
+**Goal:** 기존 개인·팀 자료와 공유 접근을 보존하면서 팀마다 대표 관리자 한 명을 기록하고, 기존 admin에게 이양한 뒤 탈퇴하게 한다.
+
+**Architecture:** nullable 확장 → 양쪽 상태를 지원하는 호환 앱 → 구버전 writer 종료 확인 → backfill·정확히 한 명 제약 → 역할 API 활성화 순서로 나눈다. 이 문서는 검토안이며 SQL·API 구현이나 운영 적용 완료를 뜻하지 않는다.
+
+**Tech Stack:** 현재 Node24·TypeScript·PostgreSQL18, 기존 account/session/workspace 잠금과 admin/member 역할을 재사용한다.
+
+**Spec:** [PR98 제안](https://github.com/P-GISE/GhostManual/pull/98) 중 대표 관리자 부분. [사용자 결정](../../00_문서_가이드.md)의 보존·이양 정책이 원 제안의 제거·자동 승계보다 우선한다.
+
+## 확정 정책과 제외 범위
+
+- 기존 개인 workspace·업무·양식·원본·답변·게시본·공유 링크·Reader와 접근/관리 화면은 유지한다. 자동 이동·삭제·개인 업로드 차단은 하지 않는다.
+- 대표는 다른 기존 admin에게 이양한 뒤 자기 탈퇴·계정 삭제를 할 수 있다. 이양 POST는 member를 자동 승격하지 않으며 자동 승계도 하지 않는다.
+- 기존 admin/member enum과 마지막 admin 보호를 유지한다. 대표 이양 후 이전 대표는 admin으로 남는다.
+- 대표만 팀 삭제·다른 admin 변경을 하게 하는 새 권한표는 아직 정책 제안이다. 사용자의 별도 정책 확정 전 활성화하지 않으며, DB 준비나 담당자 계약 검증을 그 승인으로 대신하지 않는다. 대표 표시·API 계약도 함께 검토하고 DB 준비만으로 기존 admin을 부관리자로 표시하지 않는다.
+- 현재는 화면 #99 보완과 이 계획 작성 단계다. 운영 배포·SQL·backfill·구버전 종료·계정 변경을 실행하지 않는다.
+
+## 현재 코드에서 확인한 경계
+
+- `src/lib/teams.ts` createTeam은 workspace INSERT 다음 admin membership INSERT를 한 트랜잭션으로 수행한다. 현재 대표/생성자 컬럼은 없다.
+- `src/lib/accounts.ts` deleteAccount는 현재·개인·admin 팀을 잠그고 마지막 admin을 확인한 뒤 개인 workspace를 제거하고 users를 DELETE한다. membership은 사용자 삭제 시 cascade한다.
+- `src/lib/session.ts`의 workspace 정렬 잠금 → 계정 → 세션 순서를 유지한다. 새 대상 계정을 먼저 잠가 이 순서를 뒤집지 않는다.
+- `scripts/migrate.ts`는 미적용 SQL 전부를 순서대로 실행한다. 확장과 강제 migration을 첫 배포 산출물에 함께 싣지 않는다.
+
+## 제안 DB 모양
+
+`workspaces.lead_user_id uuid NULL`을 권장한다. 한 workspace 행의 pointer가 최대 한 명을 나타내고, 개인 workspace는 항상 NULL이다. membership의 lead boolean + partial unique만으로는 대표 0명을 막지 못한다.
+
+강제 단계에서는 `(workspaces.id, lead_user_id)`가 같은 팀의 membership을 가리키는 지연 FK와 지연 constraint trigger를 둔다. 살아 있는 팀의 최종 COMMIT 상태에서 대표가 NULL이 아니고 같은 팀의 admin인지 확인한다. membership의 INSERT/UPDATE/DELETE와 workspace 변경을 모두 다루고, 팀 삭제로 workspace 자체가 사라진 경우는 허용한다. FK는 NO ACTION이며 대표 membership 삭제를 조용히 NULL로 바꾸지 않는다.
+
+기존 팀 backfill은 현재 admin 중 `joined_at ASC, user_id ASC` 첫 사람이다. 이 사람을 ‘최초 생성자’라고 주장하지 않는다. admin이 없는 기존 팀은 member를 자동 승격하지 않고 강제 전환을 중단해 점검한다.
+
+## 단계와 구현 과제
+
+### Task 1: 확장 migration과 구버전 호환성
+
+**Files:** 후보 `db/migrations/013_team_lead_expand.sql`, 새 격리 DB 업그레이드 테스트.
+
+- [ ] 번호 점유를 다시 확인하고 nullable 열만 추가한다. 기존001~012를 수정하지 않는다.
+- [ ] 대표를 채우거나 기존 쓰기를 제한하지 않는다. 구버전의 createTeam·admin 변경·이양하지 않은 계정 삭제가 확장 직후 기존 의미대로 동작하는지 검사한다.
+- [ ] 개인/팀/기존 공유 fixture와 schema·데이터 보존을 대조한다. 이 단계에서 대표 API를 활성화하지 않는다.
+
+### Task 2: 호환 backend와 명시적 이양 계약
+
+**Files:** `src/lib/teams.ts`, `src/lib/accounts.ts`, 관련 API 응답·통합 테스트. 박효민 API/화면 담당과 함께 연결한다.
+
+- [ ] 강제 전환 전 NULL 상태에서는 기존 역할 동작을 유지하고 새 이양 API는 준비 안 됨을 명확히 반환한다. 적용 상태를 확인할 방법은 구현 시 함께 검증한다.
+- [ ] 후보 `POST /api/workspaces/[id]/lead` 입력 `{userId}`는 세션·팀 소속을 잠금 후 재확인한다. actor는 대표, 대상은 같은 팀의 다른 기존 admin이어야 한다.
+- [ ] 한 트랜잭션에서 pointer만 바꾸고 두 membership은 admin으로 유지한다. 응답의 `lead` boolean은 pointer에서 계산한다.
+- [ ] 대표 강등·팀 탈퇴·계정 삭제는 이양 전 거절한다. 계정이 대표인 팀이 하나라도 있으면 개인 자료를 지우기 전에 거절하고 전체 rollback한다.
+- [ ] 현재 workspace와 대상 팀을 정렬 잠근 뒤 역할을 다시 읽는다. 이양 vs 탈퇴/강등/계정 삭제와 두 동시 이양을 검증한다.
+
+### Task 3: backfill·제약 강제와 전환 경합
+
+**Files:** 별도 후보 `db/migrations/014_team_lead_enforce.sql`, 단계 전환/동시성 통합 테스트.
+
+- [ ] 먼저 호환 앱을 모든 쓰기 주체에 반영하고 구버전 writer가 없음을 확인하는 실행서를 검토한다. 이번 문서 작성만으로 실행하지 않는다.
+- [ ] 제한된 잠금 시간 안에서 workspace→membership 쓰기를 잠그고 backfill·지연 FK·최종 상태 제약을 한 트랜잭션으로 반영한다. 실패하면 전체 rollback한다.
+- [ ] 호환 createTeam은 workspace INSERT 후 전환 상태를 재확인해, 전환 전 NULL로 판단한 요청이 강제 COMMIT 뒤 대표 없이 생성되는 경합을 닫는다.
+- [ ] 강제 후 새 팀은 workspace→admin membership→lead pointer를 같은 트랜잭션에서 만든다. 중간 NULL은 허용해도 COMMIT의 대표 0명·외부 팀원·member 대표·대표 강등은 거절한다.
+- [ ] 전환·이양·삭제 거절 시 원본·버전·게시본·공유 전체 보존을 확인한다. 직접 대표 사용자 삭제도 DB 제약으로 차단한다.
+- [ ] 명시적 계정 삭제 성공은 기존 개인 workspace 삭제 정책을 유지하되 팀 자료·게시본·공유와 다른 계정 자료를 보존한다. 명시적 팀 삭제 성공은 그 팀의 기존 삭제 범위만 정리하고 다른 개인·팀 자료·공유를 보존한다. 전환의 보존 정책을 기존 사용자의 명시적 삭제 금지로 확대하지 않는다.
+- [ ] 014 이후 복구 기준은 호환 앱 이상이다. 구버전 앱 복귀나 대표 제약/데이터의 자동 삭제를 복구로 사용하지 않는다.
+
+### Task 4: API·화면 통합과 전체 회귀
+
+- [ ] 박효민과 lead 응답·대표만 가능한 동작·준비 전 오류·탈퇴 안내 계약을 확인한다. 전체 팀 개요/진행 현황/메뉴 제거는 별도 단계로 둔다.
+- [ ] 대표/비대표 admin/member/Reader·비회원, 취소·실패·동시 변경과 데스크톱/모바일을 검사한다.
+- [ ] GitHub 격리 DB와 실제 브라우저에서 기존 개인·팀·공유·업무 이동·로그아웃·계정 삭제 회귀를 통과한다. 공유 서버에서 빌드·QA 부하를 실행하지 않는다.
+- [ ] 최신 CI·백업·복구·보호 목록과 별도 운영 지시를 확인하기 전 운영에 반영하지 않는다.
+
+## 완료 기준과 미확정
+
+정확히 한 명의 소속 admin 대표, 명시적 기존 admin 이양, 대표 탈퇴 전 보호, 구버전 공존 안전성, 승인된 기존 자료·링크 접근 보존이 동시에 통과해야 한다. 대표 삭제 자동 승계와 member 자동 승격은 이번 범위가 아니다.
+
+DB 저장안·013/014 번호·준비 상태 신호·API 오류 코드와 새 권한표 연결은 구현 검토 대상이다. 이 계획의 정책 승인과 아직 만들지 않은 migration·API의 구현/배포 승인을 혼동하지 않는다.

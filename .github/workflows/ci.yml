@@ -73,6 +73,14 @@ jobs:
       - name: Verify HTTPS cookie transport and cached Next navigation
         run: npx playwright test --config playwright.transport.config.ts --reporter=line
       - run: npm run test:accessibility
+      - name: Retain synthetic team screen evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: team-hub-ui-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/**/team-hub.png
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Export verified deployment image
         if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/feat/ghostmanual-mvp')
         env:
