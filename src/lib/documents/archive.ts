@@ -1,6 +1,6 @@
 import { posix } from "node:path";
 import { readArchive } from "../xlsx/archive.ts";
-import type { DocumentFormat } from "./types.ts";
+import { DOCUMENT_LIMITS, type DocumentFormat } from "./types.ts";
 import {
   attr,
   children,
@@ -64,6 +64,14 @@ export function documentPackage(format: DocumentFormat, bytes: Uint8Array): Docu
   const archive = readArchive(bytes);
   // Uninspected parts cannot qualify for safe limited publication or download.
   if (archive.limited) throw unsafeDocument();
+  let xmlBytes = 0;
+  for (const [name, content] of archive.parts) {
+    if (/\.(?:xml|rels|hpf)$/i.test(name)) {
+      xmlBytes += content.byteLength;
+      if (xmlBytes > DOCUMENT_LIMITS.xmlBytes) throw unsafeDocument();
+    }
+  }
+  const budget = { remaining: DOCUMENT_LIMITS.xmlOpeningTokens };
   const pkg: DocumentPackage = { parts: archive.parts, xml: new Map(), main: "" };
   for (const [name, content] of archive.parts) {
     const signature = Buffer.from(content.subarray(0, 8)).toString("hex");
@@ -80,7 +88,7 @@ export function documentPackage(format: DocumentFormat, bytes: Uint8Array): Docu
       )
     )
       throw unsafeDocument();
-    if (/\.(?:xml|rels|hpf)$/i.test(name)) pkg.xml.set(name, parseOrderedXml(content));
+    if (/\.(?:xml|rels|hpf)$/i.test(name)) pkg.xml.set(name, parseOrderedXml(content, budget));
   }
   for (const [name, root] of pkg.xml) {
     if (

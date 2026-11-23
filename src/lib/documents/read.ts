@@ -89,6 +89,7 @@ function excluded(node: Element): boolean {
 function removeHiddenStyles(body: Element, pkg: DocumentPackage): void {
   const ref = [...relationships(pkg, pkg.main).values()].find((r) => r.type.endsWith("/styles"));
   const styles = ref ? pkg.xml.get(ref.path) : undefined;
+  if (ref && !styles) throw unsafeDocument();
   if (!styles) return;
   const byId = new Map(children(styles, "style").map((style) => [attr(style, "styleId"), style]));
   type Visibility = { vanish: boolean; webHidden: boolean };

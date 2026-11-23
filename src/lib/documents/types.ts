@@ -37,6 +37,8 @@ export type DocumentQuestion = {
 export const DOCUMENT_LIMITS = {
   fileBytes: 5 * 1024 * 1024,
   expandedBytes: 20 * 1024 * 1024,
+  xmlBytes: 1024 * 1024,
+  xmlOpeningTokens: 100000,
   characters: 200000,
   blocks: 5000,
   cells: 50000,

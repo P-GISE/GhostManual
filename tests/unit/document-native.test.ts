@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { XMLValidator } from "fast-xml-parser";
+import { describe, expect, it, vi } from "vitest";
 import { compareDocuments } from "../../src/lib/documents/compare";
 import { detectDocumentFormat, readDocument } from "../../src/lib/documents/read";
 import { docx, enc, hwpx, pack, pptx, wp } from "../fixtures/documents/native/build";
@@ -135,6 +136,25 @@ it("excludes inherited hidden DOCX character and paragraph styles", () => {
   const r = readDocument("docx", pack(parts));
   expect(JSON.stringify(r.snapshot)).not.toMatch(/SECRET/);
   expect(r.snapshot?.blocks.at(-1)?.text).toBe("Visible");
+});
+it("rejects uninspected DOCX styles even when the content type identifies XML", () => {
+  const parts: Record<string, string> = docx(
+    '<w:p><w:pPr><w:pStyle w:val="HiddenParagraph"/></w:pPr><w:r><w:t>PARAGRAPH_SECRET</w:t></w:r></w:p><w:p><w:r><w:rPr><w:rStyle w:val="Derived"/></w:rPr><w:t>STYLE_SECRET</w:t></w:r><w:r><w:t>Visible</w:t></w:r></w:p>',
+  );
+  const styles =
+    '<w:styles xmlns:w="w"><w:style w:type="character" w:styleId="Hidden"><w:rPr><w:vanish/></w:rPr></w:style><w:style w:type="character" w:styleId="Derived"><w:basedOn w:val="Hidden"/></w:style><w:style w:type="paragraph" w:styleId="HiddenParagraph"><w:rPr><w:vanish/></w:rPr></w:style></w:styles>';
+  const types = parts["[Content_Types].xml"];
+  if (!types) throw new Error("fixture content types missing");
+  parts["[Content_Types].xml"] = types.replace(
+    "</Types>",
+    '<Override PartName="/word/styles.dat" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>',
+  );
+  parts["word/styles.dat"] = styles;
+  parts["word/_rels/document.xml.rels"] =
+    '<Relationships><Relationship Id="style" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.dat"/></Relationships>';
+  const bytes = pack(parts);
+  expect(detectDocumentFormat("test.docx", bytes)).toBe("docx");
+  expect(readDocument("docx", bytes)).toMatchObject({ status: "rejected", snapshot: null });
 });
 it("preserves CDATA literal ampersands and decodes XML entities exactly once", () => {
   const r = readDocument(
@@ -330,4 +350,140 @@ describe("review round 1 regressions", () => {
       expect(readDocument("csv", enc(prefix + '"valid",tail\n')).status).toBe("limited");
     },
   );
+});
+
+describe("package-wide native XML resource boundaries", () => {
+  const formats = ["docx", "hwpx", "pptx"] as const;
+  const xmlParts = (parts: Record<string, string>) =>
+    Object.entries(parts).filter(([name]) => /\.(xml|rels|hpf)$/i.test(name));
+  const xmlBytes = (parts: Record<string, string>) =>
+    xmlParts(parts).reduce((sum, [, text]) => sum + Buffer.byteLength(text), 0);
+  const openingTokens = (parts: Record<string, string>) =>
+    xmlParts(parts).reduce((sum, [, text]) => sum + [...text.matchAll(/<(?![!?/])/g)].length, 0);
+  function fillXmlBytes(
+    parts: Record<string, string>,
+    total: number,
+    name = "customXml/padding.xml",
+    root = "padding",
+  ) {
+    const wrapping = `<${root}></${root}>`;
+    const fill = total - xmlBytes(parts) - Buffer.byteLength(wrapping);
+    expect(fill).toBeGreaterThanOrEqual(0);
+    parts[name] = `<${root}>${"x".repeat(fill)}</${root}>`;
+    expect(xmlBytes(parts)).toBe(total);
+  }
+  function fillOpeningTokens(parts: Record<string, string>, total: number, token = "n") {
+    const count = total - openingTokens(parts) - 1;
+    expect(count).toBeGreaterThanOrEqual(0);
+    parts["customXml/tokens.xml"] = `<padding>${`<${token}/>`.repeat(count)}</padding>`;
+    expect(openingTokens(parts)).toBe(total);
+  }
+  it.each(formats)("accepts exactly 1 MiB of aggregate XML in %s", (format) => {
+    const parts: Record<string, string> = { docx, hwpx, pptx }[format]();
+    fillXmlBytes(parts, 1024 * 1024);
+    const bytes = pack(parts);
+    expect(detectDocumentFormat(`test.${format}`, bytes)).toBe(format);
+    expect(readDocument(format, bytes).status).toBe("ready");
+  });
+  it.each(formats)("rejects aggregate XML one byte above 1 MiB in %s", (format) => {
+    const parts: Record<string, string> = { docx, hwpx, pptx }[format]();
+    fillXmlBytes(parts, 1024 * 1024 + 1);
+    const bytes = pack(parts);
+    expect(() => detectDocumentFormat(`test.${format}`, bytes)).toThrowError(
+      expect.objectContaining({ code: "unsafe_file", httpStatus: 422 }),
+    );
+    expect(readDocument(format, bytes)).toMatchObject({ status: "rejected", snapshot: null });
+  });
+  it.each(formats)("accepts exactly 100000 package opening tokens in %s", (format) => {
+    const parts: Record<string, string> = { docx, hwpx, pptx }[format]();
+    fillOpeningTokens(parts, 100_000);
+    const bytes = pack(parts);
+    expect(detectDocumentFormat(`test.${format}`, bytes)).toBe(format);
+    expect(readDocument(format, bytes).status).toBe("ready");
+  });
+  it.each(formats)("rejects package opening token 100001 in %s", (format) => {
+    const parts: Record<string, string> = { docx, hwpx, pptx }[format]();
+    fillOpeningTokens(parts, 100_001);
+    const bytes = pack(parts);
+    expect(() => detectDocumentFormat(`test.${format}`, bytes)).toThrowError(
+      expect.objectContaining({ code: "unsafe_file", httpStatus: 422 }),
+    );
+    expect(readDocument(format, bytes)).toMatchObject({ status: "rejected", snapshot: null });
+  });
+  it("rejects cumulative tokens across individually bounded XML parts", () => {
+    const parts: Record<string, string> = docx();
+    parts["customXml/first.xml"] = `<padding>${"<n/>".repeat(50_000)}</padding>`;
+    const remaining = 100_001 - openingTokens(parts) - 1;
+    parts["customXml/second.xml"] = `<padding>${"<n/>".repeat(remaining)}</padding>`;
+    expect(openingTokens(parts)).toBe(100_001);
+    const bytes = pack(parts);
+    expect(() => detectDocumentFormat("test.docx", bytes)).toThrowError(
+      expect.objectContaining({ code: "unsafe_file", httpStatus: 422 }),
+    );
+    expect(readDocument("docx", bytes)).toMatchObject({ status: "rejected", snapshot: null });
+  });
+  it.each(formats)("includes .rels and .hpf in aggregate XML bytes for %s", (format) => {
+    const parts: Record<string, string> = { docx, hwpx, pptx }[format]();
+    fillXmlBytes(parts, 600 * 1024, "customXml/extra.hpf");
+    fillXmlBytes(parts, 1024 * 1024 + 1, "customXml/_rels/extra.xml.rels", "Relationships");
+    const bytes = pack(parts);
+    expect(() => detectDocumentFormat(`test.${format}`, bytes)).toThrowError(
+      expect.objectContaining({ code: "unsafe_file", httpStatus: 422 }),
+    );
+    expect(readDocument(format, bytes)).toMatchObject({ status: "rejected", snapshot: null });
+  });
+  it("rejects aggregate byte overflow before validating any XML", () => {
+    const parts: Record<string, string> = docx();
+    fillXmlBytes(parts, 1024 * 1024 + 1);
+    const bytes = pack(parts);
+    const validation = vi.spyOn(XMLValidator, "validate");
+    try {
+      expect(() => detectDocumentFormat("test.docx", bytes)).toThrowError();
+      expect(validation).not.toHaveBeenCalled();
+    } finally {
+      validation.mockRestore();
+    }
+  });
+  it("accepts normal Unicode element names", () => {
+    const parts = docx();
+    Object.assign(parts, { "customXml/unicode.xml": "<문서><항목>합성</항목></문서>" });
+    expect(detectDocumentFormat("test.docx", pack(parts))).toBe("docx");
+    expect(readDocument("docx", pack(parts)).status).toBe("ready");
+  });
+  it("counts Unicode opening tokens toward the package boundary", () => {
+    const parts: Record<string, string> = docx();
+    fillOpeningTokens(parts, 100_001, "가");
+    const bytes = pack(parts);
+    expect(() => detectDocumentFormat("test.docx", bytes)).toThrowError(
+      expect.objectContaining({ code: "unsafe_file", httpStatus: 422 }),
+    );
+    expect(readDocument("docx", bytes)).toMatchObject({ status: "rejected", snapshot: null });
+  });
+  it("resets the token budget for each package call", () => {
+    const parts: Record<string, string> = docx();
+    fillOpeningTokens(parts, 60_000);
+    const bytes = pack(parts);
+    expect(detectDocumentFormat("first.docx", bytes)).toBe("docx");
+    expect(detectDocumentFormat("second.docx", bytes)).toBe("docx");
+  });
+  it("preserves small CDATA and comments containing literal opening text", () => {
+    const parts = docx();
+    Object.assign(parts, {
+      "customXml/notes.xml":
+        "<notes><![CDATA[합성 <text> 값]]><!-- 합성 <note> 주석 --><가/></notes>",
+    });
+    expect(detectDocumentFormat("test.docx", pack(parts))).toBe("docx");
+    expect(readDocument("docx", pack(parts)).status).toBe("ready");
+  });
+  it("does not charge opaque non-XML bytes to the XML-only budget", () => {
+    const parts: Record<string, string> = docx();
+    const xml = xmlBytes(parts);
+    const current = Object.values(parts).reduce((sum, value) => sum + Buffer.byteLength(value), 0);
+    parts["padding.dat"] = "x".repeat(20 * 1024 * 1024 - current);
+    expect(xmlBytes(parts)).toBe(xml);
+    const bytes = pack(parts);
+    expect(bytes.length).toBeLessThanOrEqual(5 * 1024 * 1024);
+    expect(detectDocumentFormat("test.docx", bytes)).toBe("docx");
+    expect(readDocument("docx", bytes).status).toBe("ready");
+  });
 });
