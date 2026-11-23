@@ -30,19 +30,23 @@ const docxDiagnostics = [
   { name: "mixed-xml-512k-tags-25000", totalXmlBytes: 512 * 1024, totalTags: 25_000 },
   { name: "mixed-xml-1m-tags-50000", totalXmlBytes: MiB, totalTags: 50_000 },
 ] as const;
-type Scenario = (typeof scenarios)[number] | (typeof docxDiagnostics)[number]["name"];
+type Scenario =
+  | (typeof scenarios)[number]
+  | (typeof docxDiagnostics)[number]["name"]
+  | "accepted-package-boundary";
 const batches: readonly {
   readonly format: (typeof formats)[number];
   readonly scenarios: readonly Scenario[];
 }[] = [
   ...formats.map((format) => ({ format, scenarios })),
   { format: "docx", scenarios: docxDiagnostics.map((sample) => sample.name) },
+  ...formats.map((format) => ({ format, scenarios: ["accepted-package-boundary"] as const })),
 ];
 const expectedCases = batches.reduce(
   (sum, batch) => sum + batch.scenarios.length * profiles.length,
   0,
 );
-assert.equal(expectedCases, 40);
+assert.equal(expectedCases, 46);
 const childResult = z.object({
   status: z.string(),
   blocks: z.number().int().nonnegative(),
@@ -69,6 +73,8 @@ type Row = {
   readonly startTags: number;
   readonly maxPartTags: number;
   readonly sha256: string;
+  readonly expectedStatus: "accepted" | "rejected";
+  readonly rejectionReasons: readonly string[];
   readonly state: unknown;
   readonly measurement: z.infer<typeof childResult> | null;
   readonly watchdog: boolean;
@@ -99,7 +105,7 @@ function parseJson(text: string): unknown {
 }
 function tagCount(text: string): number {
   let count = 0;
-  for (const _tag of text.matchAll(/<[A-Za-z_]/g)) count++;
+  for (const _tag of text.matchAll(/<(?![!?/])/g)) count++;
   return count;
 }
 try {
@@ -141,6 +147,25 @@ try {
         parts["customXml/diagnostic.xml"] =
           `<padding>${"<n/>".repeat(partTags - 1)}${"x".repeat(fillBytes)}</padding>`;
       }
+      if (scenario === "accepted-package-boundary") {
+        const baseXml = Object.entries(parts)
+          .filter(([name]) => /\.(xml|rels|hpf)$/i.test(name))
+          .map(([, text]) => text);
+        const baseXmlBytes = baseXml.reduce((sum, text) => sum + Buffer.byteLength(text), 0);
+        const baseTags = baseXml.reduce((sum, text) => sum + tagCount(text), 0);
+        const partTags = 100_000 - baseTags;
+        const wrapping = Buffer.byteLength("<padding></padding>") + (partTags - 1) * 4;
+        const textBytes = MiB - baseXmlBytes - wrapping;
+        assert(partTags > 0 && textBytes >= 0);
+        parts["customXml/accepted-boundary.xml"] =
+          `<padding>${"<n/>".repeat(partTags - 1)}${"x".repeat(textBytes)}</padding>`;
+        const existingBytes = Object.values(parts).reduce(
+          (sum, text) => sum + Buffer.byteLength(text),
+          0,
+        );
+        assert(existingBytes < 20 * MiB);
+        parts["padding.dat"] = "x".repeat(20 * MiB - existingBytes);
+      }
       const lengths = Object.entries(parts).map(([name, text]) => ({
         bytes: Buffer.byteLength(text),
         xml: /\.(xml|rels|hpf)$/i.test(name),
@@ -170,6 +195,17 @@ try {
         if ("totalTags" in diagnostic) assert.equal(startTags, diagnostic.totalTags);
         if ("totalXmlBytes" in diagnostic) assert.equal(xmlBytes, diagnostic.totalXmlBytes);
       }
+      if (scenario === "accepted-package-boundary") {
+        assert.equal(xmlBytes, MiB);
+        assert.equal(startTags, 100_000);
+        assert.equal(expandedBytes, 20 * MiB);
+      }
+      const rejectionReasons = [
+        ...(xmlBytes > MiB ? ["aggregate-xml-bytes"] : []),
+        ...(startTags > 100_000 ? ["package-opening-tokens"] : []),
+        ...(maxXmlPartBytes > 10 * MiB ? ["xml-part-bytes"] : []),
+      ];
+      const expectedStatus = rejectionReasons.length > 0 ? "rejected" : "accepted";
       const input = join(directory, `${format}-${scenario}.zip`);
       writeFileSync(input, bytes, { mode: 0o444 });
       const sha256 = createHash("sha256").update(bytes).digest("hex");
@@ -253,12 +289,11 @@ try {
             measurement &&
             (profile.mode === "detect"
               ? measurement.status === format
-              : (measurement.status === "ready" &&
-                  measurement.blocks > 0 &&
-                  measurement.markerFound) ||
-                (scenario !== "small" && measurement.status === "limited"));
+              : measurement.status === "ready" &&
+                measurement.blocks > 0 &&
+                measurement.markerFound);
           const expected =
-            scenario === "over-xml-part" ? measurement?.status === "rejected" : accepted;
+            expectedStatus === "rejected" ? measurement?.status === "rejected" : accepted;
           outcome = !state
             ? "runner-error"
             : watchdog
@@ -297,6 +332,8 @@ try {
           startTags,
           maxPartTags,
           sha256,
+          expectedStatus,
+          rejectionReasons,
           state: state?.State ?? null,
           measurement,
           watchdog,
@@ -314,6 +351,7 @@ try {
     version: 1,
     image,
     expectedCases,
+    nativeXmlPolicy: { aggregateXmlBytes: MiB, openingTokens: 100_000 },
     runnerSwapTotalKiB: Number(
       readFileSync("/proc/meminfo", "utf8").match(/^SwapTotal:\s+(\d+)/m)?.[1] ?? 0,
     ),

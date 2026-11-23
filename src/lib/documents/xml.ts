@@ -1,6 +1,7 @@
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 import { AppError } from "../errors.ts";
 import { xmlText } from "../xlsx/xml.ts";
+import { DOCUMENT_LIMITS } from "./types.ts";
 export type Element = {
   name: string;
   attributes: Record<string, string>;
@@ -60,7 +61,10 @@ function convert(value: unknown): Element[] {
     };
   });
 }
-export function parseOrderedXml(bytes: Uint8Array): Element {
+export function parseOrderedXml(
+  bytes: Uint8Array,
+  budget: { remaining: number } = { remaining: DOCUMENT_LIMITS.xmlOpeningTokens },
+): Element {
   const encoding =
     bytes[0] === 0xff && bytes[1] === 0xfe
       ? "utf-16le"
@@ -68,12 +72,13 @@ export function parseOrderedXml(bytes: Uint8Array): Element {
         ? "utf-16be"
         : "utf-8";
   const text = new TextDecoder(encoding, { fatal: true }).decode(bytes);
-  if (/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(text) || XMLValidator.validate(text) !== true)
-    throw unsafeDocument();
+  if (/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(text)) throw unsafeDocument();
   let tags = 0;
-  for (const _match of text.matchAll(/<[A-Za-z_]/g)) {
-    if (++tags > 100000) throw unsafeDocument();
+  // Count opening candidates before validation, including non-ASCII XML names.
+  for (const _match of text.matchAll(/<(?![!?/])/g)) {
+    if (++tags > DOCUMENT_LIMITS.xmlOpeningTokens || --budget.remaining < 0) throw unsafeDocument();
   }
+  if (XMLValidator.validate(text) !== true) throw unsafeDocument();
   const roots = convert(parser.parse(text)).filter((n) => n.name !== "#text");
   if (roots.length !== 1 || !roots[0]) throw unsafeDocument();
   return roots[0];
