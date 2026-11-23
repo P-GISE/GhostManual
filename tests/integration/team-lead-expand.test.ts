@@ -20,7 +20,7 @@ it("expands a populated 012 database without rewriting personal, team, file, pub
   expect(sql, "013 expand migration must exist").not.toBeNull();
   if (sql === null) return;
   const db = await pool.connect();
-  const schema = "lead_expand_" + randomUUID().replaceAll("-", "");
+  const schema = `lead_expand_${randomUUID().replaceAll("-", "")}`;
   try {
     await db.query("BEGIN");
     await db.query(`CREATE SCHEMA ${schema}`);
@@ -29,7 +29,7 @@ it("expands a populated 012 database without rewriting personal, team, file, pub
       .filter((name) => /^(00[1-9]|01[0-2])_.*\.sql$/.test(name))
       .sort();
     expect(files).toHaveLength(12);
-    for (const file of files) await db.query(await readFile("db/migrations/" + file, "utf8"));
+    for (const file of files) await db.query(await readFile(`db/migrations/${file}`, "utf8"));
     const user = randomUUID();
     await db.query(
       "INSERT INTO users(id,email,name,password_hash,email_verified_at,terms_agreed_at) VALUES($1,'fixture@example.invalid','합성 담당자','fixture',now(),now())",
