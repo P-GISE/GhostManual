@@ -4,7 +4,7 @@
 
 **Goal:** 기존 개인·팀 자료와 공유 접근을 보존하면서 팀마다 대표 관리자 한 명을 기록하고, 기존 admin에게 이양한 뒤 탈퇴하게 한다.
 
-**Architecture:** nullable 확장 → 양쪽 상태를 지원하는 호환 앱 → 구버전 writer 종료 확인 → backfill·정확히 한 명 제약 → 역할 API 활성화 순서로 나눈다.013은 #105 병합·CI 후 운영 적용했고, Task2 호환 백엔드는 별도 PR 검증 중이다.014와 대표 기능 운영 활성화는 아직 하지 않는다.
+**Architecture:** nullable 확장 → 양쪽 상태를 지원하는 호환 앱 → 구버전 writer 종료 확인 → backfill·정확히 한 명 제약 → 역할 API 활성화 순서로 나눈다.013은 #105 병합·CI 후 운영 적용했고, Task2 호환 백엔드는 #106 병합·운영 앱/워커 반영을 완료했고 Task3 실제014 코드는 별도 PR 검증 중이다.014와 대표 기능 운영 활성화는 아직 하지 않는다.
 
 **Tech Stack:** 현재 Node24·TypeScript·PostgreSQL18, 기존 account/session/workspace 잠금과 admin/member 역할을 재사용한다.
 
@@ -16,7 +16,7 @@
 - 대표는 다른 기존 admin에게 이양한 뒤 자기 탈퇴·계정 삭제를 할 수 있다. 이양 POST는 member를 자동 승격하지 않으며 자동 승계도 하지 않는다.
 - 기존 admin/member enum과 마지막 admin 보호를 유지한다. 대표 이양 후 이전 대표는 admin으로 남는다.
 - 대표만 팀 삭제·다른 admin 변경을 하게 하는 새 권한표는 아직 정책 제안이다. 사용자의 별도 정책 확정 전 활성화하지 않으며, DB 준비나 담당자 계약 검증을 그 승인으로 대신하지 않는다. 대표 표시·API 계약도 함께 검토하고 DB 준비만으로 기존 admin을 부관리자로 표시하지 않는다.
-- 현재013 확장 운영 적용을 완료했고 호환 백엔드·이양 API를 격리 검증 중이다.014·backfill·구버전 종료·대표 기능 운영 활성화는 아직 하지 않는다.
+- 현재013 확장과 #106 호환 백엔드 운영 반영을 완료했고 실제014·강제 상태 경합을 격리 검증 중이다.014·backfill·구버전 종료·대표 기능 운영 활성화는 아직 하지 않는다.
 
 ## 현재 코드에서 확인한 경계
 
@@ -31,7 +31,7 @@
 
 강제 단계에서는 `(workspaces.id, lead_user_id)`가 같은 팀의 membership을 가리키는 지연 FK와 지연 constraint trigger를 둔다. 살아 있는 팀의 최종 COMMIT 상태에서 대표가 NULL이 아니고 같은 팀의 admin인지 확인한다. membership의 INSERT/UPDATE/DELETE와 workspace 변경을 모두 다루고, 팀 삭제로 workspace 자체가 사라진 경우는 허용한다. FK는 NO ACTION이며 대표 membership 삭제를 조용히 NULL로 바꾸지 않는다.
 
-기존 팀 backfill은 현재 admin 중 `joined_at ASC, user_id ASC` 첫 사람이다. 이 사람을 ‘최초 생성자’라고 주장하지 않는다. admin이 없는 기존 팀은 member를 자동 승격하지 않고 강제 전환을 중단해 점검한다.
+기존 팀 backfill은 NULL인 대표만 채운다. 이미 유효한 non-NULL 대표는 보존하고 잘못된 non-NULL 대표는 자동 교체하지 않고 중단한다. NULL 대표의 선택은 현재 admin 중 `joined_at ASC, user_id ASC` 첫 사람이다. 이 사람을 ‘최초 생성자’라고 주장하지 않는다. admin이 없는 기존 팀은 member를 자동 승격하지 않고 강제 전환을 중단해 점검한다.
 
 ## 단계와 구현 과제
 
@@ -58,11 +58,11 @@
 **Files:** 별도 후보 `db/migrations/014_team_lead_enforce.sql`, 단계 전환/동시성 통합 테스트.
 
 - [ ] 먼저 호환 앱을 모든 쓰기 주체에 반영하고 구버전 writer가 없음을 확인하는 실행서를 검토한다. 이번 문서 작성만으로 실행하지 않는다.
-- [ ] 제한된 잠금 시간 안에서 workspace→membership 쓰기를 잠그고 backfill·지연 FK·최종 상태 제약을 한 트랜잭션으로 반영한다. 실패하면 전체 rollback한다.
-- [ ] 호환 createTeam은 workspace INSERT 후 전환 상태를 재확인해, 전환 전 NULL로 판단한 요청이 강제 COMMIT 뒤 대표 없이 생성되는 경합을 닫는다.
-- [ ] 강제 후 새 팀은 workspace→admin membership→lead pointer를 같은 트랜잭션에서 만든다. 중간 NULL은 허용해도 COMMIT의 대표 0명·외부 팀원·member 대표·대표 강등은 거절한다.
-- [ ] 전환·이양·삭제 거절 시 원본·버전·게시본·공유 전체 보존을 확인한다. 직접 대표 사용자 삭제도 DB 제약으로 차단한다.
-- [ ] 명시적 계정 삭제 성공은 기존 개인 workspace 삭제 정책을 유지하되 팀 자료·게시본·공유와 다른 계정 자료를 보존한다. 명시적 팀 삭제 성공은 그 팀의 기존 삭제 범위만 정리하고 다른 개인·팀 자료·공유를 보존한다. 전환의 보존 정책을 기존 사용자의 명시적 삭제 금지로 확대하지 않는다.
+- [x] 제한된 잠금 시간 안에서 workspace→membership 쓰기를 잠그고 backfill·지연 FK·최종 상태 제약을 한 트랜잭션으로 반영한다. 실패하면 전체 rollback한다.
+- [x] 호환 createTeam은 workspace INSERT 후 전환 상태를 재확인해, 전환 전 NULL로 판단한 요청이 강제 COMMIT 뒤 대표 없이 생성되는 경합을 닫는다.
+- [x] 강제 후 새 팀은 workspace→admin membership→lead pointer를 같은 트랜잭션에서 만든다. 중간 NULL은 허용해도 COMMIT의 대표 0명·외부 팀원·member 대표·대표 강등은 거절한다.
+- [x] 전환·이양·삭제 거절 시 원본·버전·게시본·공유 전체 보존을 확인한다. 직접 대표 사용자 삭제도 DB 제약으로 차단한다.
+- [x] 명시적 계정 삭제 성공은 기존 개인 workspace 삭제 정책을 유지하되 팀 자료·게시본·공유와 다른 계정 자료를 보존한다. 명시적 팀 삭제 성공은 그 팀의 기존 삭제 범위만 정리하고 다른 개인·팀 자료·공유를 보존한다. 전환의 보존 정책을 기존 사용자의 명시적 삭제 금지로 확대하지 않는다.
 - [ ] 014 이후 복구 기준은 호환 앱 이상이다. 구버전 앱 복귀나 대표 제약/데이터의 자동 삭제를 복구로 사용하지 않는다.
 
 ### Task 4: API·화면 통합과 전체 회귀
@@ -81,3 +81,12 @@ DB 저장안·013/014 번호·준비 상태 신호·API 오류 코드와 새 권
 ## 2026-11-24 Task2 계약·검증 갱신
 
 [호환 백엔드·이양 API 계약](../../qa/2026-11-24/team-lead-backend-contract.md)에 readiness·응답·오류·동시성 경계를 정리했다.014 SQL은 이번 산출물에 없고 CI의 marker 모의는 실제 강제 제약 검증과 구분한다. Task2 구현과 격리 DB212건은 통과했다. 체크는 코드·DB 계약 기준이며 전체 GREEN CI·독립 최종 검토·새 앱 배포 완료를 대신하지 않는다. 전체 CI·PR은 최신 head로 별도 확인한다.
+
+
+## 2026-11-24 Task3 코드·격리 검증
+
+014 SQL과 실제 업그레이드/최종 COMMIT 제약·동시성 검사를 구현했다.70cd21e의 CI45310185330에서 단위·타입·DB226건이 통과했고 문서 갱신 시 전체 이미지/E2E 결과는 진행 중이다. 체크된 Task3 항목은 **코드·격리 검증**이며 운영014 실행이 아니다. 전체 최신 CI·PR은 해당 head에서 확인한다.
+
+기존013 NULL/marker 프로토콜2파일은 고유 *_test DB의 별도 Vitest 프로젝트로 분리했다. 고정 public search_path를 바꾸어 검증을 흉내 내거나 기본014 제약/ledger를 지우지 않는다. 기존 저장/이동/종료 fixture에는 별도 admin 대표나 명시적 이양을 추가하고 마지막 admin·동시 계정 삭제의013 의미도 별도 검사로 유지했다.
+
+검토 중 발견한 역방향 RR write-skew는 CI45309706059에서224건 성공/1건 실패로 재현했다. FK만으로 역할 스냅샷을 보호하지 못해 membership 변경 때 정렬 잠근 workspace를 같은 값으로 UPDATE하여 tuple 버전을 갱신했다. 논리 내용은 같고 stale RR은 전체 rollback한다.30명 batch/팀 cascade 검사로 지연 이벤트의 비재귀와 내용 보존을 확인했다. [전환 실행서·근거·한계](../../qa/2026-11-24/team-lead-enforcement-runbook.md).
