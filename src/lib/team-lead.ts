@@ -18,6 +18,6 @@ export async function assertNotTeamLead(db: DbClient, userId: string, teamId?: s
     throw new AppError(
       "lead_transfer_required",
       409,
-      "다른 팀 관리자에게 대표 권한을 이양한 뒤 진행하세요.",
+      "다른 팀원에게 대표 권한을 이양한 뒤 진행하세요.",
     );
 }
