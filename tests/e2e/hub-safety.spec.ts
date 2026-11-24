@@ -54,7 +54,9 @@ test("hub rechecks a cached-current task and serializes repeated navigation whil
     await expect.poll(() => calls, { timeout: 2000 }).toBe(1);
     await expect(page.getByRole("status")).toHaveText("문서함을 전환하고 있습니다.");
     resume();
-    await expect(page.getByRole("alert")).toHaveText("합성 전환 실패");
+    await expect(page.getByRole("alert").filter({ hasText: "합성 전환 실패" })).toHaveText(
+      "합성 전환 실패",
+    );
     await expect(page).toHaveURL(/\/library$/);
     await expect(page.getByLabel("업무 검색")).toHaveValue("합성");
     await expect(page.getByRole("button", { name: "내가 할 일 1", exact: true })).toHaveAttribute(
