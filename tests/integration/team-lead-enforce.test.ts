@@ -487,3 +487,42 @@ it("finishes a thirty-member batch and whole-team cascade without trigger recurs
     await f.close();
   }
 });
+
+it("rolls back backfill, new constraints and ledger when a later DDL name collision aborts the upgrade", async () => {
+  expect(sql).not.toBeNull();
+  if (!sql) return;
+  const f = await fixture();
+  try {
+    // The migration reaches this ADD CONSTRAINT after updating NULL representatives.
+    await f.db.query(
+      "ALTER TABLE workspaces ADD CONSTRAINT personal_workspace_no_lead CHECK (true)",
+    );
+    const before = await snapshot(f.db);
+    const pointers = (await f.db.query("SELECT id,lead_user_id FROM workspaces ORDER BY id")).rows;
+    await expect(enforce(f.db)).rejects.toMatchObject({ code: "42710" });
+    expect(await snapshot(f.db)).toEqual(before);
+    expect((await f.db.query("SELECT id,lead_user_id FROM workspaces ORDER BY id")).rows).toEqual(
+      pointers,
+    );
+    expect(
+      (await f.db.query("SELECT name FROM schema_migrations WHERE name=$1", [migration])).rowCount,
+    ).toBe(0);
+    expect(
+      (await f.db.query("SELECT 1 FROM pg_constraint WHERE conname='team_lead_membership_fk'"))
+        .rowCount,
+    ).toBe(0);
+    expect(
+      (await f.db.query("SELECT 1 FROM pg_trigger WHERE tgname='team_lead_membership_valid'"))
+        .rowCount,
+    ).toBe(0);
+    expect(
+      (
+        await f.db.query(
+          "SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conname='personal_workspace_no_lead'",
+        )
+      ).rows,
+    ).toEqual([{ definition: "CHECK (true)" }]);
+  } finally {
+    await f.close();
+  }
+});

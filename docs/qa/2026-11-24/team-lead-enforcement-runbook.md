@@ -16,7 +16,7 @@
 4. 업무 쓰기를 멈추거나 유입을 차단하는 승인된 짧은 점검 창을 준비하고 진행 중 트랜잭션을 배출한다. 대표 표시·이양 진입점·409 안내의 화면 계약도 확인한다. 화면이 아직 없으면 API 구현 완료를 일반 사용자용 기능 완료로 표시하지 않는다.
 5. 새 S3 백업 업로드와 저장 checksum·복구 지점을 확인한다. 이번 SQL 전환과 백업 복원 시험은 별개다.
 6. owner 연결로 DB001~013·014 미적용·nullable UUID 구조를 대조하고, NULL 팀 수/유효한 대표 수/admin 없는 팀 수/잘못된 대표 수를 확인한다. 업무 원문·개인 연락처·백업 key를 Git이나 출력에 남기지 않는다.
-7. CI 산출물과 검토한014 파일 해시를 고정한다. 신규014 파일과 package.json 검증 명령 등 보호 목록의 실제 변경을 검토한 뒤 필요한 해시만 갱신한다. fingerprint/여유 공간/검증 기준을 해제하는 우회는 하지 않는다.
+7. CI 산출물과 검토한014 파일 해시를 고정한다. CI 검증 명령(package.json) 변경은 별도로 검토하고, 현재 고정 실행기의 보호 목록에 실제로 포함된014 등 변경 파일의 해시만 갱신한다. package.json은 현재 protected_tree 항목이 아니다. fingerprint/여유 공간/검증 기준을 해제하는 우회는 하지 않는다.
 
 ## 원자적 실행 계약
 
@@ -45,7 +45,7 @@
 
 이 분리는010~012 함수의 고정 public search_path 때문에 필요하다. 단순 TEMP schema/search_path를 전환해 같은 API를 검증했다고 주장하지 않는다. DB helper는 입력 _test 접미·생성/삭제 대상 prefix·연결의 current_database를 확인하고 FORCE DROP이나 다른 DB 삭제는 하지 않는다. 이는 GHA 전용이며 공유 운영 호스트에서 실행하지 않는다.
 
-실제013→014 업그레이드 검사는 매번 별도 DB에서 source bytes·revision/질문·게시본·공유·Reader 보존, 결정적 NULL backfill/기존 대표 보존, 무admin/잘못된 대표의 전체 rollback, 실제 COMMIT 위반, 중간 NULL→정상 이양, 명시적 계정/팀 삭제, 직접 SQL 경합과 REPEATABLE READ 양방향을 검사한다. 별도 실제 앱 전환 검사는014가 잠금을 선점한 동안 createTeam 대기→COMMIT 후 대표 완성·구버전 writer 거부·실제 POST 이양·두 이양을 확인한다.
+실제013→014 업그레이드 검사는 매번 별도 DB에서 source bytes·revision/질문·게시본·공유·Reader 보존, 결정적 NULL backfill/기존 대표 보존, 무admin/잘못된 대표의 전체 rollback, backfill 뒤 DDL 이름 충돌42710의 전체 rollback, 실제 COMMIT 위반, 중간 NULL→정상 이양, 명시적 계정/팀 삭제, 직접 SQL 경합과 REPEATABLE READ 양방향을 검사한다. 별도 실제 앱 전환 검사는014가 잠금을 선점한 동안 createTeam 대기→COMMIT 후 대표 완성·구버전 writer 거부·실제 POST 이양·두 이양을 확인한다.
 
 ## PostgreSQL 근거와 한계
 
@@ -53,4 +53,4 @@
 - [CREATE TABLE](https://www.postgresql.org/docs/18/sql-createtable.html): deferred NO ACTION FK는 최종 검사 때 남아 있는 참조를 검증한다. SET NULL/CASCADE로 대표를 조용히 없애지 않는다.
 - [명시적 잠금](https://www.postgresql.org/docs/18/explicit-locking.html)·[Repeatable Read](https://www.postgresql.org/docs/18/transaction-iso.html): 행 잠금과 변경된 행의 스냅샷 충돌을 함께 고려한다. serialization 실패는 전체 TX를 처음부터 재시도해야 한다. membership이 workspace를 잠그기만 하는 초안은 반대 방향 RR 경합에서 member 대표를 commit하는 문제가 실제로 재현됐다. 같은 lead 값 UPDATE로 논리 데이터를 보존하면서 workspace tuple 버전을 바꿔 stale RR을40001로 중단한다.
 
-RED cbafa7e/CI45309706059에서 기존224건 통과·역방향 RR1건 실패를 확인했다. stale RR 이양이 member를 최종 대표로 commit해버렸으며 FK만으로는 역할 스냅샷을 보호하지 못했다. 이후 workspace tuple 버전 갱신을 보완하고30명 batch/전체 팀 cascade의 trigger 비재귀와 논리 내용 보존도 검사한다. 최종 CI·검토 결과는 PR의 최신 head를 따른다. 실제 운영014·복원·서비스 전체 부하·대표 화면 검증을 이번 격리 검증으로 대신하지 않는다.
+RED cbafa7e/CI45309706059에서 기존224건 통과·역방향 RR1건 실패를 확인했다. stale RR 이양이 member를 최종 대표로 commit해버렸으며 FK만으로는 역할 스냅샷을 보호하지 못했다. 이후 workspace tuple 버전 갱신을 보완하고30명 batch/전체 팀 cascade의 trigger 비재귀와 논리 내용 보존도 검사한다. 추가한 DDL 이름 충돌 검사는 backfill 다음 ALTER 실패를 유도하고 기존 대표 값·업무 내용·이력13개·기존 constraint 보존 및 새 FK/trigger 부재를 확인한다. 최종 CI·검토 결과는 PR의 최신 head를 따른다. 실제 운영014·복원·서비스 전체 부하·대표 화면 검증을 이번 격리 검증으로 대신하지 않는다.

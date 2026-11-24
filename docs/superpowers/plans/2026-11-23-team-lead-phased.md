@@ -90,3 +90,5 @@ DB 저장안·013/014 번호·준비 상태 신호·API 오류 코드와 새 권
 기존013 NULL/marker 프로토콜2파일은 고유 *_test DB의 별도 Vitest 프로젝트로 분리했다. 고정 public search_path를 바꾸어 검증을 흉내 내거나 기본014 제약/ledger를 지우지 않는다. 기존 저장/이동/종료 fixture에는 별도 admin 대표나 명시적 이양을 추가하고 마지막 admin·동시 계정 삭제의013 의미도 별도 검사로 유지했다.
 
 검토 중 발견한 역방향 RR write-skew는 CI45309706059에서224건 성공/1건 실패로 재현했다. FK만으로 역할 스냅샷을 보호하지 못해 membership 변경 때 정렬 잠근 workspace를 같은 값으로 UPDATE하여 tuple 버전을 갱신했다. 논리 내용은 같고 stale RR은 전체 rollback한다.30명 batch/팀 cascade 검사로 지연 이벤트의 비재귀와 내용 보존을 확인했다. [전환 실행서·근거·한계](../../qa/2026-11-24/team-lead-enforcement-runbook.md).
+
+추가로 backfill 뒤 DDL constraint 이름 충돌을 유도하는 rollback 회귀1건을 작성했다. 대표 값·업무 내용·기존 constraint/13개 이력 보존과 새 FK/trigger 부재를 확인하며, 이 추가 건의 실행 결과는 최신 PR CI를 따른다.
