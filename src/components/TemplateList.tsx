@@ -22,8 +22,10 @@ const listSchema = z.array(
     isDefault: z.boolean(),
   }),
 );
-export function TemplateList() {
+// embedded: 팀 화면의 "양식" 탭 안에 넣을 때.
+export function TemplateList({ embedded = false }: { readonly embedded?: boolean } = {}) {
   const workspaceName = useWorkspaceName();
+  const Heading = embedded ? "h2" : "h1";
   const router = useRouter();
   const [templates, setTemplates] = useState<z.infer<typeof listSchema> | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -52,8 +54,8 @@ export function TemplateList() {
   }
   return (
     <>
-      <span className="eyebrow">{workspaceName}</span>
-      <h1>양식</h1>
+      {!embedded && <span className="eyebrow">{workspaceName}</span>}
+      <Heading>양식</Heading>
       <p className="muted">
         회사에서 쓰는 인수인계 양식을 등록하면 그 양식의 항목에 맞춰 매뉴얼을 만들 수 있습니다.
       </p>

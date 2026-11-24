@@ -5,6 +5,7 @@ import { AppError } from "./errors.ts";
 import { sendMail } from "./mailer.ts";
 import { removeWorkspace } from "./retention.ts";
 import { freshToken, lockAccountSession, tokenHash } from "./session.ts";
+import { assertNotTeamLead, teamLeadEnforced } from "./team-lead.ts";
 import { newId, type SessionContext } from "./types.ts";
 
 export const TeamNameSchema = z.string().trim().min(1).max(40);
@@ -21,8 +22,8 @@ function account(ctx: SessionContext): string {
 // 팀 행을 잠그고 요청한 사람의 역할을 돌려준다. 팀원이 아니면 404, 관리자가 필요한데 아니면 403.
 // 역할 변경·나가기·내보내기·초대가 모두 이 잠금 뒤에서 마지막 관리자와 정원을 검사한다.
 async function lockTeam(db: DbClient, userId: string, teamId: string, adminOnly = false) {
-  const team = await db.query<{ team_name: string }>(
-    "SELECT team_name FROM workspaces WHERE id=$1 AND team_name IS NOT NULL FOR UPDATE",
+  const team = await db.query<{ team_name: string; lead_user_id: string | null }>(
+    "SELECT team_name,lead_user_id FROM workspaces WHERE id=$1 AND team_name IS NOT NULL FOR UPDATE",
     [teamId],
   );
   const member = await db.query<{ role: "admin" | "member" }>(
@@ -33,7 +34,7 @@ async function lockTeam(db: DbClient, userId: string, teamId: string, adminOnly 
   if (!team.rows[0] || !role) throw missing();
   if (adminOnly && role !== "admin")
     throw new AppError("forbidden", 403, "팀 관리자만 할 수 있습니다.");
-  return { name: team.rows[0].team_name, role };
+  return { name: team.rows[0].team_name, role, leadUserId: team.rows[0].lead_user_id };
 }
 async function assertOtherAdmin(db: DbClient, teamId: string, userId: string) {
   const others = await db.query(
@@ -83,8 +84,32 @@ export async function createTeam(ctx: SessionContext, input: unknown) {
       "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'admin')",
       [id, userId],
     );
+    // Recheck after INSERT: a migration may have committed while the insert was blocked.
+    if (await teamLeadEnforced(db))
+      await db.query("UPDATE workspaces SET lead_user_id=$2 WHERE id=$1", [id, userId]);
     return { id, name, role: "admin" as const };
   });
+}
+
+async function newAccountSession(db: DbClient, userId: string, workspaceId: string) {
+  const token = freshToken();
+  const created = await db.query<{ expires_at: Date }>(
+    `INSERT INTO sessions(id,workspace_id,token_hash,role,user_id,expires_at) VALUES($1,$2,$3,'owner',$4,now()+interval '${SESSION_DAYS} days') RETURNING expires_at`,
+    [newId(), workspaceId, tokenHash(token), userId],
+  );
+  return { token, expiresAt: z.date().parse(created.rows[0]?.expires_at), workspaceId };
+}
+
+async function lockExitHome(db: DbClient, ctx: SessionContext, teamId: string) {
+  if (ctx.workspaceId !== teamId) return null;
+  // Account deletion locks workspaces before users; acquire both before the session check too.
+  const locked = await db.query<{ id: string; user_id: string | null }>(
+    "SELECT id,user_id FROM workspaces WHERE id=$1 OR (user_id=$2 AND team_name IS NULL) ORDER BY id FOR UPDATE",
+    [teamId, ctx.userId],
+  );
+  const home = locked.rows.find((row) => row.user_id === ctx.userId)?.id;
+  if (!home) throw new AppError("unauthorized", 401, "로그인이 필요합니다.");
+  return home;
 }
 
 // 이전 세션 행은 질문과 작업을 위해 보존하고 브라우저 토큰만 폐기한다.
@@ -107,17 +132,13 @@ export async function switchWorkspace(token: string, workspaceId: string | null)
     );
     const id = target.rows[0]?.id;
     if (!id) throw missing();
-    const next = freshToken();
-    const created = await db.query<{ expires_at: Date }>(
-      `INSERT INTO sessions(id,workspace_id,token_hash,role,user_id,expires_at) VALUES($1,$2,$3,'owner',$4,now()+interval '${SESSION_DAYS} days') RETURNING expires_at`,
-      [newId(), id, tokenHash(next), userId],
-    );
+    const next = await newAccountSession(db, userId, id);
     const revoked = await db.query(
       "UPDATE sessions SET token_hash=$2 WHERE token_hash=$1 AND role='owner' AND expires_at>now()",
       [tokenHash(token), tokenHash(freshToken())],
     );
     if (!revoked.rowCount) throw new AppError("unauthorized", 401, "로그인이 필요합니다.");
-    return { token: next, expiresAt: z.date().parse(created.rows[0]?.expires_at), workspaceId: id };
+    return next;
   });
 }
 
@@ -135,12 +156,14 @@ export async function renameTeam(ctx: SessionContext, teamId: string, input: unk
 // 팀의 모든 자료가 영구 삭제된다. 팀 이름을 그대로 입력해야 한다.
 export async function deleteTeam(ctx: SessionContext, teamId: string, confirmName: unknown) {
   const userId = account(ctx);
-  await transaction(async (db) => {
+  return transaction(async (db) => {
+    const home = await lockExitHome(db, ctx, teamId);
     await lockAccountSession(db, ctx, teamId);
     const team = await lockTeam(db, userId, teamId, true);
     if (confirmName !== team.name)
       throw new AppError("invalid_input", 422, "팀 이름을 정확히 입력하세요.");
     await removeWorkspace(db, teamId);
+    return home ? newAccountSession(db, userId, home) : null;
   });
 }
 
@@ -150,6 +173,7 @@ export async function listMembers(ctx: SessionContext, teamId: string) {
     await lockAccountSession(db, ctx, teamId);
     const team = await lockTeam(db, userId, teamId);
     const admin = team.role === "admin";
+    const leadReady = (await teamLeadEnforced(db)) && team.leadUserId !== null;
     const members = await db.query(
       `SELECT u.id,u.name,u.department,m.role,m.joined_at AS "joinedAt"${admin ? ",u.email" : ""}
         FROM workspace_members m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=$1 ORDER BY m.joined_at,u.id`,
@@ -166,7 +190,12 @@ export async function listMembers(ctx: SessionContext, teamId: string) {
       id: teamId,
       name: team.name,
       role: team.role,
-      members: members.rows,
+      leadReady,
+      leadUserId: leadReady ? team.leadUserId : null,
+      members: members.rows.map((member) => ({
+        ...member,
+        lead: leadReady && member["id"] === team.leadUserId,
+      })),
       invites: invites.rows,
     };
   });
@@ -182,7 +211,10 @@ export async function changeRole(
   await transaction(async (db) => {
     await lockAccountSession(db, ctx, teamId);
     await lockTeam(db, userId, teamId, true);
-    if (role === "member") await assertOtherAdmin(db, teamId, targetId);
+    if (role === "member") {
+      await assertNotTeamLead(db, targetId, teamId);
+      await assertOtherAdmin(db, teamId, targetId);
+    }
     const updated = await db.query(
       "UPDATE workspace_members SET role=$3 WHERE workspace_id=$1 AND user_id=$2",
       [teamId, targetId, role],
@@ -194,7 +226,8 @@ export async function changeRole(
 // 본인이면 나가기, 다른 사람이면 내보내기(관리자만). 자료는 팀에 남는다.
 export async function removeMember(ctx: SessionContext, teamId: string, targetId: string) {
   const userId = account(ctx);
-  await transaction(async (db) => {
+  return transaction(async (db) => {
+    const home = targetId === userId ? await lockExitHome(db, ctx, teamId) : null;
     await lockAccountSession(db, ctx, teamId);
     await lockTeam(db, userId, teamId, targetId !== userId);
     const target = await db.query<{ role: string }>(
@@ -202,6 +235,7 @@ export async function removeMember(ctx: SessionContext, teamId: string, targetId
       [teamId, targetId],
     );
     if (!target.rows[0]) throw new AppError("not_found", 404, "팀원을 찾을 수 없습니다.");
+    await assertNotTeamLead(db, targetId, teamId);
     if (target.rows[0].role === "admin") await assertOtherAdmin(db, teamId, targetId);
     await db.query("DELETE FROM workspace_members WHERE workspace_id=$1 AND user_id=$2", [
       teamId,
@@ -209,6 +243,7 @@ export async function removeMember(ctx: SessionContext, teamId: string, targetId
     ]);
     // 떠난 사람의 팀 세션과 그 세션의 질문 기록(개인 기록)을 함께 지운다.
     await db.query("DELETE FROM sessions WHERE workspace_id=$1 AND user_id=$2", [teamId, targetId]);
+    return home ? newAccountSession(db, userId, home) : null;
   });
 }
 
@@ -318,5 +353,26 @@ export async function acceptInvite(ctx: SessionContext, token: unknown) {
     );
     await db.query("UPDATE workspace_invites SET accepted_at=now() WHERE id=$1", [invite.id]);
     return { id: invite.workspace_id, name: team.rows[0].team_name };
+  });
+}
+
+export async function transferTeamLead(ctx: SessionContext, teamId: string, targetId: string) {
+  const userId = account(ctx);
+  return transaction(async (db) => {
+    await lockAccountSession(db, ctx, teamId);
+    const team = await lockTeam(db, userId, teamId, true);
+    if (!(await teamLeadEnforced(db)) || !team.leadUserId)
+      throw new AppError("team_lead_not_ready", 503, "대표 관리자 기능을 준비 중입니다.");
+    if (team.leadUserId !== userId)
+      throw new AppError("lead_required", 403, "현재 대표 관리자만 이양할 수 있습니다.");
+    const target = await db.query<{ user_id: string }>(
+      "SELECT user_id FROM workspace_members WHERE workspace_id=$1 AND user_id=$2 AND role='admin' AND user_id<>$3",
+      [teamId, targetId, userId],
+    );
+    const targetUserId = target.rows[0]?.user_id;
+    if (!targetUserId)
+      throw new AppError("invalid_input", 422, "같은 팀의 다른 관리자를 선택하세요.");
+    await db.query("UPDATE workspaces SET lead_user_id=$2 WHERE id=$1", [teamId, targetUserId]);
+    return { id: teamId, leadUserId: targetUserId };
   });
 }
