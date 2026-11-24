@@ -52,14 +52,18 @@ test("library replaces team/work pages and searches across unloaded teams", asyn
   });
   await page.goto("/library");
   const first = page.getByRole("region", { name: "합성 업무 팀" });
-  await first.getByRole("button", { name: "다음 업무", exact: true }).click();
+  const nextWork = first.getByRole("button", { name: "다음 업무", exact: true });
+  await nextWork.focus();
+  await nextWork.press("Enter");
   await expect(first.getByRole("link", { name: "마지막 페이지 업무", exact: true })).toBeVisible();
+  await expect(first.getByRole("heading", { name: "합성 업무 팀", exact: true })).toBeFocused();
   await expect(first.getByRole("link", { name: hubWork.title, exact: true })).toHaveCount(0);
   expect(requests.at(-1)?.searchParams.get("workspaceId")).toBe(hubTeamId);
   expect(requests.at(-1)?.searchParams.get("afterWork")).toBe("next-work");
   await first.getByRole("button", { name: "처음 업무", exact: true }).click();
   await expect(first.getByRole("link", { name: hubWork.title, exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "다음 문서함", exact: true }).click();
+  await page.getByRole("button", { name: "다음 문서함", exact: true }).press("Enter");
+  await expect(page.getByRole("heading", { name: "내 문서함", level: 1 })).toBeFocused();
   await expect(page.getByRole("region", { name: "마지막 팀", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "합성 업무 팀", exact: true })).toHaveCount(0);
   expect(requests.at(-1)?.searchParams.get("afterTeam")).toBe(hubTeamId);
@@ -103,8 +107,17 @@ test("library ignores late searches and retains failed input for retry", async (
     );
     await search.fill("빠른 검색");
     await expect(page.getByRole("region", { name: "빠른 검색", exact: true })).toBeVisible();
+    const slowResponse = page.waitForResponse(
+      (response) => new URL(response.url()).searchParams.get("query") === "느린 검색",
+    );
     release();
+    await (await slowResponse).finished();
+    await page.evaluate(async () => {
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+    });
     await expect(page.getByRole("region", { name: "느린 검색", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "빠른 검색", exact: true })).toBeVisible();
     await search.fill("실패 검색");
     await expect(page.getByRole("alert").filter({ hasText: "합성 조회 실패" })).toBeVisible();
     await expect(search).toHaveValue("실패 검색");

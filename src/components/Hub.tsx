@@ -68,6 +68,7 @@ export function Hub() {
   const mounted = useRef(true);
   const generation = useRef(0);
   const paging = useRef(false);
+  const focusTarget = useRef<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "todo" | "published">("all");
   const [teamCursor, setTeamCursor] = useState<string | null>(null);
@@ -125,7 +126,16 @@ export function Hub() {
       clearTimeout(timer);
     };
   }, [query, filter, teamCursor, key]);
+  useEffect(() => {
+    if (!loading && !pendingGroup && focusTarget.current) {
+      const target =
+        document.getElementById(focusTarget.current) ?? document.getElementById("overview-title");
+      focusTarget.current = null;
+      target?.focus();
+    }
+  }, [loading, pendingGroup]);
   const resetSearch = () => {
+    focusTarget.current = null;
     generation.current++;
     paging.current = true;
     setLoading(true);
@@ -137,6 +147,7 @@ export function Hub() {
     generation.current++;
     paging.current = true;
     setLoading(true);
+    focusTarget.current = "overview-title";
     setBack(previous ? back.slice(0, -1) : [...back, teamCursor]);
     setTeamCursor(cursor);
   };
@@ -144,6 +155,7 @@ export function Hub() {
     if (paging.current || navigating.current) return;
     paging.current = true;
     const version = ++generation.current;
+    focusTarget.current = overview?.personal?.id === id ? "personal-works" : `team-${id}`;
     setPendingGroup(id);
     setRetryWork(null);
     setError("");
@@ -291,7 +303,9 @@ export function Hub() {
   return (
     <>
       <span className="eyebrow">한눈에 보기</span>
-      <h1>내 문서함</h1>
+      <h1 id="overview-title" tabIndex={-1}>
+        내 문서함
+      </h1>
       <p className="muted">
         내가 속한 팀의 업무와 매뉴얼을 한곳에서 봅니다. 팀 이름을 누르면 그 팀으로 들어갑니다.
       </p>
@@ -398,7 +412,7 @@ export function Hub() {
               return (
                 <section key={team.id} className="hub-team" aria-labelledby={`team-${team.id}`}>
                   <div className="hub-team-head">
-                    <h2 id={`team-${team.id}`}>
+                    <h2 id={`team-${team.id}`} tabIndex={-1}>
                       <Link href={`/teams/${team.id}`}>{team.name}</Link>
                     </h2>
                     <span className="badge">{role}</span>
@@ -440,7 +454,9 @@ export function Hub() {
             {overview.personal && (
               <section className="hub-team" aria-labelledby="personal-works">
                 <div className="hub-team-head">
-                  <h2 id="personal-works">개인 업무</h2>
+                  <h2 id="personal-works" tabIndex={-1}>
+                    개인 업무
+                  </h2>
                   <span className="help">업무 {overview.personal.workCount}개</span>
                 </div>
                 <p className="help">
