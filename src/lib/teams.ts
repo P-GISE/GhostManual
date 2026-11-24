@@ -332,7 +332,7 @@ export async function acceptInvite(ctx: SessionContext, token: unknown) {
       [invite.id, tokenHash(parsed.data)],
     );
     if (!live.rowCount) throw invalid();
-    const team = await db.query<{ team_name: string; lead_user_id: string | null }>(
+    const team = await db.query<{ team_name: string }>(
       "SELECT team_name FROM workspaces WHERE id=$1 AND team_name IS NOT NULL",
       [invite.workspace_id],
     );
