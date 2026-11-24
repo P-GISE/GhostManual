@@ -7,7 +7,7 @@ import {
   hubWork,
 } from "../fixtures/hub-overview";
 
-async function mockHub(page: Page, overview: ReturnType<typeof hubOverview>) {
+async function mockHub(page: Page, overview: Parameters<typeof filteredHub>[1]) {
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const values: Record<string, unknown> = {

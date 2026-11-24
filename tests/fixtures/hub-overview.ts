@@ -56,7 +56,12 @@ export function hubOverview(ready = false, personal = false) {
   };
 }
 
-export function filteredHub(url: string, view: ReturnType<typeof hubOverview>) {
+export function filteredHub(
+  url: string,
+  view: Omit<ReturnType<typeof hubOverview>, "teams"> & {
+    teams: ReturnType<typeof hubOverview>["teams"][number][];
+  },
+) {
   const params = new URL(url).searchParams;
   const query = (params.get("query") ?? "").trim().normalize("NFKC").toLocaleLowerCase("ko-KR");
   const filter = params.get("filter") ?? "all";
