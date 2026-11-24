@@ -221,14 +221,14 @@ it("checks final COMMIT state for NULL, foreign/member leads, demotion, removal,
       const client = await f.db.connect();
       try {
         await client.query("BEGIN");
-        let failure: unknown;
-        try {
+        if (values[0] === f.ids.personal)
+          await expect(client.query(query, [...values])).rejects.toMatchObject({ code: "23514" });
+        else {
           await client.query(query, [...values]);
-          await client.query("COMMIT");
-        } catch (error) {
-          failure = error;
+          await expect(client.query("COMMIT")).rejects.toMatchObject({
+            code: expect.stringMatching(/^235(03|14)$/),
+          });
         }
-        expect(failure).toMatchObject({ code: expect.stringMatching(/^235(03|14)$/) });
         await client.query("ROLLBACK");
       } finally {
         client.release();
