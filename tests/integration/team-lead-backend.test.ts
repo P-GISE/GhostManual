@@ -1,0 +1,245 @@
+import { existsSync } from "node:fs";
+import { afterAll, afterEach, expect, it } from "vitest";
+import { deleteAccount } from "../../src/lib/accounts.ts";
+import { pool } from "../../src/lib/db.ts";
+import { requireSession } from "../../src/lib/session.ts";
+import { createSource, getSource } from "../../src/lib/sources.ts";
+import * as teams from "../../src/lib/teams.ts";
+import type { SessionContext } from "../../src/lib/types.ts";
+import { exampleSource } from "../fixtures/manual-example.ts";
+import { setupFileMail, signedInUser } from "./mail-helper.ts";
+
+const mail = setupFileMail();
+const marker = "014_team_lead_enforce.sql";
+afterEach(async () => {
+  await pool.query("DELETE FROM schema_migrations WHERE name=$1", [marker]);
+});
+afterAll(() => pool.end());
+async function transfer(ctx: SessionContext, teamId: string, userId: string) {
+  const action = Reflect.get(teams, "transferTeamLead") as
+    | ((ctx: SessionContext, teamId: string, userId: string) => Promise<unknown>)
+    | undefined;
+  expect(action, "compatible lead transfer must exist").toBeTypeOf("function");
+  if (!action) throw new Error("missing transferTeamLead");
+  return action(ctx, teamId, userId);
+}
+async function fixture(ready = true) {
+  const lead = await signedInUser(mail),
+    admin = await signedInUser(mail),
+    member = await signedInUser(mail);
+  const team = await teams.createTeam(lead.ctx, "대표 이양 합성 팀");
+  await pool.query(
+    "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'admin'),($1,$3,'member')",
+    [team.id, admin.ctx.userId, member.ctx.userId],
+  );
+  if (ready) {
+    // Protocol simulation only: future 014 constraints are deliberately not installed.
+    await pool.query("UPDATE workspaces SET lead_user_id=$2 WHERE id=$1", [
+      team.id,
+      lead.ctx.userId,
+    ]);
+    await pool.query("INSERT INTO schema_migrations(name) VALUES($1)", [marker]);
+  }
+  return { lead, admin, member, team };
+}
+const pointer = async (id: string) =>
+  (await pool.query("SELECT lead_user_id FROM workspaces WHERE id=$1", [id])).rows[0]?.lead_user_id;
+
+it("keeps 013 legacy roles and null pointers while reporting transfer not ready", async () => {
+  const { lead, admin, team } = await fixture(false);
+  expect(await pointer(team.id)).toBeNull();
+  expect(await teams.listMembers(lead.ctx, team.id)).toMatchObject({
+    leadReady: false,
+    leadUserId: null,
+    members: expect.arrayContaining([
+      expect.objectContaining({ id: lead.ctx.userId, lead: false }),
+    ]),
+  });
+  await expect(transfer(lead.ctx, team.id, admin.ctx.userId as string)).rejects.toMatchObject({
+    code: "team_lead_not_ready",
+    httpStatus: 503,
+  });
+  await teams.changeRole(admin.ctx, team.id, lead.ctx.userId as string, "member");
+  await teams.removeMember(lead.ctx, team.id, lead.ctx.userId as string);
+  expect(await pointer(team.id)).toBeNull();
+});
+
+it("transfers only the pointer, retaining admin roles, sessions and current admin deletion rights", async () => {
+  const { lead, admin, member, team } = await fixture();
+  const before = (
+    await pool.query(
+      "SELECT to_jsonb(m) AS row FROM workspace_members m WHERE workspace_id=$1 ORDER BY user_id",
+      [team.id],
+    )
+  ).rows;
+  const sessions = (
+    await pool.query(
+      "SELECT id,token_hash FROM sessions WHERE user_id=ANY($1::uuid[]) ORDER BY id",
+      [[lead.ctx.userId, admin.ctx.userId]],
+    )
+  ).rows;
+  for (const target of [lead.ctx.userId, member.ctx.userId, crypto.randomUUID()])
+    await expect(transfer(lead.ctx, team.id, target as string)).rejects.toMatchObject({
+      httpStatus: 422,
+    });
+  for (const actor of [admin, member])
+    await expect(transfer(actor.ctx, team.id, lead.ctx.userId as string)).rejects.toMatchObject({
+      httpStatus: 403,
+    });
+  expect(await transfer(lead.ctx, team.id, admin.ctx.userId as string)).toEqual({
+    id: team.id,
+    leadUserId: admin.ctx.userId,
+  });
+  expect(await pointer(team.id)).toBe(admin.ctx.userId);
+  expect(
+    (
+      await pool.query(
+        "SELECT to_jsonb(m) AS row FROM workspace_members m WHERE workspace_id=$1 ORDER BY user_id",
+        [team.id],
+      )
+    ).rows,
+  ).toEqual(before);
+  expect(
+    (
+      await pool.query(
+        "SELECT id,token_hash FROM sessions WHERE user_id=ANY($1::uuid[]) ORDER BY id",
+        [[lead.ctx.userId, admin.ctx.userId]],
+      )
+    ).rows,
+  ).toEqual(sessions);
+  const listed = await teams.listMembers(member.ctx, team.id);
+  expect(listed).toMatchObject({ leadReady: true, leadUserId: admin.ctx.userId });
+  expect(listed.members.filter((m) => m["lead"])).toEqual([
+    expect.objectContaining({ id: admin.ctx.userId, role: "admin", lead: true }),
+  ]);
+  expect(listed.members.every((m) => !("email" in m))).toBe(true);
+  await teams.deleteTeam(lead.ctx, team.id, team.name);
+});
+
+it("rejects lead demotion, removal and account deletion before personal data is touched", async () => {
+  const { lead, admin, team } = await fixture();
+  const source = await createSource(lead.ctx, exampleSource);
+  for (const action of [
+    () => teams.changeRole(admin.ctx, team.id, lead.ctx.userId as string, "member"),
+    () => teams.removeMember(admin.ctx, team.id, lead.ctx.userId as string),
+    () => teams.removeMember(lead.ctx, team.id, lead.ctx.userId as string),
+    () => deleteAccount(lead.ctx),
+  ]) {
+    await expect(action()).rejects.toMatchObject({
+      code: "lead_transfer_required",
+      httpStatus: 409,
+    });
+    expect((await getSource(lead.ctx, source.id)).id).toBe(source.id);
+    await expect(requireSession(lead.token)).resolves.toMatchObject({ userId: lead.ctx.userId });
+    expect(await pointer(team.id)).toBe(lead.ctx.userId);
+  }
+  await transfer(lead.ctx, team.id, admin.ctx.userId as string);
+  await deleteAccount(lead.ctx);
+  expect((await pool.query("SELECT id FROM users WHERE id=$1", [lead.ctx.userId])).rowCount).toBe(
+    0,
+  );
+  expect(await pointer(team.id)).toBe(admin.ctx.userId);
+  expect((await teams.listMembers(admin.ctx, team.id)).members).toHaveLength(2);
+});
+
+it("serializes stale-actor transfers and target demotion with no dangling lead", async () => {
+  const { lead, admin, member, team } = await fixture();
+  await teams.changeRole(lead.ctx, team.id, member.ctx.userId as string, "admin");
+  const results = await Promise.allSettled([
+    transfer(lead.ctx, team.id, admin.ctx.userId as string),
+    transfer(lead.ctx, team.id, member.ctx.userId as string),
+  ]);
+  expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+  expect(results.filter((r) => r.status === "rejected")).toEqual([
+    expect.objectContaining({ reason: expect.objectContaining({ httpStatus: 403 }) }),
+  ]);
+  await pool.query("UPDATE workspaces SET lead_user_id=$2 WHERE id=$1", [team.id, lead.ctx.userId]);
+  const race = await Promise.allSettled([
+    transfer(lead.ctx, team.id, admin.ctx.userId as string),
+    teams.changeRole(lead.ctx, team.id, admin.ctx.userId as string, "member"),
+  ]);
+  expect(race.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+  expect(race.filter((r) => r.status === "rejected")).toHaveLength(1);
+  expect(
+    (
+      await pool.query(
+        "SELECT m.role FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id AND m.user_id=w.lead_user_id WHERE w.id=$1",
+        [team.id],
+      )
+    ).rows[0]?.role,
+  ).toBe("admin");
+});
+
+it("rechecks readiness after an insert blocked at the future migration boundary", async () => {
+  const lead = await signedInUser(mail),
+    blocker = await pool.connect();
+  let pending: Promise<unknown> | undefined;
+  try {
+    await blocker.query("BEGIN");
+    await blocker.query("LOCK TABLE workspaces IN SHARE ROW EXCLUSIVE MODE");
+    pending = teams.createTeam(lead.ctx, "단계 경계 합성 팀");
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const waiters = await blocker.query(
+        "SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE 'INSERT INTO workspaces%'",
+      );
+      if (waiters.rowCount) break;
+      if (attempt === 99) throw new Error("createTeam did not reach blocked INSERT");
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    await blocker.query("INSERT INTO schema_migrations(name) VALUES($1)", [marker]);
+    await blocker.query("COMMIT");
+    const created = (await pending) as { id: string };
+    expect(await pointer(created.id)).toBe(lead.ctx.userId);
+  } finally {
+    await blocker.query("ROLLBACK");
+    blocker.release();
+    await pending?.catch(() => undefined);
+  }
+});
+
+it("enforces transfer HTTP authentication, origin, strict input and membership", async () => {
+  const path = "../../src/app/api/workspaces/[id]/lead/route.ts";
+  expect(existsSync("src/app/api/workspaces/[id]/lead/route.ts")).toBe(true);
+  if (!existsSync("src/app/api/workspaces/[id]/lead/route.ts")) return;
+  const { POST } = await import(path);
+  const { lead, admin, member, team } = await fixture();
+  const outsider = await signedInUser(mail);
+  const request = (
+    token?: string,
+    input: unknown = { userId: admin.ctx.userId },
+    origin = "http://localhost:3200",
+  ) =>
+    new Request("http://localhost:3200/api/workspaces/test/lead", {
+      method: "POST",
+      headers: {
+        origin,
+        "content-type": "application/json",
+        ...(token ? { cookie: `gm_owner=${token}` } : {}),
+      },
+      body: JSON.stringify(input),
+    });
+  const call = (r: Request) => POST(r, { params: Promise.resolve({ id: team.id }) });
+  expect((await call(request())).status).toBe(401);
+  expect((await call(request(lead.token, undefined, "https://attacker.invalid"))).status).toBe(403);
+  expect((await call(request(lead.token, { userId: "bad" }))).status).toBe(422);
+  expect(
+    (await call(request(lead.token, { userId: admin.ctx.userId, role: "admin" }))).status,
+  ).toBe(422);
+  expect((await call(request(outsider.token))).status).toBe(404);
+  expect((await call(request(member.token))).status).toBe(403);
+  await pool.query("UPDATE sessions SET expires_at=now()-interval '1 second' WHERE id=$1", [
+    outsider.ctx.sessionId,
+  ]);
+  expect((await call(request(outsider.token))).status).toBe(401);
+  await expect(
+    transfer(
+      { ...lead.ctx, role: "reader" } as SessionContext,
+      team.id,
+      admin.ctx.userId as string,
+    ),
+  ).rejects.toMatchObject({ httpStatus: 404 });
+  const response = await call(request(lead.token));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ id: team.id, leadUserId: admin.ctx.userId });
+  expect(response.headers.get("set-cookie")).toBeNull();
+});
