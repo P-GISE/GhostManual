@@ -5,6 +5,7 @@ import { pool } from "../../src/lib/db.ts";
 import { createFileSource } from "../../src/lib/file-sources.ts";
 import { cleanupExpired } from "../../src/lib/retention.ts";
 import { createSource } from "../../src/lib/sources.ts";
+import { createTeam, transferTeamLead } from "../../src/lib/teams.ts";
 import { registerTemplate } from "../../src/lib/template-extraction.ts";
 import { docx, pack, wp } from "../fixtures/documents/native/build.ts";
 import { setupFileMail, signedInUser } from "./mail-helper.ts";
@@ -15,13 +16,10 @@ it("keeps team sources after a member account is deleted", async () => {
   const { ctx } = await signedInUser(setupFileMail());
   const account = await pool.query("SELECT user_id FROM sessions WHERE id=$1", [ctx.sessionId]);
   const userId = account.rows[0].user_id;
-  const teamId = crypto.randomUUID();
+  const leader = await signedInUser(setupFileMail());
+  const teamId = (await createTeam(leader.ctx, "합성 팀")).id;
   const sourceId = crypto.randomUUID();
   try {
-    await pool.query(
-      "INSERT INTO workspaces(id,mode,team_name,expires_at) VALUES($1,'blank','합성 팀','infinity')",
-      [teamId],
-    );
     await pool.query(
       "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'member')",
       [teamId, userId],
@@ -42,11 +40,16 @@ it("keeps team sources after a member account is deleted", async () => {
         .created_by,
     ).toBeNull();
     expect(
-      (await pool.query("SELECT 1 FROM workspace_members WHERE workspace_id=$1", [teamId]))
-        .rowCount,
+      (
+        await pool.query("SELECT 1 FROM workspace_members WHERE workspace_id=$1 AND user_id=$2", [
+          teamId,
+          userId,
+        ])
+      ).rowCount,
     ).toBe(0);
   } finally {
     await pool.query("DELETE FROM workspaces WHERE id=$1", [teamId]);
+    await deleteAccount(leader.ctx);
   }
 });
 
@@ -71,22 +74,15 @@ it("blocks the last administrator account deletion and preserves teams after han
     (await pool.query("SELECT user_id FROM sessions WHERE id=$1", [id])).rows[0].user_id;
   const ownerId = await user(owner.ctx.sessionId);
   const successorId = await user(successor.ctx.sessionId);
-  const teamId = crypto.randomUUID();
+  const teamId = (await createTeam(owner.ctx, "관리자 팀")).id;
   try {
-    await pool.query(
-      "INSERT INTO workspaces(id,mode,team_name,expires_at) VALUES($1,'blank','관리자 팀','infinity')",
-      [teamId],
-    );
-    await pool.query(
-      "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'admin')",
-      [teamId, ownerId],
-    );
     await expect(deleteAccount(owner.ctx)).rejects.toMatchObject({ httpStatus: 409 });
     expect((await pool.query("SELECT id FROM users WHERE id=$1", [ownerId])).rowCount).toBe(1);
     await pool.query(
       "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'admin')",
       [teamId, successorId],
     );
+    await transferTeamLead(owner.ctx, teamId, successorId);
     await pool.query("UPDATE sessions SET workspace_id=$1 WHERE id=$2", [
       teamId,
       owner.ctx.sessionId,
@@ -142,18 +138,14 @@ it("serializes concurrent administrator account deletions and retains one admini
   const mail = setupFileMail();
   const first = await signedInUser(mail);
   const second = await signedInUser(mail);
-  const teamId = crypto.randomUUID();
+  const teamId = (await createTeam(first.ctx, "동시 삭제 팀")).id;
   const userIds = (
     await pool.query("SELECT user_id FROM sessions WHERE id=ANY($1::uuid[])", [
       [first.ctx.sessionId, second.ctx.sessionId],
     ])
   ).rows.map((row) => row.user_id);
   try {
-    await pool.query(
-      "INSERT INTO workspaces(id,mode,team_name,expires_at) VALUES($1,'blank','동시 삭제 팀','infinity')",
-      [teamId],
-    );
-    for (const id of userIds)
+    for (const id of userIds.filter((id) => id !== first.ctx.userId))
       await pool.query(
         "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'admin')",
         [teamId, id],

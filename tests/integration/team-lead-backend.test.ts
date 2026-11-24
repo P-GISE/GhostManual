@@ -1,5 +1,6 @@
 import { afterAll, afterEach, expect, it } from "vitest";
 import { POST } from "../../src/app/api/workspaces/[id]/lead/route.ts";
+import { DELETE as leaveRoute } from "../../src/app/api/workspaces/[id]/members/[userId]/route.ts";
 import { deleteAccount } from "../../src/lib/accounts.ts";
 import { pool } from "../../src/lib/db.ts";
 import { getManual, publishManual, saveDraft } from "../../src/lib/manuals.ts";
@@ -40,7 +41,7 @@ const pointer = async (id: string) =>
   (await pool.query("SELECT lead_user_id FROM workspaces WHERE id=$1", [id])).rows[0]?.lead_user_id;
 
 it("keeps 013 legacy roles and null pointers while reporting transfer not ready", async () => {
-  const { lead, admin, team } = await fixture(false);
+  const { lead, admin, member, team } = await fixture(false);
   expect(await pointer(team.id)).toBeNull();
   expect(await teams.listMembers(lead.ctx, team.id)).toMatchObject({
     leadReady: false,
@@ -53,12 +54,15 @@ it("keeps 013 legacy roles and null pointers while reporting transfer not ready"
     code: "team_lead_not_ready",
     httpStatus: 503,
   });
+  await teams.changeRole(admin.ctx, team.id, member.ctx.userId as string, "admin");
   await teams.changeRole(admin.ctx, team.id, lead.ctx.userId as string, "member");
   await teams.removeMember(lead.ctx, team.id, lead.ctx.userId as string);
   expect(await pointer(team.id)).toBeNull();
+  await teams.removeMember(admin.ctx, team.id, member.ctx.userId as string);
+  await teams.deleteTeam(admin.ctx, team.id, team.name);
 });
 
-it("transfers only the pointer, retaining admin roles, sessions and current admin deletion rights", async () => {
+it("transfers to an existing admin without changing roles or sessions and restricts deletion to the current lead", async () => {
   const { lead, admin, member, team } = await fixture();
   const before = (
     await pool.query(
@@ -72,7 +76,7 @@ it("transfers only the pointer, retaining admin roles, sessions and current admi
       [[lead.ctx.userId, admin.ctx.userId]],
     )
   ).rows;
-  for (const target of [lead.ctx.userId, member.ctx.userId, crypto.randomUUID()])
+  for (const target of [lead.ctx.userId, crypto.randomUUID()])
     await expect(transfer(lead.ctx, team.id, target as string)).rejects.toMatchObject({
       httpStatus: 422,
     });
@@ -113,7 +117,10 @@ it("transfers only the pointer, retaining admin roles, sessions and current admi
     expect.objectContaining({ id: admin.ctx.userId, role: "admin", lead: true }),
   ]);
   expect(listed.members.every((m) => !("email" in m))).toBe(true);
-  await teams.deleteTeam(lead.ctx, team.id, team.name);
+  await expect(teams.deleteTeam(lead.ctx, team.id, team.name)).rejects.toMatchObject({
+    httpStatus: 403,
+  });
+  await teams.deleteTeam(admin.ctx, team.id, team.name);
 });
 
 it("rejects lead demotion, removal and account deletion before personal data is touched", async () => {
@@ -130,16 +137,27 @@ it("rejects lead demotion, removal and account deletion before personal data is 
     (await exchangeShare(link.url.split("#")[1] ?? "", viewer.ctx)).token,
   );
   const sharedBefore = JSON.stringify(await getSharing(teamCtx, manual.id));
-  for (const action of [
-    () => teams.changeRole(admin.ctx, team.id, lead.ctx.userId as string, "member"),
-    () => teams.removeMember(admin.ctx, team.id, lead.ctx.userId as string),
-    () => teams.removeMember(lead.ctx, team.id, lead.ctx.userId as string),
-    () => deleteAccount(lead.ctx),
-  ]) {
-    await expect(action()).rejects.toMatchObject({
-      code: "lead_transfer_required",
-      httpStatus: 409,
-    });
+  const attempts: Array<[() => Promise<unknown>, number, string]> = [
+    [
+      () => teams.changeRole(admin.ctx, team.id, lead.ctx.userId as string, "member"),
+      403,
+      "lead_required",
+    ],
+    [() => teams.removeMember(admin.ctx, team.id, lead.ctx.userId as string), 403, "lead_required"],
+    [
+      () => teams.changeRole(lead.ctx, team.id, lead.ctx.userId as string, "member"),
+      409,
+      "lead_transfer_required",
+    ],
+    [
+      () => teams.removeMember(lead.ctx, team.id, lead.ctx.userId as string),
+      409,
+      "lead_transfer_required",
+    ],
+    [() => deleteAccount(lead.ctx), 409, "lead_transfer_required"],
+  ];
+  for (const [action, httpStatus, code] of attempts) {
+    await expect(action()).rejects.toMatchObject({ code, httpStatus });
     expect((await getSource(lead.ctx, source.id)).id).toBe(source.id);
     await expect(requireSession(lead.token)).resolves.toMatchObject({ userId: lead.ctx.userId });
     expect(await pointer(team.id)).toBe(lead.ctx.userId);
@@ -175,10 +193,8 @@ it("serializes stale-actor transfers and target demotion with no dangling lead",
     transfer(lead.ctx, team.id, admin.ctx.userId as string),
     teams.changeRole(lead.ctx, team.id, admin.ctx.userId as string, "member"),
   ]);
-  expect(race.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-  const failure = race.find((r) => r.status === "rejected");
-  expect(failure).toBeDefined();
-  if (failure?.status === "rejected") expect([409, 422]).toContain(failure.reason.httpStatus);
+  expect(race[0]?.status).toBe("fulfilled");
+  if (race[1]?.status === "rejected") expect(race[1].reason).toMatchObject({ httpStatus: 403 });
   expect(
     (
       await pool.query(
@@ -310,3 +326,60 @@ for (const operation of ["leave", "delete"] as const)
       ).toBe("admin");
     },
   );
+
+it("retains 013 last-admin errors and serializes legacy administrator account deletion", async () => {
+  const first = await signedInUser(mail),
+    second = await signedInUser(mail);
+  const team = await teams.createTeam(first.ctx, "013 마지막 관리자");
+  await expect(
+    teams.removeMember(first.ctx, team.id, first.ctx.userId as string),
+  ).rejects.toMatchObject({ code: "last_admin" });
+  await expect(
+    teams.changeRole(first.ctx, team.id, first.ctx.userId as string, "member"),
+  ).rejects.toMatchObject({ code: "last_admin" });
+  await pool.query(
+    "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'admin')",
+    [team.id, second.ctx.userId],
+  );
+  const results = await Promise.allSettled([deleteAccount(first.ctx), deleteAccount(second.ctx)]);
+  expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+  expect(results.filter((r) => r.status === "rejected")).toEqual([
+    expect.objectContaining({ reason: expect.objectContaining({ httpStatus: 409 }) }),
+  ]);
+  expect(
+    (await pool.query("SELECT role FROM workspace_members WHERE workspace_id=$1", [team.id])).rows,
+  ).toEqual([{ role: "admin" }]);
+  expect(await pointer(team.id)).toBeNull();
+});
+
+for (const target of ["admin", "member"] as const)
+  it("keeps 013 uppercase UUID " + target + " self-exit and personal session handoff", async () => {
+    const f = await fixture(false);
+    const actor = target === "admin" ? f.admin : f.member;
+    const home = actor.ctx.workspaceId;
+    const selected = await teams.switchWorkspace(actor.token, f.team.id);
+    const ctx = await requireSession(selected.token);
+    const source = await createSource(ctx, exampleSource);
+    const response = await leaveRoute(
+      new Request("http://localhost:3200/api/workspaces/test", {
+        method: "DELETE",
+        headers: { origin: "http://localhost:3200", cookie: `gm_owner=${selected.token}` },
+      }),
+      {
+        params: Promise.resolve({
+          id: f.team.id.toUpperCase(),
+          userId: (actor.ctx.userId as string).toUpperCase(),
+        }),
+      },
+    );
+    expect(response.status).toBe(200);
+    const replacement =
+      response.headers.get("set-cookie")?.split(";")[0]?.slice("gm_owner=".length) ?? "";
+    await expect(requireSession(replacement)).resolves.toMatchObject({
+      workspaceId: home,
+      userId: actor.ctx.userId,
+    });
+    await expect(requireSession(selected.token)).rejects.toMatchObject({ httpStatus: 401 });
+    expect((await pool.query("SELECT id FROM sources WHERE id=$1", [source.id])).rowCount).toBe(1);
+    expect(await pointer(f.team.id)).toBeNull();
+  });

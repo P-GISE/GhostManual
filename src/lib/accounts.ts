@@ -226,8 +226,9 @@ export async function deleteAccount(ctx: SessionContext): Promise<void> {
     );
     const userId = result.rows[0]?.user_id;
     if (!userId) throw new AppError("unauthorized", 401, "로그인이 필요합니다.");
+    // A concurrent explicit handoff can promote any current member.
     await db.query(
-      "SELECT w.id FROM workspaces w WHERE w.id=$1 OR w.user_id=$2 OR w.lead_user_id=$2 OR EXISTS (SELECT 1 FROM workspace_members m WHERE m.workspace_id=w.id AND m.user_id=$2 AND m.role='admin') ORDER BY w.id FOR UPDATE",
+      "SELECT w.id FROM workspaces w WHERE w.id=$1 OR w.user_id=$2 OR w.lead_user_id=$2 OR EXISTS (SELECT 1 FROM workspace_members m WHERE m.workspace_id=w.id AND m.user_id=$2) ORDER BY w.id FOR UPDATE",
       [ctx.workspaceId, userId],
     );
     await assertSession(db, ctx, true);

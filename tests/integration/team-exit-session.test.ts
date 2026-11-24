@@ -4,7 +4,7 @@ import { DELETE as deleteTeamRoute } from "../../src/app/api/workspaces/[id]/rou
 import { pool } from "../../src/lib/db.ts";
 import { requireSession } from "../../src/lib/session.ts";
 import { createSource, getSource } from "../../src/lib/sources.ts";
-import { createTeam, switchWorkspace } from "../../src/lib/teams.ts";
+import { createTeam, switchWorkspace, transferTeamLead } from "../../src/lib/teams.ts";
 import { exampleSource } from "../fixtures/manual-example.ts";
 import { setupFileMail, signedInUser } from "./mail-helper.ts";
 
@@ -175,6 +175,7 @@ it.each(["delete", "leave"] as const)(
       "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'admin')",
       [team.id, member.ctx.userId],
     );
+    if (action === "leave") await transferTeamLead(admin.ctx, team.id, member.ctx.userId as string);
     const active = await switchWorkspace(admin.token, team.id);
     const ctx = await requireSession(active.token);
     const source = await createSource(ctx, exampleSource);
