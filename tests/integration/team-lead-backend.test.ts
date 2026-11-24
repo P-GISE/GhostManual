@@ -86,7 +86,7 @@ it("transfers only the pointer, retaining admin roles, sessions and current admi
     await expect(transfer(actor.ctx, team.id, lead.ctx.userId as string)).rejects.toMatchObject({
       httpStatus: 403,
     });
-  expect(await transfer(lead.ctx, team.id, admin.ctx.userId as string)).toEqual({
+  expect(await transfer(lead.ctx, team.id, (admin.ctx.userId as string).toUpperCase())).toEqual({
     id: team.id,
     leadUserId: admin.ctx.userId,
   });
@@ -263,7 +263,9 @@ it("enforces transfer HTTP authentication, origin, strict input and membership",
     (await call(request(lead.token, { userId: (lead.ctx.userId as string).toUpperCase() }))).status,
   ).toBe(422);
   expect(await pointer(team.id)).toBe(lead.ctx.userId);
-  const response = await call(request(lead.token));
+  const response = await call(
+    request(lead.token, { userId: (admin.ctx.userId as string).toUpperCase() }),
+  );
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ id: team.id, leadUserId: admin.ctx.userId });
   expect(response.headers.get("set-cookie")).toBeNull();

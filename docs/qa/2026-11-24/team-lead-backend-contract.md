@@ -18,7 +18,7 @@
 
 admin/member 역할을 바꾸거나 기존 admin을 부관리자로 표시하지 않는다. member에게 이메일·대기 초대 정보를 노출하지 않는 기존 경계를 유지한다.
 
-`POST /api/workspaces/:id/lead` 입력은 정확히 `{ "userId": "<uuid>" }`이며 기존 로그인·약관·same-origin·JSON 입력 검사를 거친다. workspace를 정렬 잠근 다음 계정·세션·현재 역할을 재확인한다. actor는 현재 대표, 대상은 같은 팀의 **다른 기존 admin**이어야 한다. 한 트랜잭션에서 pointer만 갱신하고 두 membership은 admin으로 유지한다. 응답은 `{ "id": "<workspace uuid>", "leadUserId": "<target uuid>" }`이다. 쿠키를 교체하지 않는다.
+`POST /api/workspaces/:id/lead` 입력은 정확히 `{ "userId": "<uuid>" }`이며 기존 로그인·약관·same-origin·JSON 입력 검사를 거친다. workspace를 정렬 잠근 다음 계정·세션·현재 역할을 재확인한다. actor는 현재 대표, 대상은 같은 팀의 **다른 기존 admin**이어야 한다. 한 트랜잭션에서 pointer만 갱신하고 두 membership은 admin으로 유지한다. 응답은 `{ "id": "<workspace uuid>", "leadUserId": "<target uuid>" }`이다. 대상과 actor의 동일성은 문자열 표기가 아닌 DB UUID 비교로 판별하고 응답은 DB가 돌려준 canonical 대상 UUID를 사용한다. 쿠키를 교체하지 않는다.
 
 - 401: 로그인·유효 세션 없음.
 - 403 `invalid_origin`: 다른 origin, 또는 `forbidden`/ `lead_required`: 팀원 역할·현재 대표 조건 불충족.
@@ -40,5 +40,7 @@ admin/member 역할을 바꾸거나 기존 admin을 부관리자로 표시하지
 RED CI45302151676에서 기존 DB203건 통과와 신규6건 실패를 확인한 후 구현했다. 최초 단계 경계 검사의 pg_stat_activity snapshot 캐시를 발견해 pg_stat_clear_snapshot으로 대기 관측을 보완했다.
 
 새 DB 테스트는013 NULL 호환, pointer-only 이양·역할/세션 보존, 대표 삭제 방어와 개인/팀 원본·게시본·공유/Reader 보존, 두 이양/강등/탈퇴/계정 삭제 경합, INSERT 뒤 단계 전환 재검사와 실제 HTTP 로그인·origin·입력·비회원·Reader 검사를 포함한다. 테스트의014 marker는 **격리 CI의 프로토콜 모의**이며 실제014 FK·trigger·backfill 검증이 아니다. afterEach에서 제거한다. 구현1b27fe3의 CI45302755028에서 lint·타입·단위·DB212건이 통과했고 이미지/E2E 등 전체 결과는 이 문서 작성 시 진행 중이다. 최종 head의 전체 CI와 독립 검토 결과는 PR에 기록한다.
+
+최종 검토에서 대문자 자기 UUID가 문자열 동일성 검사를 우회하는 문제를 발견했다. 회귀 e820c20/CI45304175752에서 함수·HTTP2건 실패(기존210건 성공)를 확인한 뒤 DB UUID 비교로 actor를 제외하고 canonical 대상 응답을 구현했다. 대문자 다른 admin의 성공200도 검사한다. 이는 새 이양 API 범위의 수정이며 기존 removeMember 표기 호환성은 별도 작업 목록으로 구분한다.
 
 운영013 적용은 별도 [운영 검증 기록](migration013-production-verification.md)을 따른다. 이 API·보호 코드의 운영 배포와014는 아직 하지 않는다. 실제 화면의 이양 버튼·안내는 박효민과 이 응답/오류 계약에 맞춰 연결할 후속 작업이다.

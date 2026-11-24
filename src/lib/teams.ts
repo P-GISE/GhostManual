@@ -365,13 +365,14 @@ export async function transferTeamLead(ctx: SessionContext, teamId: string, targ
       throw new AppError("team_lead_not_ready", 503, "대표 관리자 기능을 준비 중입니다.");
     if (team.leadUserId !== userId)
       throw new AppError("lead_required", 403, "현재 대표 관리자만 이양할 수 있습니다.");
-    const target = await db.query(
-      "SELECT 1 FROM workspace_members WHERE workspace_id=$1 AND user_id=$2 AND role='admin'",
-      [teamId, targetId],
+    const target = await db.query<{ user_id: string }>(
+      "SELECT user_id FROM workspace_members WHERE workspace_id=$1 AND user_id=$2 AND role='admin' AND user_id<>$3",
+      [teamId, targetId, userId],
     );
-    if (targetId === userId || !target.rowCount)
+    const targetUserId = target.rows[0]?.user_id;
+    if (!targetUserId)
       throw new AppError("invalid_input", 422, "같은 팀의 다른 관리자를 선택하세요.");
-    await db.query("UPDATE workspaces SET lead_user_id=$2 WHERE id=$1", [teamId, targetId]);
-    return { id: teamId, leadUserId: targetId };
+    await db.query("UPDATE workspaces SET lead_user_id=$2 WHERE id=$1", [teamId, targetUserId]);
+    return { id: teamId, leadUserId: targetUserId };
   });
 }
