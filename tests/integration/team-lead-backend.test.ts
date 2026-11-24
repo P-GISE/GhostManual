@@ -1,5 +1,6 @@
 import { afterAll, afterEach, expect, it } from "vitest";
 import { POST } from "../../src/app/api/workspaces/[id]/lead/route.ts";
+import { DELETE as leaveRoute } from "../../src/app/api/workspaces/[id]/members/[userId]/route.ts";
 import { deleteAccount } from "../../src/lib/accounts.ts";
 import { pool } from "../../src/lib/db.ts";
 import { getManual, publishManual, saveDraft } from "../../src/lib/manuals.ts";
@@ -40,7 +41,7 @@ const pointer = async (id: string) =>
   (await pool.query("SELECT lead_user_id FROM workspaces WHERE id=$1", [id])).rows[0]?.lead_user_id;
 
 it("keeps 013 legacy roles and null pointers while reporting transfer not ready", async () => {
-  const { lead, admin, team } = await fixture(false);
+  const { lead, admin, member, team } = await fixture(false);
   expect(await pointer(team.id)).toBeNull();
   expect(await teams.listMembers(lead.ctx, team.id)).toMatchObject({
     leadReady: false,
@@ -53,9 +54,12 @@ it("keeps 013 legacy roles and null pointers while reporting transfer not ready"
     code: "team_lead_not_ready",
     httpStatus: 503,
   });
+  await teams.changeRole(admin.ctx, team.id, member.ctx.userId as string, "admin");
   await teams.changeRole(admin.ctx, team.id, lead.ctx.userId as string, "member");
   await teams.removeMember(lead.ctx, team.id, lead.ctx.userId as string);
   expect(await pointer(team.id)).toBeNull();
+  await teams.removeMember(admin.ctx, team.id, member.ctx.userId as string);
+  await teams.deleteTeam(admin.ctx, team.id, team.name);
 });
 
 it("transfers only the pointer, retaining admin roles, sessions and current admin deletion rights", async () => {
@@ -335,3 +339,35 @@ it("retains 013 last-admin errors and serializes legacy administrator account de
   ).toEqual([{ role: "admin" }]);
   expect(await pointer(team.id)).toBeNull();
 });
+
+for (const target of ["admin", "member"] as const)
+  it("keeps 013 uppercase UUID " + target + " self-exit and personal session handoff", async () => {
+    const f = await fixture(false);
+    const actor = target === "admin" ? f.admin : f.member;
+    const home = actor.ctx.workspaceId;
+    const selected = await teams.switchWorkspace(actor.token, f.team.id);
+    const ctx = await requireSession(selected.token);
+    const source = await createSource(ctx, exampleSource);
+    const response = await leaveRoute(
+      new Request("http://localhost:3200/api/workspaces/test", {
+        method: "DELETE",
+        headers: { origin: "http://localhost:3200", cookie: `gm_owner=${selected.token}` },
+      }),
+      {
+        params: Promise.resolve({
+          id: f.team.id.toUpperCase(),
+          userId: (actor.ctx.userId as string).toUpperCase(),
+        }),
+      },
+    );
+    expect(response.status).toBe(200);
+    const replacement =
+      response.headers.get("set-cookie")?.split(";")[0]?.slice("gm_owner=".length) ?? "";
+    await expect(requireSession(replacement)).resolves.toMatchObject({
+      workspaceId: home,
+      userId: actor.ctx.userId,
+    });
+    await expect(requireSession(selected.token)).rejects.toMatchObject({ httpStatus: 401 });
+    expect((await pool.query("SELECT id FROM sources WHERE id=$1", [source.id])).rowCount).toBe(1);
+    expect(await pointer(f.team.id)).toBeNull();
+  });
