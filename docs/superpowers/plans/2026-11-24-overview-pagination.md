@@ -13,12 +13,12 @@
 검색결과가뒤page에만있음; cursor위조로타인metadata조회; microsecond동률누락; 늦은검색/페이지응답덮어쓰기; 조회실패후입력손실.
 
 ### Task1 서버 API
-- [ ] tests/integration/overview.test.ts에query422·상한·tie-break·전역검색·커서권한test추가, 구코드GHA RED확인.
-- [ ] src/lib/overview.ts·src/app/api/overview/route.ts boundedSQL/cursor검증구현.
-- [ ] RR회귀유지·실제DB GREEN.
+- [x] tests/integration/overview.test.ts에query422·상한·tie-break·전역검색·커서권한test추가, 구코드GHA RED확인.
+- [x] src/lib/overview.ts·src/app/api/overview/route.ts boundedSQL/cursor검증구현.
+- [x] RR회귀유지·실제DB GREEN.
 ### Task2 화면
-- [ ] tests/e2e/hub-safety.spec.ts·fixtures에paging/검색응답테스트추가하고GHA RED확인.
-- [ ] Hub.tsx contract·서버검색·paging·pending/failure/stale응답처리.
+- [x] tests/e2e/hub-safety.spec.ts·fixtures에paging/검색응답테스트추가하고GHA RED확인.
+- [x] Hub.tsx contract·서버검색·paging·pending/failure/stale응답처리.
 - [ ] 기존hub/a11y API형식업데이트하고desktop/mobile/tablet검증.
 ### Task3 최종
 - [ ] 코드독립검토·전체CI·합성화면직접검토.
