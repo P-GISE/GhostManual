@@ -22,12 +22,14 @@ type Work = {
 };
 
 // "내 문서함": 요청한 계정이 팀원인 모든 팀의 업무를 한 번에 읽는다. 세션이 어느 문서함에 묶여 있든 결과는 같다.
-// 팀원 자격은 이 조회 안에서 팀마다 확인한다. 개인 문서함은 옮기지 않은 업무가 남아 있을 때만 돌려준다.
+// 팀원 자격은 이 조회 안에서 팀마다 확인한다. 개인 문서함은 업무가 있을 때 함께 돌려준다.
 export async function getOverview(ctx: SessionContext) {
   if (ctx.role !== "owner" || !ctx.userId)
     throw new AppError("not_found", 404, "문서함을 찾을 수 없습니다.");
   const userId = ctx.userId;
   return transaction(async (db) => {
+    // Keep membership and work metadata on the same snapshot across all workspaces.
+    await db.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ");
     await lockAccountSession(db, ctx);
     const enforced = await teamLeadEnforced(db);
     const spaces = await db.query<{
