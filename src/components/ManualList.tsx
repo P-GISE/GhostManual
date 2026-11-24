@@ -13,6 +13,7 @@ import {
   sourceSchema,
 } from "../lib/client";
 import { type RequestStage, requestDiagnostic } from "../lib/request-diagnostic";
+import { taskState } from "../lib/task-state";
 import { RequestDiagnostics, useRequestDiagnostics } from "./RequestDiagnostics";
 import { useWorkspaceName } from "./Teams";
 // embedded: 팀 화면의 "업무" 탭 안에 넣을 때. 화면 제목은 팀 화면이 갖는다.
@@ -39,31 +40,17 @@ export function ManualList({ embedded = false }: { readonly embedded?: boolean }
     const unpublishedChanges =
       !!manual?.published &&
       JSON.stringify(manual.draft) !== JSON.stringify(manual.published.content);
-    const published = !!manual?.publishedVersion && !manual.needsReview && !unpublishedChanges;
-    const status = !manual
-      ? { label: "매뉴얼 없음", tone: "none" }
-      : manual.needsReview
-        ? { label: "재검토 필요", tone: "review" }
-        : unpublishedChanges
-          ? { label: "미게시 변경", tone: "review" }
-          : published
-            ? { label: `게시됨 v${manual.publishedVersion}`, tone: "done" }
-            : { label: "검수 전", tone: "draft" };
-    const action =
-      s.openQuestions > 0
-        ? { label: `답할 질문 ${s.openQuestions}개`, href: `/sources/${s.id}`, primary: true }
-        : !manual
-          ? { label: "매뉴얼 만들기", href: `/sources/${s.id}`, primary: true }
-          : !published
-            ? { label: "검수하고 게시", href: `/manuals/${manual.id}`, primary: false }
-            : { label: "매뉴얼 보기", href: `/manuals/${manual.id}`, primary: false };
     return {
       source: s,
       manual,
-      published,
-      status,
-      action,
-      todo: !published || s.openQuestions > 0,
+      ...taskState({
+        id: s.id,
+        openQuestions: s.openQuestions,
+        manualId: manual?.id ?? null,
+        publishedVersion: manual?.publishedVersion ?? null,
+        needsReview: manual?.needsReview ?? false,
+        unpublishedChanges,
+      }),
     };
   });
   const visible = tasks.filter(

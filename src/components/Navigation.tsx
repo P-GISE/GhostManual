@@ -78,6 +78,7 @@ export function Navigation() {
       ) : (
         <nav aria-label="주 메뉴">
           {[
+            { href: "/library", label: "내 문서함" },
             { href: "/manuals", label: "문서함" },
             { href: "/sources/new", label: "자료 등록" },
             { href: "/templates", label: "양식" },

@@ -974,6 +974,22 @@ select {
 .tabs [role="tab"] {
   flex: none;
 }
+.hub-team {
+  margin-top: 28px;
+}
+.hub-team-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+.hub-team-head h2 {
+  margin: 0;
+}
+.hub-team-head .actions {
+  margin: 0 0 0 auto;
+}
 .panel + .panel {
   margin-top: 16px;
 }
