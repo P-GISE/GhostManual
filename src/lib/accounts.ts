@@ -7,6 +7,7 @@ import { safeNextPath } from "./next-path.ts";
 import { hashPassword, verifyPassword } from "./passwords.ts";
 import { removeWorkspace } from "./retention.ts";
 import { assertSession, freshToken, tokenHash } from "./session.ts";
+import { assertNotTeamLead } from "./team-lead.ts";
 import { newId, type SessionContext } from "./types.ts";
 
 export const EmailSchema = z.string().trim().toLowerCase().pipe(z.email().max(254));
@@ -225,11 +226,13 @@ export async function deleteAccount(ctx: SessionContext): Promise<void> {
     );
     const userId = result.rows[0]?.user_id;
     if (!userId) throw new AppError("unauthorized", 401, "로그인이 필요합니다.");
+    // A concurrent explicit handoff can promote any current member.
     await db.query(
-      "SELECT w.id FROM workspaces w WHERE w.id=$1 OR w.user_id=$2 OR EXISTS (SELECT 1 FROM workspace_members m WHERE m.workspace_id=w.id AND m.user_id=$2 AND m.role='admin') ORDER BY w.id FOR UPDATE",
+      "SELECT w.id FROM workspaces w WHERE w.id=$1 OR w.user_id=$2 OR w.lead_user_id=$2 OR EXISTS (SELECT 1 FROM workspace_members m WHERE m.workspace_id=w.id AND m.user_id=$2) ORDER BY w.id FOR UPDATE",
       [ctx.workspaceId, userId],
     );
     await assertSession(db, ctx, true);
+    await assertNotTeamLead(db, userId);
     const teams = await db.query<{ id: string; team_name: string }>(
       "SELECT w.id,w.team_name FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id WHERE m.user_id=$1 AND m.role='admin' ORDER BY w.id FOR UPDATE OF w",
       [userId],

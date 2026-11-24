@@ -159,7 +159,12 @@ it("denies expired, pending-consent and reader sessions at the elevated boundary
 it("rechecks membership or logout after waiting for the workspace lock", async () => {
   for (const change of ["membership", "logout"]) {
     const owner = await signedInUser(mail);
-    const team = await createTeam(owner.ctx, "경쟁 검증 팀");
+    const leader = await signedInUser(mail);
+    const team = await createTeam(leader.ctx, "경쟁 검증 팀");
+    await pool.query(
+      "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'member')",
+      [team.id, owner.ctx.userId],
+    );
     const source = await createSource(owner.ctx, exampleSource);
     const blocker = await pool.connect();
     const mover = await pool.connect();

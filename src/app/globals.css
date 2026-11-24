@@ -960,6 +960,23 @@ select {
   border-bottom-color: var(--accent);
   font-weight: 700;
 }
+/* 일반 버튼의 hover 색이 탭을 덮어 글자가 안 보이던 것을 막는다. */
+.tabs [role="tab"]:hover:not(:disabled) {
+  background: var(--tint);
+  border-color: transparent;
+}
+.tabs [role="tab"][aria-selected="true"]:hover:not(:disabled) {
+  border-bottom-color: var(--accent);
+}
+.tabs {
+  overflow-x: auto;
+}
+.tabs [role="tab"] {
+  flex: none;
+}
+.panel + .panel {
+  margin-top: 16px;
+}
 .meter {
   height: 12px;
   background: var(--border);
