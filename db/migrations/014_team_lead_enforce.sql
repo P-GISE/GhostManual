@@ -44,10 +44,16 @@ ALTER TABLE workspaces
 CREATE FUNCTION lock_team_lead_workspace() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE targets uuid[] := ARRAY[]::uuid[];
+target uuid;
 BEGIN
   IF TG_OP <> 'INSERT' THEN targets := array_append(targets,OLD.workspace_id); END IF;
   IF TG_OP <> 'DELETE' THEN targets := array_append(targets,NEW.workspace_id); END IF;
-  PERFORM id FROM public.workspaces WHERE id=ANY(targets) ORDER BY id FOR UPDATE;
+  FOR target IN
+    SELECT id FROM public.workspaces WHERE id=ANY(targets) ORDER BY id FOR UPDATE
+  LOOP
+    -- Invalidate stale repeatable-read role snapshots without changing workspace data.
+    UPDATE public.workspaces SET lead_user_id=lead_user_id WHERE id=target;
+  END LOOP;
   IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
   RETURN NEW;
 END $$;

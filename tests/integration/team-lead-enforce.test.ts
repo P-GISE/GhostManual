@@ -432,3 +432,58 @@ it("rejects a stale repeatable-read pointer when a target was demoted after its 
     await f.close();
   }
 });
+
+it("finishes a thirty-member batch and whole-team cascade without trigger recursion or logical workspace changes", async () => {
+  expect(sql).not.toBeNull();
+  if (!sql) return;
+  const f = await fixture();
+  const client = await f.db.connect();
+  try {
+    await enforce(f.db);
+    const before = (
+      await f.db.query("SELECT to_jsonb(w) AS row FROM workspaces w WHERE id=$1", [f.ids.team])
+    ).rows;
+    await client.query("BEGIN; SET LOCAL statement_timeout='5s'");
+    for (let index = 0; index < 27; index++) {
+      const user = randomUUID();
+      await client.query(
+        "INSERT INTO users(id,email,name,password_hash,terms_agreed_at) VALUES($1,$2,'합성 팀원','fixture',now())",
+        [user, user + "@example.invalid"],
+      );
+      await client.query(
+        "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'member')",
+        [f.ids.team, user],
+      );
+    }
+    await client.query("UPDATE workspace_members SET role=role WHERE workspace_id=$1", [
+      f.ids.team,
+    ]);
+    await client.query("COMMIT");
+    expect(
+      (await f.db.query("SELECT to_jsonb(w) AS row FROM workspaces w WHERE id=$1", [f.ids.team]))
+        .rows,
+    ).toEqual(before);
+    expect(
+      (
+        await f.db.query(
+          "SELECT count(*)::int AS count FROM workspace_members WHERE workspace_id=$1",
+          [f.ids.team],
+        )
+      ).rows[0]?.count,
+    ).toBe(30);
+    await client.query("BEGIN; SET LOCAL statement_timeout='5s'");
+    await removeWorkspace(client, f.ids.team);
+    await client.query("COMMIT");
+    expect(
+      (
+        await f.db.query("SELECT user_id FROM workspace_members WHERE workspace_id=$1", [
+          f.ids.team,
+        ])
+      ).rowCount,
+    ).toBe(0);
+  } finally {
+    await client.query("ROLLBACK");
+    client.release();
+    await f.close();
+  }
+});
