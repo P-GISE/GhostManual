@@ -63,3 +63,38 @@ for (const ready of [false, true]) {
     await page.screenshot({ path: testInfo.outputPath("team-hub.png"), fullPage: true });
   });
 }
+
+test("library page controls retain native keyboard and touch targets", async ({
+  page,
+}, testInfo) => {
+  const view = hubOverview(false, true);
+  const body = {
+    ...view,
+    counts: { all: 12, todo: 12, published: 0 },
+    nextTeamCursor: hubTeamId,
+    teams: [{ ...view.teams[0], workCount: 11, matchingCount: 11, nextWorkCursor: "next-work" }],
+  };
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() !== "GET") throw new Error("Audit must not write");
+    await route.fulfill({
+      json:
+        path === "/api/overview"
+          ? body
+          : path === "/api/me"
+            ? { name: "합성 담당자", admin: false }
+            : [],
+    });
+  });
+  await page.goto("/library");
+  for (const label of ["다음 업무", "다음 문서함"]) {
+    const button = page.getByRole("button", { name: label, exact: true });
+    await button.focus();
+    await expect(button).toBeFocused();
+    const bounds = await button.boundingBox();
+    expect(bounds?.height).toBeGreaterThanOrEqual(44);
+    expect(bounds?.width).toBeGreaterThanOrEqual(44);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("team-hub.png"), fullPage: true });
+});

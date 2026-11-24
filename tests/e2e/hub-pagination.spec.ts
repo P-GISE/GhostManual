@@ -116,3 +116,60 @@ test("library ignores late searches and retains failed input for retry", async (
     release();
   }
 });
+
+test("library serializes page clicks and retries a failed page without dropping the current page", async ({
+  page,
+}) => {
+  let calls = 0;
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== "GET") throw new Error("Paging must not write");
+    if (url.pathname === "/api/me")
+      return route.fulfill({ json: { name: "합성 담당자", admin: false } });
+    if (url.pathname === "/api/workspaces") return route.fulfill({ json: [] });
+    const view = hubOverview();
+    if (url.searchParams.has("workspaceId")) {
+      calls++;
+      await gate;
+      if (calls === 1)
+        return route.fulfill({
+          status: 503,
+          json: { error: { code: "unavailable", message: "합성 페이지 실패", retryable: false } },
+        });
+      view.teams[0].works[0].title = "다시 불러온 업무";
+    }
+    await route.fulfill({
+      json: {
+        ...view,
+        teams: [
+          {
+            ...view.teams[0],
+            workCount: 11,
+            matchingCount: 11,
+            nextWorkCursor: calls ? null : "next-work",
+          },
+        ],
+      },
+    });
+  });
+  try {
+    await page.goto("/library");
+    const next = page.getByRole("button", { name: "다음 업무", exact: true });
+    await next.evaluate((element) => {
+      for (let i = 0; i < 2; i++) element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await expect.poll(() => calls).toBe(1);
+    release();
+    await expect(page.getByRole("alert").filter({ hasText: "합성 페이지 실패" })).toBeVisible();
+    await expect(page.getByRole("link", { name: hubWork.title, exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "다시 불러오기", exact: true }).click();
+    await expect(page.getByRole("link", { name: "다시 불러온 업무", exact: true })).toBeVisible();
+    expect(calls).toBe(2);
+  } finally {
+    release();
+  }
+});
