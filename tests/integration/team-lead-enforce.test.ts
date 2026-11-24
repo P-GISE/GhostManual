@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import pg from "pg";
+import { removeWorkspace } from "../../src/lib/retention.ts";
 import { expect, it } from "vitest";
 import { isolatedDatabase } from "../isolated-database.ts";
 
@@ -274,7 +275,14 @@ it("checks final COMMIT state for NULL, foreign/member leads, demotion, removal,
     expect((await f.db.query("SELECT id FROM sessions WHERE id=$1", [f.ids.reader])).rowCount).toBe(
       1,
     );
-    await f.db.query("DELETE FROM workspaces WHERE id=$1", [f.ids.team]);
+    const deletion = await f.db.connect();
+    try {
+      await deletion.query("BEGIN");
+      await removeWorkspace(deletion, f.ids.team);
+      await deletion.query("COMMIT");
+    } finally {
+      deletion.release();
+    }
     expect(
       (
         await f.db.query("SELECT revision_id FROM source_files WHERE revision_id=$1", [
@@ -384,6 +392,40 @@ it("aborts a stale repeatable-read membership change instead of accepting an obs
         )
       ).rows[0]?.role,
     ).toBe("admin");
+  } finally {
+    await stale.query("ROLLBACK");
+    stale.release();
+    await f.close();
+  }
+});
+
+it("rejects a stale repeatable-read pointer when a target was demoted after its snapshot", async () => {
+  expect(sql).not.toBeNull();
+  if (!sql) return;
+  const f = await fixture();
+  const stale = await f.db.connect();
+  try {
+    await enforce(f.db);
+    await stale.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
+    await stale.query("SELECT lead_user_id FROM workspaces WHERE id=$1", [f.ids.team]);
+    await f.db.query(
+      "UPDATE workspace_members SET role='member' WHERE workspace_id=$1 AND user_id=$2",
+      [f.ids.team, f.users[1]],
+    );
+    const attempt = async () => {
+      await stale.query("UPDATE workspaces SET lead_user_id=$2 WHERE id=$1", [
+        f.ids.team,
+        f.users[1],
+      ]);
+      await stale.query("COMMIT");
+      return (
+        await f.db.query(
+          "SELECT m.role FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id AND m.user_id=w.lead_user_id WHERE w.id=$1",
+          [f.ids.team],
+        )
+      ).rows[0]?.role;
+    };
+    await expect(attempt()).rejects.toMatchObject({ code: "40001" });
   } finally {
     await stale.query("ROLLBACK");
     stale.release();
