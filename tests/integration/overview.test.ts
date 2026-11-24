@@ -48,6 +48,7 @@ it("lists every team the account belongs to with task status, and nothing else",
 
   // 세션이 첫 팀에 묶여 있어도 두 팀과 개인 업무가 모두 나온다.
   const view = await getOverview(adminInFirst);
+  view.teams.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "ko"));
   expect(view.teams.map((team) => [team.name, team.role, team.memberCount, team.current])).toEqual([
     ["가 팀", "admin", 1, true],
     ["나 팀", "admin", 1, false],
@@ -126,7 +127,7 @@ it("keeps authorization and work metadata in one snapshot across a non-current t
             if (key !== "query") return Reflect.get(target, key);
             return async (sql: string, values?: unknown[]) => {
               const result = await target.query(sql, values);
-              if (!paused && sql.startsWith("SELECT w.id,w.team_name AS name,m.role")) {
+              if (!paused && sql.includes("/* overview-spaces */")) {
                 paused = true;
                 await resume.promise;
               }
