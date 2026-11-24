@@ -60,7 +60,14 @@ export function filteredHub(url: string, view: ReturnType<typeof hubOverview>) {
   const params = new URL(url).searchParams;
   const query = (params.get("query") ?? "").trim().normalize("NFKC").toLocaleLowerCase("ko-KR");
   const filter = params.get("filter") ?? "all";
-  const select = <T extends { works: (typeof hubWork)[]; matchingCount: number }>(group: T) => {
+  const select = <
+    T extends {
+      works: (Parameters<typeof taskState>[0] & { title: string; manualTitle: string | null })[];
+      matchingCount: number;
+    },
+  >(
+    group: T,
+  ) => {
     const works = group.works.filter((work) => {
       const state = taskState(work);
       return (
