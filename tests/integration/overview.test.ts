@@ -77,9 +77,9 @@ it("lists every team the account belongs to with task status, and nothing else",
 
   // 게시한 뒤 초안을 고치면 미게시 변경으로 나온다.
   await saveDraft(adminInFirst, published.revisionId, { ...exampleDraft, title: "고친 제목" }, 1);
-  const edited = (await getOverview(adminInFirst)).teams[0]?.works.find(
-    (work) => work.id === published.id,
-  );
+  const edited = (await getOverview(adminInFirst)).teams
+    .find((team) => team.id === first.id)
+    ?.works.find((work) => work.id === published.id);
   expect(edited).toMatchObject({ publishedVersion: 1, unpublishedChanges: true });
 
   // 팀원이 아니면 그 팀이 보이지 않는다.
