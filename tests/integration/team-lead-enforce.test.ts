@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import pg from "pg";
-import { removeWorkspace } from "../../src/lib/retention.ts";
 import { expect, it } from "vitest";
+import { removeWorkspace } from "../../src/lib/retention.ts";
 import { isolatedDatabase } from "../isolated-database.ts";
 
 const migration = "014_team_lead_enforce.sql";
