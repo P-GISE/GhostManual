@@ -36,6 +36,13 @@ async function lockTeam(db: DbClient, userId: string, teamId: string, adminOnly 
     throw new AppError("forbidden", 403, "팀 관리자만 할 수 있습니다.");
   return { name: team.rows[0].team_name, role, leadUserId: team.rows[0].lead_user_id };
 }
+async function leadOnly(db: DbClient, userId: string, leadUserId: string | null) {
+  if (!(await teamLeadEnforced(db))) return;
+  if (!leadUserId)
+    throw new AppError("team_lead_not_ready", 503, "대표 관리자 기능을 준비 중입니다.");
+  if (leadUserId !== userId)
+    throw new AppError("lead_required", 403, "대표 관리자만 할 수 있습니다.");
+}
 async function assertOtherAdmin(db: DbClient, teamId: string, userId: string) {
   const others = await db.query(
     "SELECT 1 FROM workspace_members WHERE workspace_id=$1 AND role='admin' AND user_id<>$2",
@@ -101,7 +108,7 @@ async function newAccountSession(db: DbClient, userId: string, workspaceId: stri
 }
 
 async function lockExitHome(db: DbClient, ctx: SessionContext, teamId: string) {
-  if (ctx.workspaceId !== teamId) return null;
+  if (ctx.workspaceId.toLowerCase() !== teamId.toLowerCase()) return null;
   // Account deletion locks workspaces before users; acquire both before the session check too.
   const locked = await db.query<{ id: string; user_id: string | null }>(
     "SELECT id,user_id FROM workspaces WHERE id=$1 OR (user_id=$2 AND team_name IS NULL) ORDER BY id FOR UPDATE",
@@ -160,6 +167,7 @@ export async function deleteTeam(ctx: SessionContext, teamId: string, confirmNam
     const home = await lockExitHome(db, ctx, teamId);
     await lockAccountSession(db, ctx, teamId);
     const team = await lockTeam(db, userId, teamId, true);
+    await leadOnly(db, userId, team.leadUserId);
     if (confirmName !== team.name)
       throw new AppError("invalid_input", 422, "팀 이름을 정확히 입력하세요.");
     await removeWorkspace(db, teamId);
@@ -210,7 +218,8 @@ export async function changeRole(
   const userId = account(ctx);
   await transaction(async (db) => {
     await lockAccountSession(db, ctx, teamId);
-    await lockTeam(db, userId, teamId, true);
+    const team = await lockTeam(db, userId, teamId, true);
+    await leadOnly(db, userId, team.leadUserId);
     if (role === "member") {
       await assertNotTeamLead(db, targetId, teamId);
       await assertOtherAdmin(db, teamId, targetId);
@@ -226,15 +235,17 @@ export async function changeRole(
 // 본인이면 나가기, 다른 사람이면 내보내기(관리자만). 자료는 팀에 남는다.
 export async function removeMember(ctx: SessionContext, teamId: string, targetId: string) {
   const userId = account(ctx);
+  const isSelf = targetId.toLowerCase() === userId.toLowerCase();
   return transaction(async (db) => {
-    const home = targetId === userId ? await lockExitHome(db, ctx, teamId) : null;
+    const home = isSelf ? await lockExitHome(db, ctx, teamId) : null;
     await lockAccountSession(db, ctx, teamId);
-    await lockTeam(db, userId, teamId, targetId !== userId);
+    const team = await lockTeam(db, userId, teamId, !isSelf);
     const target = await db.query<{ role: string }>(
       "SELECT role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2",
       [teamId, targetId],
     );
     if (!target.rows[0]) throw new AppError("not_found", 404, "팀원을 찾을 수 없습니다.");
+    if (!isSelf && target.rows[0].role === "admin") await leadOnly(db, userId, team.leadUserId);
     await assertNotTeamLead(db, targetId, teamId);
     if (target.rows[0].role === "admin") await assertOtherAdmin(db, teamId, targetId);
     await db.query("DELETE FROM workspace_members WHERE workspace_id=$1 AND user_id=$2", [
@@ -365,13 +376,18 @@ export async function transferTeamLead(ctx: SessionContext, teamId: string, targ
       throw new AppError("team_lead_not_ready", 503, "대표 관리자 기능을 준비 중입니다.");
     if (team.leadUserId !== userId)
       throw new AppError("lead_required", 403, "현재 대표 관리자만 이양할 수 있습니다.");
-    const target = await db.query<{ user_id: string }>(
-      "SELECT user_id FROM workspace_members WHERE workspace_id=$1 AND user_id=$2 AND role='admin' AND user_id<>$3",
+    const target = await db.query<{ user_id: string; role: "admin" | "member" }>(
+      "SELECT user_id,role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2 AND user_id<>$3",
       [teamId, targetId, userId],
     );
     const targetUserId = target.rows[0]?.user_id;
     if (!targetUserId)
-      throw new AppError("invalid_input", 422, "같은 팀의 다른 관리자를 선택하세요.");
+      throw new AppError("invalid_input", 422, "같은 팀의 다른 팀원을 선택하세요.");
+    if (target.rows[0]?.role === "member")
+      await db.query(
+        "UPDATE workspace_members SET role='admin' WHERE workspace_id=$1 AND user_id=$2",
+        [teamId, targetUserId],
+      );
     await db.query("UPDATE workspaces SET lead_user_id=$2 WHERE id=$1", [teamId, targetUserId]);
     return { id: teamId, leadUserId: targetUserId };
   });

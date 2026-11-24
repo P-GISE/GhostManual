@@ -62,7 +62,7 @@ it("keeps 013 legacy roles and null pointers while reporting transfer not ready"
   await teams.deleteTeam(admin.ctx, team.id, team.name);
 });
 
-it("transfers only the pointer, retaining admin roles, sessions and current admin deletion rights", async () => {
+it("transfers to an existing admin without changing roles or sessions and restricts deletion to the current lead", async () => {
   const { lead, admin, member, team } = await fixture();
   const before = (
     await pool.query(
@@ -76,7 +76,7 @@ it("transfers only the pointer, retaining admin roles, sessions and current admi
       [[lead.ctx.userId, admin.ctx.userId]],
     )
   ).rows;
-  for (const target of [lead.ctx.userId, member.ctx.userId, crypto.randomUUID()])
+  for (const target of [lead.ctx.userId, crypto.randomUUID()])
     await expect(transfer(lead.ctx, team.id, target as string)).rejects.toMatchObject({
       httpStatus: 422,
     });
@@ -117,7 +117,10 @@ it("transfers only the pointer, retaining admin roles, sessions and current admi
     expect.objectContaining({ id: admin.ctx.userId, role: "admin", lead: true }),
   ]);
   expect(listed.members.every((m) => !("email" in m))).toBe(true);
-  await teams.deleteTeam(lead.ctx, team.id, team.name);
+  await expect(teams.deleteTeam(lead.ctx, team.id, team.name)).rejects.toMatchObject({
+    httpStatus: 403,
+  });
+  await teams.deleteTeam(admin.ctx, team.id, team.name);
 });
 
 it("rejects lead demotion, removal and account deletion before personal data is touched", async () => {
@@ -134,16 +137,27 @@ it("rejects lead demotion, removal and account deletion before personal data is 
     (await exchangeShare(link.url.split("#")[1] ?? "", viewer.ctx)).token,
   );
   const sharedBefore = JSON.stringify(await getSharing(teamCtx, manual.id));
-  for (const action of [
-    () => teams.changeRole(admin.ctx, team.id, lead.ctx.userId as string, "member"),
-    () => teams.removeMember(admin.ctx, team.id, lead.ctx.userId as string),
-    () => teams.removeMember(lead.ctx, team.id, lead.ctx.userId as string),
-    () => deleteAccount(lead.ctx),
-  ]) {
-    await expect(action()).rejects.toMatchObject({
-      code: "lead_transfer_required",
-      httpStatus: 409,
-    });
+  const attempts: Array<[() => Promise<unknown>, number, string]> = [
+    [
+      () => teams.changeRole(admin.ctx, team.id, lead.ctx.userId as string, "member"),
+      403,
+      "lead_required",
+    ],
+    [() => teams.removeMember(admin.ctx, team.id, lead.ctx.userId as string), 403, "lead_required"],
+    [
+      () => teams.changeRole(lead.ctx, team.id, lead.ctx.userId as string, "member"),
+      409,
+      "lead_transfer_required",
+    ],
+    [
+      () => teams.removeMember(lead.ctx, team.id, lead.ctx.userId as string),
+      409,
+      "lead_transfer_required",
+    ],
+    [() => deleteAccount(lead.ctx), 409, "lead_transfer_required"],
+  ];
+  for (const [action, httpStatus, code] of attempts) {
+    await expect(action()).rejects.toMatchObject({ code, httpStatus });
     expect((await getSource(lead.ctx, source.id)).id).toBe(source.id);
     await expect(requireSession(lead.token)).resolves.toMatchObject({ userId: lead.ctx.userId });
     expect(await pointer(team.id)).toBe(lead.ctx.userId);
@@ -179,10 +193,8 @@ it("serializes stale-actor transfers and target demotion with no dangling lead",
     transfer(lead.ctx, team.id, admin.ctx.userId as string),
     teams.changeRole(lead.ctx, team.id, admin.ctx.userId as string, "member"),
   ]);
-  expect(race.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-  const failure = race.find((r) => r.status === "rejected");
-  expect(failure).toBeDefined();
-  if (failure?.status === "rejected") expect([409, 422]).toContain(failure.reason.httpStatus);
+  expect(race[0]?.status).toBe("fulfilled");
+  if (race[1]?.status === "rejected") expect(race[1].reason).toMatchObject({ httpStatus: 403 });
   expect(
     (
       await pool.query(
