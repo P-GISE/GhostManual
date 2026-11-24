@@ -358,3 +358,61 @@ it("pages equal-microsecond work timestamps without duplicates and rechecks targ
   ]);
   expect(personal.personal.works[0].createdByName).toBeNull();
 });
+
+it("keeps global overlapping status counts and paged personal work while searching manual titles", async () => {
+  const actor = await person();
+  await pool.query(
+    `INSERT INTO sources(id,workspace_id,revision,created_by)
+    SELECT gen_random_uuid(),$1,1,$2 FROM generate_series(1,11)`,
+    [actor.ctx.workspaceId, actor.userId],
+  );
+  await pool.query(
+    `INSERT INTO source_revisions(id,workspace_id,source_id,revision,title,text,uploaded_by_name)
+    SELECT gen_random_uuid(),workspace_id,id,1,'개인 페이지 업무',repeat('합성 개인 내용 ',20),'개인 작성자'
+    FROM sources WHERE workspace_id=$1`,
+    [actor.ctx.workspaceId],
+  );
+  const team = await createTeam(actor.ctx, "집계 팀");
+  const ctx = await inTeam(actor.token, team.id);
+  const source = await createSource(ctx, exampleSource);
+  await createSource(ctx, { ...exampleSource, title: "게시되지 않은 업무" });
+  const manual = await saveDraft(ctx, source.revisionId, {
+    ...exampleDraft,
+    title: "ＭＡＮＵＡＬ %_",
+  });
+  await publishManual(ctx, manual.id, 1, exampleDraft.unknowns);
+  await pool.query(
+    `INSERT INTO revision_questions(id,workspace_id,revision_id,position,kind,question)
+    VALUES(gen_random_uuid(),$1,$2,9,'other','추가 확인할 내용')`,
+    [team.id, source.revisionId],
+  );
+  const all = await (await overviewPage(actor.token)).json();
+  expect(all.counts).toEqual({ all: 13, todo: 13, published: 1 });
+  expect(all.personal.workCount).toBe(11);
+  expect(all.personal.works).toHaveLength(10);
+  const next = await (
+    await overviewPage(actor.token, {
+      workspaceId: actor.ctx.workspaceId,
+      afterWork: all.personal.nextWorkCursor,
+    })
+  ).json();
+  expect(next.personal.works).toHaveLength(1);
+  expect(next.personal.nextWorkCursor).toBeNull();
+  const combined = [...all.personal.works, ...next.personal.works];
+  expect(new Set(combined.map((work: { id: string }) => work.id)).size).toBe(11);
+  expect(
+    combined.every((work: { createdByName: string | null }) => work.createdByName === null),
+  ).toBe(true);
+  for (const filter of ["published", "todo"]) {
+    const found = await (await overviewPage(actor.token, { query: "manual %_", filter })).json();
+    expect(found.counts).toEqual(all.counts);
+    expect(found.teams).toHaveLength(1);
+    expect(found.teams[0].works.map((work: { id: string }) => work.id)).toEqual([source.id]);
+    expect(found.teams[0].matchingCount).toBe(1);
+    expect(found.teams[0].works[0].openQuestions).toBe(1);
+    expect(found.personal.works).toHaveLength(0);
+  }
+  expect(
+    (await (await overviewPage(actor.token, { query: "manual _%" })).json()).teams,
+  ).toHaveLength(0);
+});

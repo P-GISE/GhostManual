@@ -152,7 +152,7 @@ export async function getOverview(ctx: SessionContext, params = new URLSearchPar
         ${fromSql} WHERE s.workspace_id=wanted.id AND ${matchingSql}
           AND ($4::timestamptz IS NULL OR (s.created_at,s.id)<($4::timestamptz,$5::uuid))
         ORDER BY s.created_at DESC,s.id DESC LIMIT ${WORK_PAGE + 1}
-      ) page`,
+      ) page ORDER BY wanted.id,page."cursorTime" DESC,page.id DESC`,
       [ids, query, options.filter, cursor?.[0] ?? null, cursor?.[1] ?? null],
     );
     const byWorkspace = new Map<string, RawWork[]>();
