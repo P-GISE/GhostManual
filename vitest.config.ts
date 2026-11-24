@@ -7,6 +7,7 @@ if (compatibility)
 const compatibilityFiles = [
   "tests/integration/team-lead-backend.test.ts",
   "tests/integration/team-lead-expand.test.ts",
+  "tests/integration/overview-compat.test.ts",
 ];
 
 export default defineConfig({
