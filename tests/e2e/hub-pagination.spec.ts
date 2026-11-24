@@ -29,7 +29,7 @@ test("library replaces team/work pages and searches across unloaded teams", asyn
         nextTeamCursor: hubTeamId,
         teams: [{ ...view.teams[0], nextWorkCursor: "next-work" }],
       };
-      if (url.searchParams.has("workspaceId"))
+      if (url.searchParams.has("afterWork"))
         body = {
           ...view,
           teams: [{ ...view.teams[0], works: [{ ...hubWork, title: "마지막 페이지 업무" }] }],

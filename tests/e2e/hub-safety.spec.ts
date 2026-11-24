@@ -1,7 +1,13 @@
 import { expect, type Page, test } from "@playwright/test";
-import { hubOverview, hubPersonalId, hubTeamId, hubWork } from "../fixtures/hub-overview";
+import {
+  filteredHub,
+  hubOverview,
+  hubPersonalId,
+  hubTeamId,
+  hubWork,
+} from "../fixtures/hub-overview";
 
-async function mockHub(page: Page, overview: unknown) {
+async function mockHub(page: Page, overview: ReturnType<typeof hubOverview>) {
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const values: Record<string, unknown> = {
@@ -20,7 +26,9 @@ async function mockHub(page: Page, overview: unknown) {
       });
       return;
     }
-    await route.fulfill({ json: values[path] });
+    await route.fulfill({
+      json: path === "/api/overview" ? filteredHub(route.request().url(), overview) : values[path],
+    });
   });
 }
 
@@ -73,7 +81,12 @@ test("hub rechecks a cached-current task and serializes repeated navigation whil
 test("hub keeps personal registration available and does not classify current personal work as legacy", async ({
   page,
 }) => {
-  await mockHub(page, { teams: [], personal: null });
+  await mockHub(page, {
+    ...hubOverview(),
+    teams: [],
+    personal: null,
+    counts: { all: 0, todo: 0, published: 0 },
+  });
   await page.goto("/library");
   await expect(
     page.getByRole("link", { name: "개인 문서함에 업무 등록", exact: true }),

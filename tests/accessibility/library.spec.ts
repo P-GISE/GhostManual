@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { hubOverview, hubPersonalId, hubTeamId } from "../fixtures/hub-overview";
+import { filteredHub, hubOverview, hubPersonalId, hubTeamId } from "../fixtures/hub-overview";
 
 for (const ready of [false, true]) {
   test(`library role labels, personal entry and keyboard filters (ready: ${ready})`, async ({
@@ -18,7 +18,12 @@ for (const ready of [false, true]) {
       const path = new URL(request.url()).pathname;
       if (request.method() !== "GET") throw new Error("Library accessibility audit must not write");
       if (!(path in values)) throw new Error(`Unexpected library audit request: ${path}`);
-      await route.fulfill({ json: values[path] });
+      await route.fulfill({
+        json:
+          path === "/api/overview"
+            ? filteredHub(request.url(), hubOverview(ready, true))
+            : values[path],
+      });
     });
     await page.goto("/library");
     await expect(page.getByRole("heading", { name: "내 문서함", level: 1 })).toBeVisible();
@@ -38,7 +43,9 @@ for (const ready of [false, true]) {
     await published.focus();
     await published.press("Enter");
     await expect(published).toHaveAttribute("aria-pressed", "true");
-    await expect(team.getByText("조건에 맞는 업무가 없습니다.", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("조건에 맞는 업무가 없습니다.", { exact: true }).first(),
+    ).toBeVisible();
     await search.fill("찾을 수 없는 합성 업무");
     await expect(search).toHaveValue("찾을 수 없는 합성 업무");
     for (const button of await page

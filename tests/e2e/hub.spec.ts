@@ -34,10 +34,14 @@ test("my library shows every team's work and opens it in the right team", async 
 
   // 찾기와 거르기는 모든 팀에 한 번에 적용된다.
   await page.getByLabel("업무 검색").fill("없는 이름");
-  await expect(team.getByText("조건에 맞는 업무가 없습니다.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("조건에 맞는 업무가 없습니다.", { exact: true }).first(),
+  ).toBeVisible();
   await page.getByLabel("업무 검색").fill("허브에서");
   await page.getByRole("button", { name: "게시됨 0" }).click();
-  await expect(team.getByText("조건에 맞는 업무가 없습니다.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("조건에 맞는 업무가 없습니다.", { exact: true }).first(),
+  ).toBeVisible();
   await page.getByRole("button", { name: "내가 할 일 1" }).click();
 
   // 다른 문서함을 보고 있었어도 업무를 누르면 그 팀으로 전환해 연다.
