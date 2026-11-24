@@ -1,12 +1,13 @@
-import { existsSync } from "node:fs";
 import { afterAll, afterEach, expect, it } from "vitest";
+import { POST } from "../../src/app/api/workspaces/[id]/lead/route.ts";
 import { deleteAccount } from "../../src/lib/accounts.ts";
 import { pool } from "../../src/lib/db.ts";
+import { getManual, publishManual, saveDraft } from "../../src/lib/manuals.ts";
 import { requireSession } from "../../src/lib/session.ts";
+import { exchangeShare, getSharing, setSharing } from "../../src/lib/shares.ts";
 import { createSource, getSource } from "../../src/lib/sources.ts";
 import * as teams from "../../src/lib/teams.ts";
-import type { SessionContext } from "../../src/lib/types.ts";
-import { exampleSource } from "../fixtures/manual-example.ts";
+import { exampleDraft, exampleSource } from "../fixtures/manual-example.ts";
 import { setupFileMail, signedInUser } from "./mail-helper.ts";
 
 const mail = setupFileMail();
@@ -15,14 +16,7 @@ afterEach(async () => {
   await pool.query("DELETE FROM schema_migrations WHERE name=$1", [marker]);
 });
 afterAll(() => pool.end());
-async function transfer(ctx: SessionContext, teamId: string, userId: string) {
-  const action = Reflect.get(teams, "transferTeamLead") as
-    | ((ctx: SessionContext, teamId: string, userId: string) => Promise<unknown>)
-    | undefined;
-  expect(action, "compatible lead transfer must exist").toBeTypeOf("function");
-  if (!action) throw new Error("missing transferTeamLead");
-  return action(ctx, teamId, userId);
-}
+const transfer = teams.transferTeamLead;
 async function fixture(ready = true) {
   const lead = await signedInUser(mail),
     admin = await signedInUser(mail),
@@ -119,6 +113,17 @@ it("transfers only the pointer, retaining admin roles, sessions and current admi
 it("rejects lead demotion, removal and account deletion before personal data is touched", async () => {
   const { lead, admin, team } = await fixture();
   const source = await createSource(lead.ctx, exampleSource);
+  const teamCtx = await requireSession((await teams.switchWorkspace(admin.token, team.id)).token);
+  const teamSource = await createSource(teamCtx, exampleSource);
+  const manual = await saveDraft(teamCtx, teamSource.revisionId, exampleDraft);
+  await publishManual(teamCtx, manual.id, 1, exampleDraft.unknowns);
+  const link = await setSharing(teamCtx, manual.id, "link");
+  if (link.mode !== "link") throw new Error("expected link share");
+  const viewer = await signedInUser(mail);
+  const reader = await requireSession(
+    (await exchangeShare(link.url.split("#")[1] ?? "", viewer.ctx)).token,
+  );
+  const sharedBefore = JSON.stringify(await getSharing(teamCtx, manual.id));
   for (const action of [
     () => teams.changeRole(admin.ctx, team.id, lead.ctx.userId as string, "member"),
     () => teams.removeMember(admin.ctx, team.id, lead.ctx.userId as string),
@@ -132,6 +137,9 @@ it("rejects lead demotion, removal and account deletion before personal data is 
     expect((await getSource(lead.ctx, source.id)).id).toBe(source.id);
     await expect(requireSession(lead.token)).resolves.toMatchObject({ userId: lead.ctx.userId });
     expect(await pointer(team.id)).toBe(lead.ctx.userId);
+    expect((await getSource(teamCtx, teamSource.id)).id).toBe(teamSource.id);
+    expect((await getManual(reader, manual.id)).id).toBe(manual.id);
+    expect(JSON.stringify(await getSharing(teamCtx, manual.id))).toBe(sharedBefore);
   }
   await transfer(lead.ctx, team.id, admin.ctx.userId as string);
   await deleteAccount(lead.ctx);
@@ -140,6 +148,9 @@ it("rejects lead demotion, removal and account deletion before personal data is 
   );
   expect(await pointer(team.id)).toBe(admin.ctx.userId);
   expect((await teams.listMembers(admin.ctx, team.id)).members).toHaveLength(2);
+  expect((await getSource(teamCtx, teamSource.id)).id).toBe(teamSource.id);
+  expect((await getManual(reader, manual.id)).id).toBe(manual.id);
+  expect(JSON.stringify(await getSharing(teamCtx, manual.id))).toBe(sharedBefore);
 });
 
 it("serializes stale-actor transfers and target demotion with no dangling lead", async () => {
@@ -159,7 +170,9 @@ it("serializes stale-actor transfers and target demotion with no dangling lead",
     teams.changeRole(lead.ctx, team.id, admin.ctx.userId as string, "member"),
   ]);
   expect(race.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-  expect(race.filter((r) => r.status === "rejected")).toHaveLength(1);
+  const failure = race.find((r) => r.status === "rejected");
+  expect(failure).toBeDefined();
+  if (failure?.status === "rejected") expect([409, 422]).toContain(failure.reason.httpStatus);
   expect(
     (
       await pool.query(
@@ -179,6 +192,7 @@ it("rechecks readiness after an insert blocked at the future migration boundary"
     await blocker.query("LOCK TABLE workspaces IN SHARE ROW EXCLUSIVE MODE");
     pending = teams.createTeam(lead.ctx, "단계 경계 합성 팀");
     for (let attempt = 0; attempt < 100; attempt++) {
+      await blocker.query("SELECT pg_stat_clear_snapshot()");
       const waiters = await blocker.query(
         "SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE 'INSERT INTO workspaces%'",
       );
@@ -198,10 +212,6 @@ it("rechecks readiness after an insert blocked at the future migration boundary"
 });
 
 it("enforces transfer HTTP authentication, origin, strict input and membership", async () => {
-  const path = "../../src/app/api/workspaces/[id]/lead/route.ts";
-  expect(existsSync("src/app/api/workspaces/[id]/lead/route.ts")).toBe(true);
-  if (!existsSync("src/app/api/workspaces/[id]/lead/route.ts")) return;
-  const { POST } = await import(path);
   const { lead, admin, member, team } = await fixture();
   const outsider = await signedInUser(mail);
   const request = (
@@ -231,15 +241,60 @@ it("enforces transfer HTTP authentication, origin, strict input and membership",
     outsider.ctx.sessionId,
   ]);
   expect((await call(request(outsider.token))).status).toBe(401);
-  await expect(
-    transfer(
-      { ...lead.ctx, role: "reader" } as SessionContext,
-      team.id,
-      admin.ctx.userId as string,
-    ),
-  ).rejects.toMatchObject({ httpStatus: 404 });
+  const teamCtx = await requireSession((await teams.switchWorkspace(admin.token, team.id)).token);
+  const source = await createSource(teamCtx, exampleSource);
+  const manual = await saveDraft(teamCtx, source.revisionId, exampleDraft);
+  await publishManual(teamCtx, manual.id, 1, exampleDraft.unknowns);
+  const link = await setSharing(teamCtx, manual.id, "link");
+  if (link.mode !== "link") throw new Error("expected link share");
+  const readerAccount = await signedInUser(mail);
+  const readerSession = await exchangeShare(link.url.split("#")[1] ?? "", readerAccount.ctx);
+  const readerRequest = request();
+  readerRequest.headers.set("cookie", "gm_reader=" + readerSession.token);
+  readerRequest.headers.set("x-ghost-role", "reader");
+  expect((await call(readerRequest)).status).toBe(404);
   const response = await call(request(lead.token));
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ id: team.id, leadUserId: admin.ctx.userId });
   expect(response.headers.get("set-cookie")).toBeNull();
 });
+
+it("does not infer a lead when the enforcement marker exists but the team pointer is null", async () => {
+  const { lead, admin, team } = await fixture(false);
+  await pool.query("INSERT INTO schema_migrations(name) VALUES($1)", [marker]);
+  expect(await teams.listMembers(lead.ctx, team.id)).toMatchObject({
+    leadReady: false,
+    leadUserId: null,
+  });
+  await expect(transfer(lead.ctx, team.id, admin.ctx.userId as string)).rejects.toMatchObject({
+    code: "team_lead_not_ready",
+    httpStatus: 503,
+  });
+  expect(await pointer(team.id)).toBeNull();
+});
+
+for (const operation of ["leave", "delete"] as const)
+  it(
+    "serializes transfer with target " + operation + " without stale account or member pointers",
+    async () => {
+      const { lead, admin, team } = await fixture();
+      const outcomes = await Promise.allSettled([
+        transfer(lead.ctx, team.id, admin.ctx.userId as string),
+        operation === "leave"
+          ? teams.removeMember(admin.ctx, team.id, admin.ctx.userId as string)
+          : deleteAccount(admin.ctx),
+      ]);
+      expect(outcomes.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      const failed = outcomes.find((r) => r.status === "rejected");
+      expect(failed).toBeDefined();
+      if (failed?.status === "rejected") expect([409, 422]).toContain(failed.reason.httpStatus);
+      expect(
+        (
+          await pool.query(
+            "SELECT m.role FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id AND m.user_id=w.lead_user_id JOIN users u ON u.id=m.user_id WHERE w.id=$1",
+            [team.id],
+          )
+        ).rows[0]?.role,
+      ).toBe("admin");
+    },
+  );
