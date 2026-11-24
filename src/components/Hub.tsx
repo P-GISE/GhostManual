@@ -1,10 +1,10 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { message, read } from "../lib/client";
+import { http, message, read } from "../lib/client";
 import { taskState } from "../lib/task-state";
-import { roleText, switchWorkspace } from "./Teams";
+import { roleText } from "./Teams";
 
 const workSchema = z.object({
   id: z.uuid(),
@@ -37,7 +37,7 @@ const overviewSchema = z.object({
   personal: z.object({ id: z.uuid(), current: z.boolean(), works: z.array(workSchema) }).nullable(),
 });
 type Overview = z.infer<typeof overviewSchema>;
-type Group = { id: string | null; current: boolean; works: Overview["teams"][number]["works"] };
+type Group = { id: string | null; works: Overview["teams"][number]["works"] };
 
 const normalize = (value: string) => value.trim().normalize("NFKC").toLocaleLowerCase("ko-KR");
 
@@ -45,12 +45,26 @@ const normalize = (value: string) => value.trim().normalize("NFKC").toLocaleLowe
 export function Hub() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [error, setError] = useState("");
+  const [switching, setSwitching] = useState(false);
+  const navigating = useRef(false);
+  const mounted = useRef(true);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "todo" | "published">("all");
   useEffect(() => {
+    let active = true;
+    mounted.current = true;
     read("/api/overview", overviewSchema)
-      .then(setOverview)
-      .catch(async (e) => setError(await message(e)));
+      .then((value) => {
+        if (active) setOverview(value);
+      })
+      .catch(async (e) => {
+        const detail = await message(e);
+        if (active) setError(detail);
+      });
+    return () => {
+      active = false;
+      mounted.current = false;
+    };
   }, []);
   if (!overview)
     return error ? (
@@ -62,12 +76,25 @@ export function Hub() {
         내 문서함을 불러오고 있습니다.
       </p>
     );
-  // 업무·매뉴얼 화면은 세션의 문서함을 따른다. 다른 팀의 것을 누르면 그 팀으로 세션을 맞춘 뒤 연다.
-  const enter = (group: Group, href: string) => (event: React.MouseEvent) => {
-    if (group.current) return;
+  // 다른 탭이 쿠키를 바꿀 수 있으므로 캐시된 current 대신 선택한 문서함을 맞춘다.
+  const enter = (workspaceId: string | null, href: string) => (event: React.MouseEvent) => {
     event.preventDefault();
+    if (navigating.current) return;
+    navigating.current = true;
+    setSwitching(true);
     setError("");
-    void switchWorkspace(group.id, href).catch(async (e) => setError(await message(e)));
+    void http
+      .post("/api/session/workspace", { json: { workspaceId } })
+      .then(() => {
+        if (mounted.current) window.location.assign(href);
+      })
+      .catch(async (e) => {
+        const detail = await message(e);
+        if (!mounted.current) return;
+        navigating.current = false;
+        setSwitching(false);
+        setError(detail);
+      });
   };
   const all = [...overview.teams, ...(overview.personal ? [overview.personal] : [])].flatMap(
     (group) => group.works.map(taskState),
@@ -95,7 +122,12 @@ export function Hub() {
               </span>
               <div className="task-main">
                 <h3>
-                  <Link className="task-link" href={home} onClick={enter(group, home)}>
+                  <Link
+                    className="task-link"
+                    href={home}
+                    aria-disabled={switching}
+                    onClick={enter(group.id, home)}
+                  >
                     {work.manualTitle ?? work.title}
                   </Link>
                 </h3>
@@ -111,7 +143,8 @@ export function Hub() {
                   state.action.primary ? "button task-action" : "button secondary task-action"
                 }
                 href={state.action.href}
-                onClick={enter(group, state.action.href)}
+                aria-disabled={switching}
+                onClick={enter(group.id, state.action.href)}
               >
                 {state.action.label}
               </Link>
@@ -139,15 +172,22 @@ export function Hub() {
           {error}
         </p>
       )}
+      {switching && <p role="status">문서함을 전환하고 있습니다.</p>}
       {empty ? (
         <section className="panel">
           <h2>팀 문서함을 만들어 시작하세요</h2>
-          <p className="muted">
-            업무는 팀 문서함에 올립니다. 혼자 쓰는 경우에도 팀을 하나 만들어 쓰면 됩니다.
-          </p>
+          <p className="muted">팀을 만들어 함께 쓰거나 개인 문서함에 업무를 등록할 수 있습니다.</p>
           <div className="actions">
             <Link className="button" href="/teams">
               팀 만들기
+            </Link>
+            <Link
+              className="button secondary"
+              href="/sources/new"
+              aria-disabled={switching}
+              onClick={enter(null, "/sources/new")}
+            >
+              개인 문서함에 업무 등록
             </Link>
           </div>
         </section>
@@ -199,7 +239,8 @@ export function Hub() {
                       className="button"
                       href="/sources/new"
                       aria-label={`${team.name}에 새 업무 등록`}
-                      onClick={enter(team, "/sources/new")}
+                      aria-disabled={switching}
+                      onClick={enter(team.id, "/sources/new")}
                     >
                       새 업무 등록
                     </Link>
@@ -228,17 +269,25 @@ export function Hub() {
           {overview.personal && (
             <section className="hub-team" aria-labelledby="personal-works">
               <div className="hub-team-head">
-                <h2 id="personal-works">옮기지 않은 개인 업무</h2>
+                <h2 id="personal-works">개인 업무</h2>
                 <span className="help">업무 {overview.personal.works.length}개</span>
               </div>
               <p className="help">
-                팀을 만들기 전에 올린 업무입니다. 업무를 열어 "팀 문서함으로 옮기기"로 팀에 옮길 수
-                있습니다.
+                개인 문서함에 보관한 업무입니다. 그대로 이용하거나, 필요하면 업무를 열어 팀
+                문서함으로 옮길 수 있습니다.
               </p>
               {rows({ ...overview.personal, id: null })}
             </section>
           )}
           <div className="actions">
+            <Link
+              className="button secondary"
+              href="/sources/new"
+              aria-disabled={switching}
+              onClick={enter(null, "/sources/new")}
+            >
+              개인 문서함에 업무 등록
+            </Link>
             <Link className="button secondary" href="/teams">
               팀 만들기
             </Link>
