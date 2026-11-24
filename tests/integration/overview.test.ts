@@ -283,7 +283,8 @@ it("pages team metadata and searches beyond the first team page without exposing
   const next = await (await overviewPage(actor.token, { afterTeam: first.nextTeamCursor })).json();
   expect(next.teams.map((team: { id: string }) => team.id)).toEqual(teams.slice(20));
   expect(next.nextTeamCursor).toBeNull();
-  const lastCtx = await inTeam(actor.token, teams[20] as string);
+  actor.token = (await switchWorkspace(actor.token, teams[20] as string)).token;
+  const lastCtx = await requireSession(actor.token);
   const hidden = await createSource(lastCtx, { ...exampleSource, title: "ＦＯＯ %_ 뒤쪽 업무" });
   const found = await (await overviewPage(actor.token, { query: "foo %_" })).json();
   expect(found.teams).toHaveLength(1);
@@ -373,7 +374,8 @@ it("keeps global overlapping status counts and paged personal work while searchi
     [actor.ctx.workspaceId],
   );
   const team = await createTeam(actor.ctx, "집계 팀");
-  const ctx = await inTeam(actor.token, team.id);
+  actor.token = (await switchWorkspace(actor.token, team.id)).token;
+  const ctx = await requireSession(actor.token);
   const source = await createSource(ctx, exampleSource);
   await createSource(ctx, { ...exampleSource, title: "게시되지 않은 업무" });
   const manual = await saveDraft(ctx, source.revisionId, {

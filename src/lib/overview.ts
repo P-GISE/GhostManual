@@ -121,6 +121,7 @@ export async function getOverview(ctx: SessionContext, params = new URLSearchPar
       ...spaces.rows.filter((space) => space.name === null),
     ];
     const ids = selected.map((space) => space.id);
+    // shortcut: exact totals still scan authorized work; profile indexes/caching if queries reach the timeout.
     const counts = (
       await db.query<{ all: number; todo: number; published: number }>(
         `${spacesSql} SELECT count(*)::int AS all,
