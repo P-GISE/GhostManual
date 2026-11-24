@@ -33,7 +33,7 @@ export function hubOverview(ready = false, personal = false) {
         workCount: 1,
         matchingCount: 1,
         nextWorkCursor: null,
-        works: [hubWork] satisfies [typeof hubWork],
+        works: [{ ...hubWork }] satisfies [typeof hubWork],
       },
     ] satisfies [unknown],
     personal: personal
