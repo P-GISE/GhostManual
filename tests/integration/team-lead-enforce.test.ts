@@ -22,65 +22,78 @@ async function fixture() {
     share: randomUUID(),
     reader: randomUUID(),
   };
-  await db.query("BEGIN");
-  for (const user of users)
-    await db.query(
-      "INSERT INTO users(id,email,name,password_hash,terms_agreed_at) VALUES($1,$2,'합성','fixture',now())",
-      [user, user + "@example.invalid"],
+  const setup = await db.connect();
+  try {
+    await setup.query("BEGIN");
+    for (const user of users)
+      await setup.query(
+        "INSERT INTO users(id,email,name,password_hash,terms_agreed_at) VALUES($1,$2,'합성','fixture',now())",
+        [user, user + "@example.invalid"],
+      );
+    await setup.query(
+      "INSERT INTO workspaces(id,mode,user_id,expires_at) VALUES($1,'blank',$2,'infinity')",
+      [ids.personal, users[0]],
     );
-  await db.query(
-    "INSERT INTO workspaces(id,mode,user_id,expires_at) VALUES($1,'blank',$2,'infinity')",
-    [ids.personal, users[0]],
-  );
-  for (const id of [ids.team, ids.preserved, ids.other]) {
-    await db.query(
-      "INSERT INTO workspaces(id,mode,team_name,expires_at) VALUES($1,'blank','합성 팀','infinity')",
-      [id],
+    for (const id of [ids.team, ids.preserved, ids.other]) {
+      await setup.query(
+        "INSERT INTO workspaces(id,mode,team_name,expires_at) VALUES($1,'blank','합성 팀','infinity')",
+        [id],
+      );
+      await setup.query(
+        "INSERT INTO workspace_members(workspace_id,user_id,role,joined_at) VALUES($1,$2,'admin','2026-01-01'),($1,$3,'admin','2026-01-01'),($1,$4,'member','2025-01-01')",
+        [id, users[0], users[1], users[2]],
+      );
+    }
+    await setup.query("UPDATE workspaces SET lead_user_id=$2 WHERE id=$1", [
+      ids.preserved,
+      users[1],
+    ]);
+    await setup.query("DELETE FROM workspace_members WHERE workspace_id=$1 AND user_id=$2", [
+      ids.other,
+      users[0],
+    ]);
+    await setup.query(
+      "INSERT INTO sources(id,workspace_id,revision,kind,file_type,created_by) VALUES($1,$2,1,'file','xlsx',$3)",
+      [ids.source, ids.team, users[0]],
     );
-    await db.query(
-      "INSERT INTO workspace_members(workspace_id,user_id,role,joined_at) VALUES($1,$2,'admin','2026-01-01'),($1,$3,'admin','2026-01-01'),($1,$4,'member','2025-01-01')",
-      [id, users[0], users[1], users[2]],
+    await setup.query(
+      "INSERT INTO source_revisions(id,workspace_id,source_id,revision,title,text) VALUES($1,$2,$3,1,'합성 원본',repeat('가',100))",
+      [ids.revision, ids.team, ids.source],
     );
+    await setup.query(
+      "INSERT INTO source_files(revision_id,workspace_id,file_name,size_bytes,sha256,content,compare_status) VALUES($1,$2,'synthetic.xlsx',3,repeat('0',64),decode('0001ff','hex'),'limit_exceeded')",
+      [ids.revision, ids.team],
+    );
+    await setup.query(
+      "INSERT INTO revision_questions(id,workspace_id,revision_id,position,kind,question,answer,answered_at) VALUES($1,$2,$3,0,'purpose','목적?','합성 답',now())",
+      [randomUUID(), ids.team, ids.revision],
+    );
+    await setup.query(
+      "INSERT INTO manuals(id,workspace_id,source_id,source_revision_id,draft,provenance) VALUES($1,$2,$3,$4,'{}','human')",
+      [ids.manual, ids.team, ids.source, ids.revision],
+    );
+    await setup.query(
+      "INSERT INTO manual_versions(id,workspace_id,manual_id,version,source_revision_id,content,provenance,acknowledged_unknowns) VALUES($1,$2,$3,1,$4,'{}','human','[]')",
+      [ids.version, ids.team, ids.manual, ids.revision],
+    );
+    await setup.query("UPDATE manuals SET published_version=1 WHERE id=$1", [ids.manual]);
+    await setup.query(
+      "INSERT INTO shares(id,workspace_id,manual_id,token_hash,link_token,expires_at) VALUES($1,$2,$3,$4,$5,'infinity')",
+      [ids.share, ids.team, ids.manual, randomUUID(), randomUUID()],
+    );
+    await setup.query(
+      "INSERT INTO sessions(id,workspace_id,token_hash,role,share_id,user_id,expires_at) VALUES($1,$2,$3,'reader',$4,$5,'infinity')",
+      [ids.reader, ids.team, randomUUID(), ids.share, users[2]],
+    );
+    await setup.query("COMMIT");
+  } catch (error) {
+    await setup.query("ROLLBACK");
+    setup.release();
+    await db.end();
+    await isolated.close();
+    throw error;
   }
-  await db.query("UPDATE workspaces SET lead_user_id=$2 WHERE id=$1", [ids.preserved, users[1]]);
-  await db.query("DELETE FROM workspace_members WHERE workspace_id=$1 AND user_id=$2", [
-    ids.other,
-    users[0],
-  ]);
-  await db.query(
-    "INSERT INTO sources(id,workspace_id,revision,kind,file_type,created_by) VALUES($1,$2,1,'file','xlsx',$3)",
-    [ids.source, ids.team, users[0]],
-  );
-  await db.query(
-    "INSERT INTO source_revisions(id,workspace_id,source_id,revision,title,text) VALUES($1,$2,$3,1,'합성 원본',repeat('가',100))",
-    [ids.revision, ids.team, ids.source],
-  );
-  await db.query(
-    "INSERT INTO source_files(revision_id,workspace_id,file_name,size_bytes,sha256,content,compare_status) VALUES($1,$2,'synthetic.xlsx',3,repeat('0',64),decode('0001ff','hex'),'limit_exceeded')",
-    [ids.revision, ids.team],
-  );
-  await db.query(
-    "INSERT INTO revision_questions(id,workspace_id,revision_id,position,kind,question,answer,answered_at) VALUES($1,$2,$3,0,'purpose','목적?','합성 답',now())",
-    [randomUUID(), ids.team, ids.revision],
-  );
-  await db.query(
-    "INSERT INTO manuals(id,workspace_id,source_id,source_revision_id,draft,provenance) VALUES($1,$2,$3,$4,'{}','human')",
-    [ids.manual, ids.team, ids.source, ids.revision],
-  );
-  await db.query(
-    "INSERT INTO manual_versions(id,workspace_id,manual_id,version,source_revision_id,content,provenance,acknowledged_unknowns) VALUES($1,$2,$3,1,$4,'{}','human','[]')",
-    [ids.version, ids.team, ids.manual, ids.revision],
-  );
-  await db.query("UPDATE manuals SET published_version=1 WHERE id=$1", [ids.manual]);
-  await db.query(
-    "INSERT INTO shares(id,workspace_id,manual_id,token_hash,link_token,expires_at) VALUES($1,$2,$3,$4,$5,'infinity')",
-    [ids.share, ids.team, ids.manual, randomUUID(), randomUUID()],
-  );
-  await db.query(
-    "INSERT INTO sessions(id,workspace_id,token_hash,role,share_id,user_id,expires_at) VALUES($1,$2,$3,'reader',$4,$5,'infinity')",
-    [ids.reader, ids.team, randomUUID(), ids.share, users[2]],
-  );
-  await db.query("COMMIT");
+  setup.release();
   return {
     db,
     ids,
@@ -119,11 +132,19 @@ async function snapshot(db: pg.Pool) {
 async function enforce(db: pg.Pool) {
   expect(sql, "actual 014 migration must exist").not.toBeNull();
   if (!sql) throw new Error("missing actual 014 migration");
-  await db.query("BEGIN");
-  await db.query("SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='10s'");
-  await db.query(sql);
-  await db.query("INSERT INTO schema_migrations(name) VALUES($1)", [migration]);
-  await db.query("COMMIT");
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='10s'");
+    await client.query(sql);
+    await client.query("INSERT INTO schema_migrations(name) VALUES($1)", [migration]);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 it("backfills NULL leads deterministically while preserving valid non-NULL leads and every business row", async () => {

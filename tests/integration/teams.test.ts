@@ -21,6 +21,7 @@ import {
   removeMember,
   renameTeam,
   switchWorkspace,
+  transferTeamLead,
 } from "../../src/lib/teams.ts";
 import {
   deleteTemplate,
@@ -198,12 +199,12 @@ it("keeps one admin, ends the session of a removed member and deletes a team by 
   const adminInTeam = await inTeam(admin.token, team.id);
   const kept = await createSource(adminInTeam, exampleSource);
 
-  // 관리자가 한 명뿐이면 나가거나 내려올 수 없다.
+  // 강제 단계에서는 대표 이양 전 나가기와 강등을 막는다.013 마지막 admin 검사는 호환 프로젝트에서 유지한다.
   await expect(removeMember(admin.ctx, team.id, admin.userId)).rejects.toMatchObject({
-    code: "last_admin",
+    code: "lead_transfer_required",
   });
   await expect(changeRole(admin.ctx, team.id, admin.userId, "member")).rejects.toMatchObject({
-    code: "last_admin",
+    code: "lead_transfer_required",
   });
   // 내보내면 그 사람의 팀 세션이 끊기고 자료는 남는다.
   const memberSession = await switchWorkspace(member.token, team.id);
@@ -231,6 +232,7 @@ it("keeps one admin, ends the session of a removed member and deletes a team by 
   await inviteMember(admin.ctx, team.id, member.email);
   await acceptInvite(member.ctx, inviteToken(member.email));
   await changeRole(admin.ctx, team.id, member.userId, "admin");
+  await transferTeamLead(admin.ctx, team.id, member.userId);
   await removeMember(admin.ctx, team.id, admin.userId);
   await expect(listMembers(admin.ctx, team.id)).rejects.toMatchObject({ httpStatus: 404 });
 

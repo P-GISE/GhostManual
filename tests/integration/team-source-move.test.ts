@@ -51,6 +51,18 @@ it("moves history and links atomically and removes only related AI questions", a
       team,
       user,
     );
+    const leader = id();
+    await q(
+      "INSERT INTO users(id,email,name,password_hash,terms_agreed_at) VALUES($1,$2,'Synthetic lead','fixture',now())",
+      leader,
+      leader + "@example.test",
+    );
+    await q(
+      "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'admin')",
+      team,
+      leader,
+    );
+    await q("UPDATE workspaces SET lead_user_id=$2 WHERE id=$1", team, leader);
     await q(
       "INSERT INTO sources(id,workspace_id,revision,kind,file_type,created_by) VALUES($1,$2,1,'file','xlsx',$3)",
       source,

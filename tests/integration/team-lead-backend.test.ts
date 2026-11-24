@@ -310,3 +310,28 @@ for (const operation of ["leave", "delete"] as const)
       ).toBe("admin");
     },
   );
+
+it("retains 013 last-admin errors and serializes legacy administrator account deletion", async () => {
+  const first = await signedInUser(mail),
+    second = await signedInUser(mail);
+  const team = await teams.createTeam(first.ctx, "013 마지막 관리자");
+  await expect(
+    teams.removeMember(first.ctx, team.id, first.ctx.userId as string),
+  ).rejects.toMatchObject({ code: "last_admin" });
+  await expect(
+    teams.changeRole(first.ctx, team.id, first.ctx.userId as string, "member"),
+  ).rejects.toMatchObject({ code: "last_admin" });
+  await pool.query(
+    "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'admin')",
+    [team.id, second.ctx.userId],
+  );
+  const results = await Promise.allSettled([deleteAccount(first.ctx), deleteAccount(second.ctx)]);
+  expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+  expect(results.filter((r) => r.status === "rejected")).toEqual([
+    expect.objectContaining({ reason: expect.objectContaining({ httpStatus: 409 }) }),
+  ]);
+  expect(
+    (await pool.query("SELECT role FROM workspace_members WHERE workspace_id=$1", [team.id])).rows,
+  ).toEqual([{ role: "admin" }]);
+  expect(await pointer(team.id)).toBeNull();
+});
