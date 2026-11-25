@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
 import { http, message, read } from "../lib/client";
 import { ManualList } from "./ManualList";
+import { TeamProgress } from "./TeamProgress";
 import { roleText, switchWorkspace, workspacesSchema } from "./Teams";
 import { TemplateList } from "./TemplateList";
 
@@ -30,6 +31,7 @@ type Team = z.infer<typeof teamSchema>;
 const tabs = [
   { id: "works", label: "업무" },
   { id: "members", label: "팀원·초대" },
+  { id: "progress", label: "진행 현황" },
   { id: "forms", label: "양식" },
   { id: "settings", label: "팀 설정" },
 ] as const;
@@ -99,10 +101,14 @@ export function TeamPage({ id }: { readonly id: string }) {
     setSaved("");
     window.history.replaceState(null, "", `?tab=${next}`);
   }
+  // 진행 현황은 관리자와 부관리자에게만 보이는 탭이다.
+  const shown = tabs.filter((entry) => entry.id !== "progress" || team?.role === "admin");
+  const active = shown.some((entry) => entry.id === tab) ? tab : "works";
   // 화살표 키로 탭을 옮긴다(WAI-ARIA 탭 패턴).
   function onKey(event: React.KeyboardEvent, index: number) {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
-    const next = tabs[(index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+    const next =
+      shown[(index + (event.key === "ArrowRight" ? 1 : shown.length - 1)) % shown.length];
     if (!next) return;
     choose(next.id);
     document.getElementById(`tab-${next.id}`)?.focus();
@@ -249,15 +255,15 @@ export function TeamPage({ id }: { readonly id: string }) {
       ) : (
         <>
           <div role="tablist" aria-label={`${team.name} 메뉴`} className="tabs">
-            {tabs.map((entry, index) => (
+            {shown.map((entry, index) => (
               <button
                 key={entry.id}
                 id={`tab-${entry.id}`}
                 type="button"
                 role="tab"
-                aria-selected={tab === entry.id}
+                aria-selected={active === entry.id}
                 aria-controls={`panel-${entry.id}`}
-                tabIndex={tab === entry.id ? 0 : -1}
+                tabIndex={active === entry.id ? 0 : -1}
                 onClick={() => choose(entry.id)}
                 onKeyDown={(event) => onKey(event, index)}
               >
@@ -265,10 +271,11 @@ export function TeamPage({ id }: { readonly id: string }) {
               </button>
             ))}
           </div>
-          <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>
-            {tab === "works" && (aligned ? <ManualList embedded /> : waiting)}
-            {tab === "forms" && (aligned ? <TemplateList embedded /> : waiting)}
-            {tab === "members" && (
+          <div id={`panel-${active}`} role="tabpanel" aria-labelledby={`tab-${active}`}>
+            {active === "works" && (aligned ? <ManualList embedded /> : waiting)}
+            {active === "forms" && (aligned ? <TemplateList embedded /> : waiting)}
+            {active === "progress" && <TeamProgress id={id} />}
+            {active === "members" && (
               <>
                 {admin && invite}
                 <section className="panel" aria-labelledby="members">
@@ -379,7 +386,7 @@ export function TeamPage({ id }: { readonly id: string }) {
                 </section>
               </>
             )}
-            {tab === "settings" && (
+            {active === "settings" && (
               <>
                 {admin && (
                   <section className="panel" aria-labelledby="rename">
