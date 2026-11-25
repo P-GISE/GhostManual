@@ -26,7 +26,7 @@ it("keeps 013 progress HTTP admin/member/Reader and private-work boundaries", as
   const source = await createSource(ctx, exampleSource);
   const draft = await saveDraft(ctx, source.revisionId, exampleDraft);
   await publishManual(ctx, draft.id, 1, exampleDraft.unknowns);
-  const read = (token: string, id = team.id, reader = false) =>
+  const read = (token: string, id: string = team.id, reader = false) =>
     GET(
       new Request(`http://localhost:3200/api/workspaces/${id}/progress`, {
         headers: {
