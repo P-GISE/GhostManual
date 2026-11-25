@@ -83,15 +83,15 @@ for (const role of ["member", "admin"] as const) {
       const labels = [
         "업무",
         "팀원·초대",
-        "양식",
         ...(role === "admin" ? ["진행 현황"] : []),
+        "양식",
         "팀 설정",
       ];
       const ids = [
         "works",
         "members",
-        "forms",
         ...(role === "admin" ? ["progress"] : []),
+        "forms",
         "settings",
       ];
       await expect(tabs.getByRole("tab")).toHaveCount(labels.length);
@@ -123,7 +123,7 @@ for (const role of ["member", "admin"] as const) {
           if (role === "admin") await expect(invite).toBeVisible();
           else await expect(invite).toHaveCount(0);
         }
-        if (index === 2) {
+        if (ids[index] === "forms") {
           await expect(panel.getByRole("link", { name: "합성 인수인계 양식" })).toBeVisible();
           await expect(panel.getByRole("button", { name: "양식 등록" })).toBeDisabled();
         }
