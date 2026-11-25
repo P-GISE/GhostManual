@@ -104,3 +104,36 @@ test("lost lead permission refreshes controls without retrying the mutation", as
   ).toHaveCount(0);
   expect(writes).toBe(1);
 });
+
+test("unconfirmed transfer blocks resubmission until a read-only refresh succeeds", async ({
+  page,
+}) => {
+  await mockTeam(page, () => team());
+  let failedReads = false;
+  let writes = 0;
+  await page.route(`**/api/workspaces/${teamId}/members`, async (route) => {
+    if (!failedReads) return route.fallback();
+    await route.fulfill({
+      status: 503,
+      json: { error: { code: "unavailable", message: "합성 재조회 실패", retryable: false } },
+    });
+  });
+  await page.route(`**/api/workspaces/${teamId}/lead`, async (route) => {
+    writes++;
+    failedReads = true;
+    await route.fulfill({
+      status: 503,
+      json: { error: { code: "unavailable", message: "합성 결과 불명확", retryable: false } },
+    });
+  });
+  await page.goto(`/teams/${teamId}?tab=members`);
+  await page.getByRole("button", { name: "합성 후임에게 관리자 넘기기", exact: true }).click();
+  await page.getByRole("button", { name: "넘기기 확인", exact: true }).click();
+  const refresh = page.getByRole("button", { name: "권한 다시 확인", exact: true });
+  await expect(refresh).toBeVisible();
+  await expect(page.getByRole("button", { name: "넘기기 확인", exact: true })).toBeDisabled();
+  failedReads = false;
+  await refresh.click();
+  await expect(page.getByRole("button", { name: "넘기기 확인", exact: true })).toBeEnabled();
+  expect(writes).toBe(1);
+});
