@@ -12,7 +12,7 @@ import {
 
 test("sign up, verify by mail, log out and log back in", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "시작하기" }).click();
+  await page.getByRole("link", { name: "팀 문서함 만들기" }).click();
   await expect(page).toHaveURL(/\/signup$/);
   const email = await signUpAndVerify(page, undefined, "박효민");
   await expect(page.getByText("박효민")).toBeVisible();
