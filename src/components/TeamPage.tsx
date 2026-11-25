@@ -18,8 +18,11 @@ const teamSchema = z.object({
       department: z.string().nullable(),
       role: z.enum(["admin", "member"]),
       email: z.string().optional(),
+      lead: z.boolean().optional(),
     }),
   ),
+  // 대표 관리자가 정해진 팀인지(migration 014 적용 뒤). 거짓이면 예전처럼 admin 누구나 관리한다.
+  leadReady: z.boolean().optional(),
   invites: z.array(z.object({ id: z.uuid(), email: z.string(), expired: z.boolean() })),
 });
 type Team = z.infer<typeof teamSchema>;
@@ -43,6 +46,8 @@ export function TeamPage({ id }: { readonly id: string }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [confirmName, setConfirmName] = useState("");
+  // 관리자를 넘기려고 고른 팀원. 한 번 더 확인받는다.
+  const [transfer, setTransfer] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
@@ -113,6 +118,18 @@ export function TeamPage({ id }: { readonly id: string }) {
       </p>
     );
   const admin = team.role === "admin";
+  const ready = team.leadReady === true;
+  // 관리자(대표)만 역할 변경·넘기기·팀 삭제를 한다. 준비 전 팀에서는 admin이 모두 한다.
+  const lead = ready ? team.members.some((member) => member.id === me && member.lead) : admin;
+  const roleName = (member: { role: "admin" | "member"; lead?: boolean | undefined }) =>
+    ready
+      ? member.lead
+        ? "관리자"
+        : member.role === "admin"
+          ? "부관리자"
+          : "팀원"
+      : roleText[member.role];
+  const promote = ready ? "부관리자로 지정" : "팀 관리자로 지정";
   const home = () => window.location.assign("/teams");
   const waiting = (
     <p className="loading" role="status">
@@ -184,7 +201,9 @@ export function TeamPage({ id }: { readonly id: string }) {
       <Link href="/teams">팀 문서함 목록</Link>
       <h1>{team.name}</h1>
       <p>
-        <span className="badge">{roleText[team.role]}</span>{" "}
+        <span className="badge">
+          {roleName(team.members.find((member) => member.id === me) ?? { role: team.role })}
+        </span>{" "}
         <span className="help">팀원 {team.members.length}명</span>
       </p>
       {error && (
@@ -259,52 +278,103 @@ export function TeamPage({ id }: { readonly id: string }) {
                       <li key={member.id}>
                         <strong>{member.name}</strong>
                         {member.id === me && <span className="help"> (나)</span>}{" "}
-                        <span className="badge">{roleText[member.role]}</span>{" "}
+                        <span className="badge">{roleName(member)}</span>{" "}
                         <span className="help">
                           {[member.department, member.email].filter(Boolean).join(" · ")}
                         </span>
-                        {admin && (
+                        {transfer === member.id ? (
                           <span className="actions">
+                            <span role="status">
+                              {member.name} 님에게 관리자를 넘깁니다. 나는 부관리자가 됩니다.
+                            </span>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                act(
+                                  () =>
+                                    http.post(`/api/workspaces/${id}/lead`, {
+                                      json: { userId: member.id },
+                                    }),
+                                  `${member.name} 님에게 관리자를 넘겼습니다.`,
+                                ).then(() => setTransfer(""))
+                              }
+                            >
+                              넘기기 확인
+                            </button>
                             <button
                               type="button"
                               className="secondary"
                               disabled={busy}
-                              aria-label={`${member.name} ${member.role === "admin" ? "팀원으로 변경" : "팀 관리자로 지정"}`}
-                              onClick={() =>
-                                act(
-                                  () =>
-                                    http.patch(`/api/workspaces/${id}/members/${member.id}`, {
-                                      json: { role: member.role === "admin" ? "member" : "admin" },
-                                    }),
-                                  "역할을 바꿨습니다.",
-                                )
-                              }
+                              onClick={() => setTransfer("")}
                             >
-                              {member.role === "admin" ? "팀원으로 변경" : "팀 관리자로 지정"}
+                              취소
                             </button>
-                            {member.id !== me && (
-                              <button
-                                type="button"
-                                className="secondary"
-                                disabled={busy}
-                                aria-label={`${member.name} 내보내기`}
-                                onClick={() =>
-                                  act(
-                                    () => http.delete(`/api/workspaces/${id}/members/${member.id}`),
-                                    `${member.name} 님을 내보냈습니다. 올린 자료는 팀에 남습니다.`,
-                                  )
-                                }
-                              >
-                                내보내기
-                              </button>
-                            )}
                           </span>
+                        ) : (
+                          admin && (
+                            <span className="actions">
+                              {/* 관리자 자신의 역할은 넘기기로만 바꾼다. */}
+                              {lead && !member.lead && (
+                                <button
+                                  type="button"
+                                  className="secondary"
+                                  disabled={busy}
+                                  aria-label={`${member.name} ${member.role === "admin" ? "팀원으로 변경" : promote}`}
+                                  onClick={() =>
+                                    act(
+                                      () =>
+                                        http.patch(`/api/workspaces/${id}/members/${member.id}`, {
+                                          json: {
+                                            role: member.role === "admin" ? "member" : "admin",
+                                          },
+                                        }),
+                                      "역할을 바꿨습니다.",
+                                    )
+                                  }
+                                >
+                                  {member.role === "admin" ? "팀원으로 변경" : promote}
+                                </button>
+                              )}
+                              {ready && lead && member.id !== me && (
+                                <button
+                                  type="button"
+                                  className="secondary"
+                                  disabled={busy}
+                                  aria-label={`${member.name}에게 관리자 넘기기`}
+                                  onClick={() => setTransfer(member.id)}
+                                >
+                                  관리자 넘기기
+                                </button>
+                              )}
+                              {/* 부관리자는 팀원만 내보낸다. */}
+                              {member.id !== me && (lead || member.role === "member") && (
+                                <button
+                                  type="button"
+                                  className="secondary"
+                                  disabled={busy}
+                                  aria-label={`${member.name} 내보내기`}
+                                  onClick={() =>
+                                    act(
+                                      () =>
+                                        http.delete(`/api/workspaces/${id}/members/${member.id}`),
+                                      `${member.name} 님을 내보냈습니다. 올린 자료는 팀에 남습니다.`,
+                                    )
+                                  }
+                                >
+                                  내보내기
+                                </button>
+                              )}
+                            </span>
+                          )
                         )}
                       </li>
                     ))}
                   </ul>
                   <p className="help">
                     나가거나 내보내도 그 사람이 올린 업무와 매뉴얼은 팀에 남습니다.
+                    {ready &&
+                      " 관리자는 팀에 한 명이고, 부관리자 지정과 관리자 넘기기, 팀 삭제는 관리자만 합니다."}
                   </p>
                 </section>
               </>
@@ -341,14 +411,17 @@ export function TeamPage({ id }: { readonly id: string }) {
                 <section className="panel" aria-labelledby="leave">
                   <h2 id="leave">팀 나가기</h2>
                   <p className="help">
-                    나가도 내가 올린 업무와 매뉴얼은 팀에 남습니다. 팀 관리자가 한 명뿐이면 다른
-                    관리자를 지정한 뒤에 나갈 수 있습니다.
+                    나가도 내가 올린 업무와 매뉴얼은 팀에 남습니다.{" "}
+                    {ready
+                      ? lead &&
+                        "관리자는 팀원·초대 탭에서 다른 사람에게 관리자를 넘긴 뒤에 나갈 수 있습니다."
+                      : "팀 관리자가 한 명뿐이면 다른 관리자를 지정한 뒤에 나갈 수 있습니다."}
                   </p>
                   <div className="actions">
                     <button
                       type="button"
                       className="secondary"
-                      disabled={busy || !me}
+                      disabled={busy || !me || (ready && lead)}
                       onClick={() =>
                         act(() => http.delete(`/api/workspaces/${id}/members/${me}`), "", home)
                       }
@@ -357,7 +430,7 @@ export function TeamPage({ id }: { readonly id: string }) {
                     </button>
                   </div>
                 </section>
-                {admin && (
+                {lead && (
                   <section className="panel" aria-labelledby="delete">
                     <h2 id="delete">팀 문서함 삭제</h2>
                     <p className="help">
