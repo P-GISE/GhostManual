@@ -1,3 +1,9 @@
+# Node26 전환 검증 (2026-11-25)
+
+앱·문서 큐 워커의 후보 런타임은 Node26.13.1/bookworm-slim이며 Docker Official Images registry index `sha256:0042e17d232a87a2cd485be1da7900fca4d10a4ad11b29e9285da1d2e54798c9`를 조회해 고정했다. CI도26.13.1, package/lock의 엔진은 `>=26.13.1 <27`이다. 별도 Python·Java OCR 추출기 이미지는 기존 Node24 베이스를 보존하며, 새 Node26 호출자와 기존 gateway의 실제 mTLS 성공/거부를 CI에서 검사한다. 아래24 기록은 이전 앱 기준이다.
+
+운영은 PR110/Node24/DB013이며 후보 CI 성공과 검토 전에는 새 런타임으로 간주하지 않는다. `.github/workflows/ci.yml`·Dockerfile·deploy 문서는 배포 보호 트리 대상이므로 운영 반영 전 최종 해시 검토가 필요하다. 실행기 재설치/가드 완화, OCR 재빌드, migration014·backfill·대표 지정은 포함하지 않는다.
+
 # GhostManual 배포
 
 Task8 배포 구성이다. 실제 컨테이너 실행·AWS 부하·공개 HTTPS 검증은 별도 실행 결과로 기록한다. 로컬 Docker 엔진이 고장난 상태에서 Compose 문법 검사와 이미지 manifest 조회만 성공한 결과를 배포 성공으로 해석하지 않는다.

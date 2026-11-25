@@ -20,7 +20,7 @@
     "test:accessibility": "playwright test --config playwright.accessibility.config.ts"
   },
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=26.13.1 <27"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.11.0",
