@@ -21,6 +21,25 @@ for (const role of ["member", "admin"] as const) {
         },
         "/api/manuals": [manual],
         "/api/sources": [{ ...source, canDelete: role === "admin" }],
+        [`/api/workspaces/${teamId}/progress`]: {
+          total: 1,
+          nextCursor: null,
+          works: [
+            {
+              id: source.id,
+              title: "합성 진행 업무",
+              manualTitle: null,
+              createdByName: "합성 팀원",
+              revision: 1,
+              revisionAt: "2026-11-25T00:00:00.000Z",
+              openQuestions: 0,
+              manualId: null,
+              publishedVersion: null,
+              needsReview: false,
+              unpublishedChanges: false,
+            },
+          ],
+        },
         "/api/templates": [
           {
             id: "20000000-0000-4000-8000-000000000003",
@@ -61,9 +80,23 @@ for (const role of ["member", "admin"] as const) {
       }
 
       const tabs = page.getByRole("tablist", { name: `${name} 메뉴` });
-      const labels = ["업무", "팀원·초대", "양식", "팀 설정"];
-      const ids = ["works", "members", "forms", "settings"];
-      await expect(tabs.getByRole("tab")).toHaveCount(4);
+      const labels = [
+        "업무",
+        "팀원·초대",
+        "양식",
+        ...(role === "admin" ? ["진행 현황"] : []),
+        "팀 설정",
+      ];
+      const ids = [
+        "works",
+        "members",
+        "forms",
+        ...(role === "admin" ? ["progress"] : []),
+        "settings",
+      ];
+      await expect(tabs.getByRole("tab")).toHaveCount(labels.length);
+      if (role === "member")
+        await expect(tabs.getByRole("tab", { name: "진행 현황", exact: true })).toHaveCount(0);
       await expect(
         page.getByRole("tabpanel").getByRole("link", { name: manual.draft.title, exact: true }),
       ).toBeVisible();
@@ -74,7 +107,7 @@ for (const role of ["member", "admin"] as const) {
         await expect(tab).toHaveAttribute("aria-selected", "true");
         await expect(tab).toHaveAttribute("tabindex", "0");
         await expect(tab).toHaveAttribute("aria-controls", `panel-${ids[index]}`);
-        await expect(tabs.locator('[aria-selected="false"]')).toHaveCount(3);
+        await expect(tabs.locator('[aria-selected="false"]')).toHaveCount(labels.length - 1);
         for (const inactive of await tabs.locator('[aria-selected="false"]').all()) {
           await expect(inactive).toHaveAttribute("tabindex", "-1");
         }
@@ -94,7 +127,16 @@ for (const role of ["member", "admin"] as const) {
           await expect(panel.getByRole("link", { name: "합성 인수인계 양식" })).toBeVisible();
           await expect(panel.getByRole("button", { name: "양식 등록" })).toBeDisabled();
         }
-        if (index === 3) {
+        if (ids[index] === "progress") {
+          await expect(
+            panel.getByRole("heading", { name: "진행 현황", exact: true }),
+          ).toBeVisible();
+          await expect(panel.getByRole("row", { name: /합성 진행 업무/ })).toBeVisible();
+          await expect(panel.getByRole("listitem").filter({ hasText: "초안" })).toContainText(
+            "진행 중",
+          );
+        }
+        if (ids[index] === "settings") {
           await expect(panel.getByRole("button", { name: "팀 나가기" })).toBeEnabled();
           if (role === "admin") {
             await expect(page.getByLabel("팀 이름 바꾸기")).toBeVisible();

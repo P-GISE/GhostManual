@@ -1,4 +1,5 @@
 import { afterAll, expect, it } from "vitest";
+import { GET } from "../../src/app/api/workspaces/[id]/progress/route.ts";
 import { pool } from "../../src/lib/db.ts";
 import { publishManual, saveDraft } from "../../src/lib/manuals.ts";
 import { getProgress } from "../../src/lib/progress.ts";
@@ -9,6 +10,7 @@ import {
   changeRole,
   createTeam,
   inviteMember,
+  removeMember,
   switchWorkspace,
 } from "../../src/lib/teams.ts";
 import { exampleDraft, exampleSource } from "../fixtures/manual-example.ts";
@@ -65,4 +67,85 @@ it("shows team progress to admins only", async () => {
   await expect(getProgress(lead.ctx, lead.ctx.workspaceId)).rejects.toMatchObject({
     httpStatus: 404,
   });
+});
+
+async function page(token: string, teamId: string, query = "") {
+  return GET(
+    new Request(
+      `http://localhost:3200/api/workspaces/${teamId}/progress${query ? `?${query}` : ""}`,
+      {
+        headers: { cookie: `gm_owner=${token}` },
+      },
+    ),
+    { params: Promise.resolve({ id: teamId }) },
+  );
+}
+
+it("limits progress pages, preserves microsecond ties and rechecks admin rights on every request", async () => {
+  const lead = await person(),
+    deputy = await person(),
+    outsider = await person();
+  const team = await createTeam(lead.ctx, "제한 조회 팀");
+  await pool.query(
+    "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'admin')",
+    [team.id, deputy.userId],
+  );
+  const ids = (
+    await pool.query<{ id: string }>(
+      `INSERT INTO sources(id,workspace_id,revision,created_by,created_at)
+    SELECT gen_random_uuid(),$1,1,$2,'2026-11-25T00:00:00.123456Z'::timestamptz FROM generate_series(1,23) RETURNING id`,
+      [team.id, lead.userId],
+    )
+  ).rows
+    .map((row) => row.id)
+    .sort()
+    .reverse();
+  await pool.query(
+    `INSERT INTO source_revisions(id,workspace_id,source_id,revision,title,text,uploaded_by_name)
+    SELECT gen_random_uuid(),workspace_id,id,1,'진행 업무 '||id,repeat('합성 내용 ',20),'합성 담당자' FROM sources WHERE workspace_id=$1`,
+    [team.id],
+  );
+  const firstResponse = await page(deputy.token, team.id);
+  expect(firstResponse.status).toBe(200);
+  const first = await firstResponse.json();
+  expect(first.works).toHaveLength(10);
+  expect(first.total).toBe(23);
+  expect(first.works.map((work: { id: string }) => work.id)).toEqual(ids.slice(0, 10));
+  const secondResponse = await page(deputy.token, team.id, `afterWork=${first.nextCursor}`);
+  expect(secondResponse.status).toBe(200);
+  const second = await secondResponse.json();
+  expect(second.works.map((work: { id: string }) => work.id)).toEqual(ids.slice(10, 20));
+  const third = await (await page(deputy.token, team.id, `afterWork=${second.nextCursor}`)).json();
+  expect(third.works.map((work: { id: string }) => work.id)).toEqual(ids.slice(20));
+  expect(third.nextCursor).toBeNull();
+  expect(
+    new Set(
+      [...first.works, ...second.works, ...third.works].map((work: { id: string }) => work.id),
+    ).size,
+  ).toBe(23);
+  expect((await page(outsider.token, team.id, `afterWork=${first.nextCursor}`)).status).toBe(404);
+  expect((await page(deputy.token, deputy.ctx.workspaceId)).status).toBe(404);
+  await changeRole(lead.ctx, team.id, deputy.userId, "member");
+  expect((await page(deputy.token, team.id, `afterWork=${first.nextCursor}`)).status).toBe(403);
+  await removeMember(lead.ctx, team.id, deputy.userId);
+  expect((await page(deputy.token, team.id, `afterWork=${first.nextCursor}`)).status).toBe(404);
+});
+
+it("rejects invalid progress cursors, unsupported and duplicate query parameters", async () => {
+  const lead = await person();
+  const team = await createTeam(lead.ctx, "잘못된 조회 팀");
+  for (const query of [
+    "limit=9999",
+    "afterWork=bad",
+    "afterWork=a&afterWork=b",
+    "filter=all",
+    "afterWork=",
+  ]) {
+    expect((await page(lead.token, team.id, query)).status, query).toBe(422);
+  }
+  const noSession = await GET(
+    new Request(`http://localhost:3200/api/workspaces/${team.id}/progress`),
+    { params: Promise.resolve({ id: team.id }) },
+  );
+  expect(noSession.status).toBe(401);
 });
