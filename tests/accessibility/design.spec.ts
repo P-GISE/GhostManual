@@ -140,7 +140,7 @@ test("public entry and form screens are visually captured", async ({ page }, tes
 test("starting is visible without scrolling", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => document.fonts.ready);
-  await expect(page.getByRole("link", { name: "시작하기", exact: true })).toBeInViewport({
+  await expect(page.getByRole("link", { name: "팀 문서함 만들기", exact: true })).toBeInViewport({
     ratio: 1,
   });
 });
@@ -171,14 +171,23 @@ test("form placeholder remains readable against its input background", async ({ 
   ).toBeGreaterThanOrEqual(4.5);
 });
 
-test("home lists every feature as available in text", async ({ page }) => {
+test("home explains the four steps with marked examples and states measurement limits", async ({
+  page,
+}) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
-  const features = page.getByRole("list", { name: "GhostManual 기능" }).getByRole("listitem");
-  await expect(features).toHaveCount(6);
-  await expect(features.filter({ hasText: "사용 가능" })).toHaveCount(6);
+  const steps = page.getByRole("list", { name: "GhostManual을 쓰는 순서" }).locator(":scope > li");
+  await expect(steps).toHaveCount(4);
+  // 단계마다 제목과 "예시"로 표시한 화면 조각이 하나씩 있다.
+  for (const step of await steps.all()) {
+    await expect(step.getByRole("heading", { level: 3 })).toHaveCount(1);
+    await expect(step.getByRole("figure").getByText("예시", { exact: true })).toBeVisible();
+  }
+  await expect(page.getByRole("figure")).toHaveCount(5);
+  await expect(
+    page.getByText("실제 회사 자료로 잰 값이 아닙니다.", { exact: false }),
+  ).toBeVisible();
   await expect(page.getByText("준비 중")).toHaveCount(0);
-  await expect(page.getByText("예시", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
