@@ -27,3 +27,11 @@ export function taskState(work: {
           : { label: "매뉴얼 보기", href: `/manuals/${work.manualId}`, primary: false };
   return { published, status, action, todo: !published || work.openQuestions > 0 };
 }
+
+export const progressSteps = ["원본", "질문", "초안", "검수", "게시"] as const;
+// 지금 진행 중인 단계의 번호. 게시까지 끝났으면 단계 수를 돌려준다.
+export function progressStep(work: Parameters<typeof taskState>[0]): number {
+  if (work.openQuestions > 0) return 1;
+  if (!work.manualId) return 2;
+  return taskState(work).published ? progressSteps.length : 3;
+}
