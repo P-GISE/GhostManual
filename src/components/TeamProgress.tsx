@@ -1,4 +1,5 @@
 "use client";
+import { HTTPError } from "ky";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { message, read } from "../lib/client";
@@ -56,7 +57,9 @@ export function TeamProgress({ id }: { readonly id: string }) {
       })
       .catch(async (e) => {
         const detail = await message(e);
-        if (active) setError(detail);
+        if (!active) return;
+        if (e instanceof HTTPError && [401, 403, 404].includes(e.response.status)) setResult(null);
+        setError(detail);
       })
       .finally(() => {
         if (active) {
