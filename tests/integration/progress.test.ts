@@ -14,7 +14,7 @@ import {
   switchWorkspace,
 } from "../../src/lib/teams.ts";
 import { exampleDraft, exampleSource } from "../fixtures/manual-example.ts";
-import { mailsTo, setupFileMail, signedInUser } from "./mail-helper.ts";
+import { mailsTo, setupFileMail, shareWithNewReader, signedInUser } from "./mail-helper.ts";
 
 afterAll(() => pool.end());
 
@@ -36,6 +36,18 @@ it("shows team progress to admins only", async () => {
   const published = await createSource(inTeam, exampleSource);
   const draft = await saveDraft(inTeam, published.revisionId, exampleDraft);
   await publishManual(inTeam, draft.id, 1, exampleDraft.unknowns);
+
+  const reader = await shareWithNewReader(inTeam, draft.id);
+  expect(
+    (
+      await GET(
+        new Request(`http://localhost:3200/api/workspaces/${team.id}/progress`, {
+          headers: { cookie: `gm_reader=${reader.token}`, "x-ghost-role": "reader" },
+        }),
+        { params: Promise.resolve({ id: team.id }) },
+      )
+    ).status,
+  ).toBe(404);
 
   // 세션이 개인 문서함이어도 관리자는 팀의 진행 현황을 본다.
   const { works } = await getProgress(lead.ctx, team.id);
@@ -129,6 +141,10 @@ it("limits progress pages, preserves microsecond ties and rechecks admin rights 
   expect((await page(deputy.token, team.id, `afterWork=${first.nextCursor}`)).status).toBe(403);
   await removeMember(lead.ctx, team.id, deputy.userId);
   expect((await page(deputy.token, team.id, `afterWork=${first.nextCursor}`)).status).toBe(404);
+  await pool.query("UPDATE workspaces SET expires_at=now()-interval '1 second' WHERE id=$1", [
+    team.id,
+  ]);
+  expect((await page(lead.token, team.id, `afterWork=${first.nextCursor}`)).status).toBe(404);
 });
 
 it("rejects invalid progress cursors, unsupported and duplicate query parameters", async () => {
