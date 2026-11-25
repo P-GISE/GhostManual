@@ -141,10 +141,11 @@ it("limits progress pages, preserves microsecond ties and rechecks admin rights 
   expect((await page(deputy.token, team.id, `afterWork=${first.nextCursor}`)).status).toBe(403);
   await removeMember(lead.ctx, team.id, deputy.userId);
   expect((await page(deputy.token, team.id, `afterWork=${first.nextCursor}`)).status).toBe(404);
+  // Team expiry is constrained to infinity; expire the caller's valid personal workspace instead.
   await pool.query("UPDATE workspaces SET expires_at=now()-interval '1 second' WHERE id=$1", [
-    team.id,
+    lead.ctx.workspaceId,
   ]);
-  expect((await page(lead.token, team.id, `afterWork=${first.nextCursor}`)).status).toBe(404);
+  expect((await page(lead.token, team.id, `afterWork=${first.nextCursor}`)).status).toBe(401);
 });
 
 it("rejects invalid progress cursors, unsupported and duplicate query parameters", async () => {
