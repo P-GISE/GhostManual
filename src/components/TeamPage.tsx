@@ -88,6 +88,7 @@ export function TeamPage({ id }: { readonly id: string }) {
     recheckRequired.current = false;
     setUncertain(false);
     setError("");
+    setSaved("");
     void load()
       .then(() => (active ? read("/api/workspaces", workspacesSchema) : null))
       .then((list) => {
@@ -132,6 +133,7 @@ export function TeamPage({ id }: { readonly id: string }) {
       if (after) after();
       else {
         await load();
+        if (!alive.current || currentId.current !== id) return true;
         setSaved(done);
       }
       return true;
@@ -250,7 +252,7 @@ export function TeamPage({ id }: { readonly id: string }) {
               () => http.post(`/api/workspaces/${id}/invites`, { json: { email } }),
               "초대 메일을 보냈습니다.",
             ).then((success) => {
-              if (success) setEmail("");
+              if (success && alive.current && currentId.current === id) setEmail("");
             })
           }
         >
