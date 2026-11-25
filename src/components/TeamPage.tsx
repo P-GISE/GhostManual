@@ -1,11 +1,11 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { http, message, read } from "../lib/client";
 import { ManualList } from "./ManualList";
 import { TeamProgress } from "./TeamProgress";
-import { roleText, switchWorkspace, workspacesSchema } from "./Teams";
+import { roleText, workspacesSchema } from "./Teams";
 import { TemplateList } from "./TemplateList";
 
 const teamSchema = z.object({
@@ -51,50 +51,132 @@ export function TeamPage({ id }: { readonly id: string }) {
   // 관리자를 넘기려고 고른 팀원. 한 번 더 확인받는다.
   const [transfer, setTransfer] = useState("");
   const [busy, setBusy] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
+  const acting = useRef(false);
+  const recheckRequired = useRef(false);
+  const alive = useRef(true);
+  const currentId = useRef(id);
+  currentId.current = id;
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
   const load = useCallback(
-    () =>
+    (keepInputs = false) =>
       read(`/api/workspaces/${id}/members`, teamSchema).then((current) => {
-        setTeam(current);
-        setName(current.name);
+        if (alive.current && currentId.current === id) {
+          setTeam(current);
+          if (!keepInputs) setName(current.name);
+        }
+        return current;
       }),
     [id],
   );
   useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    let active = true;
     const query = new URLSearchParams(window.location.search);
     setTab(tabs.find((entry) => entry.id === query.get("tab"))?.id ?? "works");
     setCreated(query.get("created") === "1");
-    load()
-      .then(() => read("/api/workspaces", workspacesSchema))
+    setTeam(null);
+    setAligned(false);
+    setMe("");
+    setTransfer("");
+    recheckRequired.current = false;
+    setUncertain(false);
+    setError("");
+    void load()
+      .then(() => (active ? read("/api/workspaces", workspacesSchema) : null))
       .then((list) => {
+        if (!active || !list) return;
         if (list.find((workspace) => workspace.current)?.id === id) setAligned(true);
-        // 다른 문서함을 보다가 들어왔으면 이 팀으로 세션을 맞추고 같은 주소를 다시 연다.
-        else return switchWorkspace(id, window.location.pathname + window.location.search);
+        else {
+          const destination = window.location.pathname + window.location.search;
+          return http.post("/api/session/workspace", { json: { workspaceId: id } }).then(() => {
+            if (active) window.location.assign(destination);
+          });
+        }
       })
-      .catch(async (e) => setError(await message(e)));
-    // 내 계정의 id로 목록에서 "나"를 찾는다.
-    read("/api/me", z.object({ id: z.uuid().optional(), name: z.string() }))
-      .then((user) => setMe(user.id ?? ""))
+      .catch(async (e) => {
+        const detail = await message(e);
+        if (active) setError(detail);
+      });
+    void read("/api/me", z.object({ id: z.uuid().optional(), name: z.string() }))
+      .then((user) => {
+        if (active) setMe(user.id ?? "");
+      })
       .catch(() => {});
+    return () => {
+      active = false;
+    };
   }, [load, id]);
+  useEffect(() => {
+    if (busy) return;
+    if (uncertain) document.getElementById("team-permission-refresh")?.focus();
+    else if (transfer) document.getElementById(`transfer-confirm-${transfer}`)?.focus();
+  }, [transfer, busy, uncertain]);
   async function act(work: () => Promise<unknown>, done: string, after?: () => void) {
+    if (acting.current || recheckRequired.current || currentId.current !== id) return false;
+    acting.current = true;
     setBusy(true);
     setError("");
     setSaved("");
+    let applied = false;
     try {
       await work();
+      applied = true;
+      if (!alive.current || currentId.current !== id) return true;
       if (after) after();
       else {
         await load();
         setSaved(done);
       }
+      return true;
     } catch (e) {
-      setError(await message(e));
+      const detail = await message(e);
+      if (!alive.current || currentId.current !== id) return applied;
+      let unconfirmed = applied;
+      if (!applied) {
+        try {
+          await load(true);
+        } catch {
+          unconfirmed = true;
+        }
+      }
+      if (!alive.current || currentId.current !== id) return applied;
+      if (unconfirmed) {
+        recheckRequired.current = true;
+        setUncertain(true);
+      }
+      setError(detail + (unconfirmed ? " 변경 결과와 권한을 다시 확인한 뒤 진행하세요." : ""));
+      return applied;
     } finally {
-      setBusy(false);
+      acting.current = false;
+      if (alive.current) setBusy(false);
     }
   }
+  async function refreshPermissions() {
+    if (acting.current) return;
+    acting.current = true;
+    setBusy(true);
+    try {
+      await load(true);
+      if (!alive.current || currentId.current !== id) return;
+      recheckRequired.current = false;
+      setUncertain(false);
+      setError("");
+    } catch (e) {
+      const detail = await message(e);
+      if (alive.current && currentId.current === id) setError(detail);
+    } finally {
+      acting.current = false;
+      if (alive.current) setBusy(false);
+    }
+  }
+  const blocked = busy || uncertain;
   function choose(next: TabId) {
     setTab(next);
     setCreated(false);
@@ -150,6 +232,7 @@ export function TeamPage({ id }: { readonly id: string }) {
         id="invite-email"
         type="email"
         value={email}
+        disabled={blocked}
         maxLength={254}
         onChange={(event) => setEmail(event.target.value)}
         aria-describedby="invite-help"
@@ -161,12 +244,14 @@ export function TeamPage({ id }: { readonly id: string }) {
       <div className="actions">
         <button
           type="button"
-          disabled={busy || !email.trim()}
+          disabled={blocked || !email.trim()}
           onClick={() =>
             act(
               () => http.post(`/api/workspaces/${id}/invites`, { json: { email } }),
               "초대 메일을 보냈습니다.",
-            ).then(() => setEmail(""))
+            ).then((success) => {
+              if (success) setEmail("");
+            })
           }
         >
           초대 메일 보내기
@@ -183,7 +268,7 @@ export function TeamPage({ id }: { readonly id: string }) {
                   <button
                     type="button"
                     className="secondary"
-                    disabled={busy}
+                    disabled={blocked}
                     aria-label={`${pending.email} 초대 취소`}
                     onClick={() =>
                       act(
@@ -205,7 +290,9 @@ export function TeamPage({ id }: { readonly id: string }) {
   return (
     <>
       <Link href="/teams">팀 문서함 목록</Link>
-      <h1>{team.name}</h1>
+      <h1 id="team-heading" tabIndex={-1}>
+        {team.name}
+      </h1>
       <p>
         <span className="badge">
           {roleName(team.members.find((member) => member.id === me) ?? { role: team.role })}
@@ -216,6 +303,19 @@ export function TeamPage({ id }: { readonly id: string }) {
         <p className="error" role="alert">
           {error}
         </p>
+      )}
+      {uncertain && (
+        <button
+          id="team-permission-refresh"
+          type="button"
+          className="secondary"
+          disabled={busy}
+          onClick={() => {
+            void refreshPermissions();
+          }}
+        >
+          권한 다시 확인
+        </button>
       )}
       {saved && (
         <p className="notice" role="status">
@@ -289,14 +389,15 @@ export function TeamPage({ id }: { readonly id: string }) {
                         <span className="help">
                           {[member.department, member.email].filter(Boolean).join(" · ")}
                         </span>
-                        {transfer === member.id ? (
+                        {transfer === member.id && ready && lead && member.id !== me ? (
                           <span className="actions">
                             <span role="status">
                               {member.name} 님에게 관리자를 넘깁니다. 나는 부관리자가 됩니다.
                             </span>
                             <button
                               type="button"
-                              disabled={busy}
+                              id={`transfer-confirm-${member.id}`}
+                              disabled={blocked}
                               onClick={() =>
                                 act(
                                   () =>
@@ -304,7 +405,12 @@ export function TeamPage({ id }: { readonly id: string }) {
                                       json: { userId: member.id },
                                     }),
                                   `${member.name} 님에게 관리자를 넘겼습니다.`,
-                                ).then(() => setTransfer(""))
+                                ).then((success) => {
+                                  if (success && alive.current && currentId.current === id) {
+                                    setTransfer("");
+                                    document.getElementById("team-heading")?.focus();
+                                  }
+                                })
                               }
                             >
                               넘기기 확인
@@ -312,8 +418,14 @@ export function TeamPage({ id }: { readonly id: string }) {
                             <button
                               type="button"
                               className="secondary"
-                              disabled={busy}
-                              onClick={() => setTransfer("")}
+                              disabled={blocked}
+                              onClick={() => {
+                                setTransfer("");
+                                requestAnimationFrame(() => {
+                                  if (alive.current && currentId.current === id)
+                                    document.getElementById(`transfer-start-${member.id}`)?.focus();
+                                });
+                              }}
                             >
                               취소
                             </button>
@@ -326,7 +438,7 @@ export function TeamPage({ id }: { readonly id: string }) {
                                 <button
                                   type="button"
                                   className="secondary"
-                                  disabled={busy}
+                                  disabled={blocked}
                                   aria-label={`${member.name} ${member.role === "admin" ? "팀원으로 변경" : promote}`}
                                   onClick={() =>
                                     act(
@@ -347,7 +459,8 @@ export function TeamPage({ id }: { readonly id: string }) {
                                 <button
                                   type="button"
                                   className="secondary"
-                                  disabled={busy}
+                                  disabled={blocked}
+                                  id={`transfer-start-${member.id}`}
                                   aria-label={`${member.name}에게 관리자 넘기기`}
                                   onClick={() => setTransfer(member.id)}
                                 >
@@ -359,7 +472,7 @@ export function TeamPage({ id }: { readonly id: string }) {
                                 <button
                                   type="button"
                                   className="secondary"
-                                  disabled={busy}
+                                  disabled={blocked}
                                   aria-label={`${member.name} 내보내기`}
                                   onClick={() =>
                                     act(
@@ -395,6 +508,7 @@ export function TeamPage({ id }: { readonly id: string }) {
                     <input
                       id="rename-team"
                       value={name}
+                      disabled={blocked}
                       maxLength={40}
                       onChange={(event) => setName(event.target.value)}
                     />
@@ -402,7 +516,7 @@ export function TeamPage({ id }: { readonly id: string }) {
                       <button
                         type="button"
                         className="secondary"
-                        disabled={busy || !name.trim() || name.trim() === team.name}
+                        disabled={blocked || !name.trim() || name.trim() === team.name}
                         onClick={() =>
                           act(
                             () => http.patch(`/api/workspaces/${id}`, { json: { name } }),
@@ -428,7 +542,7 @@ export function TeamPage({ id }: { readonly id: string }) {
                     <button
                       type="button"
                       className="secondary"
-                      disabled={busy || !me || (ready && lead)}
+                      disabled={blocked || !me || (ready && lead)}
                       onClick={() =>
                         act(() => http.delete(`/api/workspaces/${id}/members/${me}`), "", home)
                       }
@@ -448,13 +562,14 @@ export function TeamPage({ id }: { readonly id: string }) {
                     <input
                       id="delete-team"
                       value={confirmName}
+                      disabled={blocked}
                       onChange={(event) => setConfirmName(event.target.value)}
                     />
                     <div className="actions">
                       <button
                         type="button"
                         className="secondary"
-                        disabled={busy || confirmName !== team.name}
+                        disabled={blocked || confirmName !== team.name}
                         onClick={() =>
                           act(
                             () =>
