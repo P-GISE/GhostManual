@@ -58,9 +58,9 @@ for (const format of variants)
     await expect(page.getByRole("heading", { name: /v1과 비교해 바뀐 부분 [1-9]/ })).toBeVisible({
       timeout: 15000,
     });
-    await expect(page.getByRole("status")).not.toContainText(
-      "완료 후 질문과 비교 결과를 표시합니다",
-    );
+    await expect(
+      page.getByRole("status").filter({ hasText: "완료 후 질문과 비교 결과를 표시합니다" }),
+    ).toHaveCount(0);
     await page.getByText(/내용 변경 1\s*건/, { exact: true }).click();
     await expect(page.getByText("SECRET_OLD_7391", { exact: false }).last()).toBeVisible();
     await expect(

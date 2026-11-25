@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { hubOverview, hubPersonalId, hubTeamId } from "../fixtures/hub-overview";
+import { filteredHub, hubOverview, hubPersonalId, hubTeamId } from "../fixtures/hub-overview";
 
 for (const ready of [false, true]) {
   test(`library role labels, personal entry and keyboard filters (ready: ${ready})`, async ({
@@ -18,7 +18,12 @@ for (const ready of [false, true]) {
       const path = new URL(request.url()).pathname;
       if (request.method() !== "GET") throw new Error("Library accessibility audit must not write");
       if (!(path in values)) throw new Error(`Unexpected library audit request: ${path}`);
-      await route.fulfill({ json: values[path] });
+      await route.fulfill({
+        json:
+          path === "/api/overview"
+            ? filteredHub(request.url(), hubOverview(ready, true))
+            : values[path],
+      });
     });
     await page.goto("/library");
     await expect(page.getByRole("heading", { name: "내 문서함", level: 1 })).toBeVisible();
@@ -38,7 +43,9 @@ for (const ready of [false, true]) {
     await published.focus();
     await published.press("Enter");
     await expect(published).toHaveAttribute("aria-pressed", "true");
-    await expect(team.getByText("조건에 맞는 업무가 없습니다.", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("조건에 맞는 업무가 없습니다.", { exact: true }).first(),
+    ).toBeVisible();
     await search.fill("찾을 수 없는 합성 업무");
     await expect(search).toHaveValue("찾을 수 없는 합성 업무");
     for (const button of await page
@@ -56,3 +63,38 @@ for (const ready of [false, true]) {
     await page.screenshot({ path: testInfo.outputPath("team-hub.png"), fullPage: true });
   });
 }
+
+test("library page controls retain native keyboard and touch targets", async ({
+  page,
+}, testInfo) => {
+  const view = hubOverview(false, true);
+  const body = {
+    ...view,
+    counts: { all: 12, todo: 12, published: 0 },
+    nextTeamCursor: hubTeamId,
+    teams: [{ ...view.teams[0], workCount: 11, matchingCount: 11, nextWorkCursor: "next-work" }],
+  };
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() !== "GET") throw new Error("Audit must not write");
+    await route.fulfill({
+      json:
+        path === "/api/overview"
+          ? body
+          : path === "/api/me"
+            ? { name: "합성 담당자", admin: false }
+            : [],
+    });
+  });
+  await page.goto("/library");
+  for (const label of ["다음 업무", "다음 문서함"]) {
+    const button = page.getByRole("button", { name: label, exact: true });
+    await button.focus();
+    await expect(button).toBeFocused();
+    const bounds = await button.boundingBox();
+    expect(bounds?.height).toBeGreaterThanOrEqual(44);
+    expect(bounds?.width).toBeGreaterThanOrEqual(44);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("team-hub.png"), fullPage: true });
+});
