@@ -1,6 +1,7 @@
 """Real TLS handshake tests; certificate files are synthetic and live only in tmpfs."""
 from pathlib import Path
 import http.client
+import json
 import os
 import ssl
 import subprocess
@@ -42,12 +43,24 @@ class MutualTLS(unittest.TestCase):
     client.load_cert_chain(str(folder/"client-cert.pem"),str(folder/"client-key.pem"))
     status,body=request(client)
     self.assertEqual(status,200);self.assertIn(b"sandbox_unavailable",body)
-    # Exercise the actual Node24 worker transport against this TLS gateway.
-    self.assertTrue(Path("/work/src/lib/document-extractor.ts").is_file(), "Mount the isolated clone readonly at /work")
+    # Run the same transport under the CI runtime; /work remains the isolated-image default.
+    root=Path(os.environ.get("GHOSTMANUAL_TEST_ROOT","/work")).resolve()
+    transport=root/"src/lib/document-extractor.ts"
+    self.assertTrue(transport.is_file(), "Provide the isolated checkout as GHOSTMANUAL_TEST_ROOT or mount it at /work")
     environment={"PATH":os.environ["PATH"],"DOCUMENT_EXTRACTOR_URL":f"https://localhost:{server.server_port}","DOCUMENT_EXTRACTOR_CA":(folder/"client-ca.pem").read_text(),"DOCUMENT_EXTRACTOR_CERT":(folder/"client-cert.pem").read_text(),"DOCUMENT_EXTRACTOR_KEY":(folder/"client-key.pem").read_text()}
-    script="import {extractDocument} from '/work/src/lib/document-extractor.ts'; const r=await extractDocument('pdf',Buffer.from('%PDF-1.7')); if(r.status!=='failed'||r.reason!=='안전한 문서 추출 환경을 사용할 수 없습니다.')throw new Error('Transport contract failed');"
-    result=subprocess.run(["node","--input-type=module","-e",script],env=environment,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=10)
-    self.assertEqual(result.returncode,0,result.stderr.decode()[:500])
+    denied="문서 추출 서비스에 연결할 수 없습니다."
+    cases=[
+     ("valid",{},"안전한 문서 추출 환경을 사용할 수 없습니다."),
+     ("missing-client",{"DOCUMENT_EXTRACTOR_CERT":"","DOCUMENT_EXTRACTOR_KEY":""},denied),
+     ("untrusted-client",{"DOCUMENT_EXTRACTOR_CERT":(folder/"rogue-cert.pem").read_text(),"DOCUMENT_EXTRACTOR_KEY":(folder/"rogue-key.pem").read_text()},denied),
+     ("wrong-server-ca",{"DOCUMENT_EXTRACTOR_CA":(folder/"rogue-cert.pem").read_text()},denied),
+     ("wrong-server-name",{"DOCUMENT_EXTRACTOR_URL":f"https://127.0.0.1:{server.server_port}"},denied),
+    ]
+    for name,overrides,expected in cases:
+     with self.subTest(node_transport=name):
+      script="import {extractDocument} from "+json.dumps(transport.as_uri())+"; const r=await extractDocument('pdf',Buffer.from('%PDF-1.7')); if(r.status!=='failed'||r.snapshot!==null||r.reason!=="+json.dumps(expected)+")throw new Error('Transport contract failed');"
+      result=subprocess.run(["node","--input-type=module","-e",script],env=environment|overrides,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=10)
+      self.assertEqual(result.returncode,0,result.stderr.decode()[:500])
     untrusted=ssl.create_default_context(cafile=str(folder/"client-ca.pem"))
     untrusted.load_cert_chain(str(folder/"rogue-cert.pem"),str(folder/"rogue-key.pem"))
     with self.assertRaises((ssl.SSLError,ConnectionError)):request(untrusted)

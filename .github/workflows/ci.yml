@@ -35,11 +35,15 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
-          node-version: 24.20.0
+          node-version: 26.13.1
           cache: npm
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - name: Verify real worker mutual TLS transport
+        env:
+          GHOSTMANUAL_TEST_ROOT: ${{ github.workspace }}
+        run: python3 -B services/document-extractor/tests/test_tls.py
       - run: npm test
       - name: Verify app-only deployment guards
         run: |
@@ -55,6 +59,29 @@ jobs:
       - run: npm run build
       - name: Build deployment image without credentials
         run: docker build --label org.opencontainers.image.revision=${{ github.sha }} -t ghostmanual:${{ github.sha }} .
+      - name: Verify Node26 image and real worker entrypoint
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+            "ghostmanual:${{ github.sha }}" node -e 'if(process.version!=="v26.13.1")throw new Error("Unexpected image runtime")'
+          node --input-type=module -e 'import pg from "pg"; const c=new pg.Client({connectionString:process.env.DATABASE_URL}); await c.connect(); await c.query("CREATE DATABASE ghostmanual_worker_compat"); await c.end();'
+          export DATABASE_URL=postgresql://ghostmanual:ci-only-password@localhost:5432/ghostmanual_worker_compat
+          npm run db:migrate
+          certs=$(mktemp -d)
+          trap 'sudo rm -rf -- "$certs"' EXIT
+          chmod 755 "$certs"
+          for name in server-ca.pem client-cert.pem client-key.pem; do
+            printf 'synthetic entrypoint-only fixture\n' > "$certs/$name"
+            sudo chown 1000:1000 "$certs/$name"
+            sudo chmod 400 "$certs/$name"
+          done
+          docker run --rm --network host --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --memory 192m --memory-swap 192m --cpus .25 --pids-limit 64 \
+            --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m \
+            -e DATABASE_URL -e NODE_OPTIONS=--max-old-space-size=128 \
+            -e DOCUMENT_EXTRACTOR_URL=https://localhost:18443/ \
+            -v "$certs:/run/secrets:ro" -v "$PWD/deploy/document-worker/worker-entry.mjs:/entry.mjs:ro" \
+            "ghostmanual:${{ github.sha }}" node /entry.mjs --once
       - name: Measure native document parsing within production resource profiles
         run: node tests/performance/measure-native-documents.ts ghostmanual:${{ github.sha }}
       - name: Retain native parser measurement summary only
