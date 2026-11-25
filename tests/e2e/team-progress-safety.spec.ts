@@ -90,3 +90,61 @@ test("progress replaces pages, serializes requests and retains the failed page f
     release();
   }
 });
+
+for (const deniedStatus of [401, 403, 404]) {
+  test(`progress clears the previous admin table after an explicit ${deniedStatus} denial`, async ({
+    page,
+  }) => {
+    await page.route("**/api/**", async (route) => {
+      const url = new URL(route.request().url());
+      if (route.request().method() !== "GET")
+        throw new Error("Progress denial audit must not write");
+      if (url.pathname === `/api/workspaces/${teamId}/progress`) {
+        if (url.searchParams.has("afterWork"))
+          return route.fulfill({
+            status: deniedStatus,
+            json: {
+              error: {
+                code:
+                  deniedStatus === 401
+                    ? "unauthorized"
+                    : deniedStatus === 403
+                      ? "forbidden"
+                      : "not_found",
+                message: "진행 현황 접근이 거절됐습니다.",
+                retryable: false,
+              },
+            },
+          });
+        return route.fulfill({ json: { works: [work], total: 11, nextCursor: "next-work" } });
+      }
+      const values: Record<string, unknown> = {
+        "/api/me": { id: userId, name: "합성 담당자", admin: false },
+        "/api/workspaces": [{ id: teamId, name: "합성 진행 팀", role: "admin", current: true }],
+        [`/api/workspaces/${teamId}/members`]: {
+          id: teamId,
+          name: "합성 진행 팀",
+          role: "admin",
+          leadReady: false,
+          members: [{ id: userId, name: "합성 담당자", department: null, role: "admin" }],
+          invites: [],
+        },
+        "/api/manuals": [],
+        "/api/sources": [],
+        "/api/templates": [],
+      };
+      if (!(url.pathname in values)) throw new Error(`Unexpected path ${url.pathname}`);
+      await route.fulfill({ json: values[url.pathname] });
+    });
+    await page.goto(`/teams/${teamId}?tab=progress`);
+    await expect(page.getByRole("rowheader", { name: work.title, exact: true })).toBeVisible();
+    await expect(page.getByRole("table")).toHaveCount(1);
+    await page.getByRole("button", { name: "다음 업무", exact: true }).click();
+    await expect(
+      page.getByRole("alert").filter({ hasText: "진행 현황 접근이 거절됐습니다." }),
+    ).toBeVisible();
+    await expect(page.getByRole("table")).toHaveCount(0);
+    await expect(page.getByRole("rowheader", { name: work.title, exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "다음 업무", exact: true })).toHaveCount(0);
+  });
+}
