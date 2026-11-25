@@ -135,6 +135,11 @@ for (const role of ["member", "admin"] as const) {
           await expect(panel.getByRole("listitem").filter({ hasText: "초안" })).toContainText(
             "진행 중",
           );
+          await page.evaluate(() => document.fonts.ready);
+          await page.screenshot({
+            path: testInfo.outputPath("progress", "team-hub.png"),
+            fullPage: true,
+          });
         }
         if (ids[index] === "settings") {
           await expect(panel.getByRole("button", { name: "팀 나가기" })).toBeEnabled();
