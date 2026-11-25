@@ -2,17 +2,8 @@
   :root {
     --gutter: 32px;
   }
-  .start {
-    column-gap: 28px;
-  }
-  .start-actions {
-    grid-template-columns: 1fr;
-  }
   .split {
     gap: 20px;
-  }
-  .feature-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .panel,
   .document,
@@ -61,36 +52,12 @@
   h2 {
     font-size: 19px;
   }
-  .start,
   .split {
     grid-template-columns: minmax(0, 1fr);
     gap: 24px;
   }
-  .start {
-    grid-template-areas: "intro" "entry" "workflow";
-    padding-block: 0;
-  }
-  .workflow {
-    margin-top: 0;
-  }
-  .feature-list {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .landing {
-    margin-top: 32px;
-    padding-top: 32px;
-  }
   .shell-header > .badge {
     align-self: flex-start;
-  }
-  .start-intro {
-    padding-block: 0;
-  }
-  .start h1 {
-    font-size: 33px;
-  }
-  .start-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .section-heading {
     align-items: stretch;
@@ -136,12 +103,6 @@
   :root {
     --gutter: 20px;
   }
-  .start h1 {
-    font-size: 30px;
-  }
-  .start-actions {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .row {
     flex-direction: column;
   }
@@ -159,5 +120,22 @@
   *::after {
     transition: none;
     scroll-behavior: auto;
+  }
+}
+
+@media (max-width: 860px) {
+  .lp {
+    gap: 52px;
+  }
+  .lp-hero,
+  .lp-steps > li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .lp-steps > li:nth-child(even) .lp-step-text {
+    order: 0;
+  }
+  .lp-trust {
+    padding: 24px;
   }
 }

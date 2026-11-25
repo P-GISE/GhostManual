@@ -17,7 +17,8 @@ test("signing in returns to the landing page with a way into the library", async
   await signUpAndVerify(page);
   await page.goto("/");
   await page.getByRole("link", { name: "내 문서함으로" }).click();
-  await expect(page.getByRole("heading", { name: "업무 문서함", level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/library$/);
+  await expect(page.getByRole("heading", { name: "내 문서함", level: 1 })).toBeVisible();
 });
 
 test("a workbook card opens the new version form directly", async ({ page }) => {
