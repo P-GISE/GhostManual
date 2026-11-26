@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { http } from "../lib/client";
 import { CHAT_STORAGE_PREFIX } from "./QuestionForm";
-import { WorkspaceSwitch } from "./Teams";
 
 // Remounted per path (key) so the name refreshes after login or logout.
 function AccountMenu() {
@@ -79,26 +78,22 @@ export function Navigation() {
         <nav aria-label="주 메뉴">
           {[
             { href: "/library", label: "내 문서함" },
-            { href: "/manuals", label: "문서함" },
-            { href: "/sources/new", label: "자료 등록" },
-            { href: "/templates", label: "양식" },
-            { href: "/teams", label: "팀" },
             { href: "/help", label: "도움말" },
           ].map(({ href, label }) => (
             <Link
               key={href}
               href={href}
               aria-current={pathname === href ? "page" : undefined}
+              // 팀·업무·매뉴얼·양식 화면은 모두 내 문서함 아래에 있다.
               data-active={
-                href === "/manuals" || href === "/templates" || href === "/teams"
-                  ? pathname.startsWith(href)
+                href === "/library"
+                  ? /^\/(library|teams|manuals|sources|templates)(\/|$)/.test(pathname)
                   : pathname === href
               }
             >
               {label}
             </Link>
           ))}
-          <WorkspaceSwitch />
           <AccountMenu key={pathname} />
         </nav>
       )}

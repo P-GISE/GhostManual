@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { loadExample, openAsNewReader, signUpAndVerify, turnOnLinkSharing } from "./helpers";
+import {
+  loadExample,
+  openAsNewReader,
+  openCurrentTeam,
+  signUpAndVerify,
+  turnOnLinkSharing,
+} from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await page.setExtraHTTPHeaders({ "CF-Connecting-IP": "198.51.100.30" });
@@ -20,7 +26,7 @@ test("search and status chips combine on the task cards", async ({ page }) => {
   await page.getByLabel("미확인 항목이 남아 있음을 확인했습니다.").check();
   await page.getByRole("button", { name: "검수 완료·버전 게시" }).click();
   await expect(page.getByText("검수 완료 · 버전 1", { exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "문서함", exact: true }).click();
+  await openCurrentTeam(page);
   await page.getByRole("button", { name: /^게시됨/ }).click();
   await expect(page.getByRole("heading", { name: "신입 구성원 업무 계정 발급" })).toBeVisible();
   await expect(page.getByText("게시됨 v1", { exact: true })).toBeVisible();
@@ -85,7 +91,7 @@ test("unpublished task changes stay actionable until republished", async ({ page
   await page.getByLabel("업무 목적", { exact: true }).fill("게시 전에 다시 확인해야 할 새 목적");
   await page.getByRole("button", { name: "초안 저장", exact: true }).click();
   await expect(page.getByText("초안을 저장했습니다. 검수 후 게시할 수 있습니다.")).toBeVisible();
-  await page.getByRole("link", { name: "문서함", exact: true }).click();
+  await openCurrentTeam(page);
   await page.getByRole("button", { name: /^할 일 있음/ }).click();
   const card = page.getByRole("listitem").filter({
     has: page.getByRole("heading", { name: "신입 구성원 업무 계정 발급", exact: true }),
@@ -95,7 +101,7 @@ test("unpublished task changes stay actionable until republished", async ({ page
   await card.getByRole("link", { name: "검수하고 게시", exact: true }).click();
   await expect(page.getByText("게시 전에 다시 확인해야 할 새 목적", { exact: true })).toBeVisible();
   await publish(2);
-  await page.getByRole("link", { name: "문서함", exact: true }).click();
+  await openCurrentTeam(page);
   await page.getByRole("button", { name: /^할 일 있음/ }).click();
   await expect(card).toHaveCount(0);
   await page.getByRole("button", { name: /^게시됨/ }).click();
@@ -114,7 +120,7 @@ test("saving the same published content does not create a task", async ({ page }
   await page.getByRole("link", { name: "초안 수정", exact: true }).click();
   await page.getByRole("button", { name: "초안 저장", exact: true }).click();
   await expect(page.getByText("초안을 저장했습니다. 검수 후 게시할 수 있습니다.")).toBeVisible();
-  await page.getByRole("link", { name: "문서함", exact: true }).click();
+  await openCurrentTeam(page);
   await expect(page.getByText("게시됨 v1", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /^할 일 있음/ }).click();
   await expect(page.getByRole("heading", { name: "신입 구성원 업무 계정 발급" })).toHaveCount(0);

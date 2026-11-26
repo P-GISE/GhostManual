@@ -17,7 +17,7 @@ test("login: the SSR button cannot lose a click before hydration", async ({ page
   });
   const offset = (await (await context.request.get("/__fixture/observations")).json()).length;
   try {
-    await page.goto("/login?next=%2Fmanuals", { waitUntil: "commit" });
+    await page.goto("/login", { waitUntil: "commit" });
     const button = page.getByRole("button", { name: "로그인", exact: true });
     await expect(button).toBeVisible();
     await expect.poll(() => heldScripts).toBeGreaterThan(0);
@@ -42,8 +42,10 @@ test("login: the SSR button cannot lose a click before hydration", async ({ page
     await page.getByLabel("이메일").fill("a@example.com");
     await page.getByLabel("비밀번호", { exact: true }).fill("correct horse 9");
     await button.click();
-    await expect(page).toHaveURL(/\/manuals$/);
-    await expect(page.getByText("아직 등록한 업무가 없습니다.")).toBeVisible();
+    await expect(page).toHaveURL(/\/library$/);
+    await expect(
+      page.getByRole("heading", { name: "팀 문서함을 만들어 시작하세요" }),
+    ).toBeVisible();
     expect(logins).toBe(1);
     expect(
       (await context.cookies()).some(

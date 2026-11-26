@@ -7,8 +7,7 @@ test("admins see the progress tab with each task's step; members do not", async 
   page,
   browser,
 }) => {
-  await signUpAndVerify(page, undefined, "진행 담당자");
-  await page.goto("/teams");
+  await signUpAndVerify(page, undefined, "진행 담당자", false);
   await page.getByLabel("팀 이름").fill("진행 검증 팀");
   await page.getByRole("button", { name: "팀 문서함 만들기" }).click();
   await page.getByRole("link", { name: "새 업무 등록" }).click();
@@ -37,7 +36,7 @@ test("admins see the progress tab with each task's step; members do not", async 
   // 팀원에게는 탭이 없고, 주소로 열어도 업무 탭이 나온다.
   const context = await browser.newContext({ viewport: page.viewportSize() });
   const other = await context.newPage();
-  await signUpAndVerify(other, undefined, "신입");
+  await signUpAndVerify(other, undefined, "신입", false);
   const invitee = await (await other.request.get("/api/me")).json();
   const invited = await page.request.post(`/api/workspaces/${teamId}/invites`, {
     headers: { Origin: new URL(page.url()).origin },
@@ -54,7 +53,7 @@ test("admins see the progress tab with each task's step; members do not", async 
     : undefined;
   if (!link) throw new Error("Missing synthetic invite");
   await other.goto(link);
-  await expect(other).toHaveURL(/\/manuals$/);
+  await expect(other).toHaveURL(new RegExp(`/teams/${teamId}$`));
   await other.goto(`/teams/${teamId}?tab=progress`);
   await expect(other.getByRole("tab", { name: "업무" })).toHaveAttribute("aria-selected", "true");
   await expect(other.getByRole("tab", { name: "진행 현황" })).toHaveCount(0);

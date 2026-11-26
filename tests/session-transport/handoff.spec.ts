@@ -13,13 +13,21 @@ async function submitLogin(page: Page) {
   }) => {
     const offset = (await (await context.request.get("/__fixture/observations")).json()).length;
     await page.goto("/");
-    await page.getByRole("link", { name: "문서함", exact: true }).hover();
-    await page.getByRole("link", { name: "문서함", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "주 메뉴" })
+      .getByRole("link", { name: "내 문서함" })
+      .hover();
+    await page
+      .getByRole("navigation", { name: "주 메뉴" })
+      .getByRole("link", { name: "내 문서함" })
+      .click();
     await expect(page.locator("[role=alert].error")).toBeVisible();
     await page.getByRole("link", { name: "로그인 화면으로", exact: true }).click();
     await submitLogin(page);
-    await expect(page).toHaveURL(/\/manuals$/);
-    await expect(page.getByText("아직 등록한 업무가 없습니다.")).toBeVisible();
+    await expect(page).toHaveURL(/\/library$/);
+    await expect(
+      page.getByRole("heading", { name: "팀 문서함을 만들어 시작하세요" }),
+    ).toBeVisible();
     expect(
       (await context.cookies()).some(
         (cookie) => cookie.name === "gm_owner" && cookie.httpOnly && cookie.secure,
@@ -27,7 +35,7 @@ async function submitLogin(page: Page) {
     ).toBe(true);
     const response = await context.request.get("/__fixture/observations");
     const observations = (await response.json()).slice(offset);
-    for (const path of ["/api/session", "/api/manuals", "/api/sources"]) {
+    for (const path of ["/api/session", "/api/overview"]) {
       expect(
         observations.some(
           (entry: { path: string; status?: number; ownerPresent: boolean }) =>
@@ -38,7 +46,7 @@ async function submitLogin(page: Page) {
     expect(
       observations.some(
         (entry: { path: string; prefetch?: boolean; ownerPresent: boolean }) =>
-          entry.path === "/manuals" && entry.prefetch && !entry.ownerPresent,
+          entry.path === "/library" && entry.prefetch && !entry.ownerPresent,
       ),
     ).toBe(true);
   });
@@ -66,14 +74,14 @@ test("login 200 with no Set-Cookie stays on login and retry is GET only", async 
 
 test("session200 then cookie loss is distinguished at document GET", async ({ page, context }) => {
   await context.setExtraHTTPHeaders({ "x-fixture-scenario": "drop-after-session" });
-  await page.goto("/login?next=%2Fmanuals");
+  await page.goto("/login");
   await submitLogin(page);
-  await expect(page).toHaveURL(/\/manuals$/);
+  await expect(page).toHaveURL(/\/library$/);
   await expect(page.locator("[role=alert].error")).toBeVisible();
   await page.getByText("오류 진단", { exact: true }).click();
   await expect(page.getByTestId("request-diagnostics")).toContainText("session / 200 / success");
-  await expect(page.getByTestId("request-diagnostics")).toContainText("manuals / 401 / http");
-  await expect(page.getByText("아직 등록한 업무가 없습니다.")).toHaveCount(0);
+  await expect(page.getByTestId("request-diagnostics")).toContainText("overview / 401 / http");
+  await expect(page.getByRole("heading", { name: "팀 문서함을 만들어 시작하세요" })).toHaveCount(0);
 });
 
 test("session503 is distinguished from lost credentials", async ({ page, context }) => {

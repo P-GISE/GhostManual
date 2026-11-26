@@ -9,7 +9,7 @@ test("a manual written on a company template is answered item by item, published
 }) => {
   await signUpAndVerify(page);
   // 양식 등록 → 직접 입력 → 확정(첫 양식은 기본 양식이 된다).
-  await page.getByRole("link", { name: "양식", exact: true }).click();
+  await page.getByRole("tab", { name: "양식", exact: true }).click();
   await page.getByLabel("양식 파일").setInputFiles({
     name: "인계서.docx",
     mimeType: "application/octet-stream",

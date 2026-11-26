@@ -63,13 +63,54 @@ export async function signUp(page: Page, email = uniqueEmail(), name = "테스�
   await expect(page.getByText("인증 메일을 보냈습니다.")).toBeVisible();
   return email;
 }
-export async function signUpAndVerify(page: Page, email = uniqueEmail(), name = "테스트 사용자") {
+// 팀 문서함을 만들고 그 팀의 업무 탭을 연다. 새 업무는 팀에만 올릴 수 있다.
+export async function createTeam(page: Page, name = "테스트 팀") {
+  const headers = { Origin: new URL(page.url()).origin };
+  const created = await page.request.post("/api/workspaces", { headers, data: { name } });
+  expect(created.status()).toBe(201);
+  const id = (await created.json()).id as string;
+  const switched = await page.request.post("/api/session/workspace", {
+    headers,
+    data: { workspaceId: id },
+  });
+  expect(switched.ok()).toBe(true);
+  await openTeam(page, id);
+  return id;
+}
+// 팀 화면의 업무 탭(예전의 문서함 목록).
+export async function openTeam(page: Page, id: string) {
+  await page.goto(`/teams/${id}`);
+  await expect(page.getByRole("tab", { name: "업무" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: "업무", level: 2, exact: true })).toBeVisible();
+}
+// 세션을 개인 문서함으로 돌린다. 화면에는 그 길이 없어서 API로 한다.
+export async function usePersonalSession(page: Page) {
+  const switched = await page.request.post("/api/session/workspace", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { workspaceId: null },
+  });
+  expect(switched.ok()).toBe(true);
+}
+// 지금 세션이 묶인 팀의 업무 탭으로 돌아간다.
+export async function openCurrentTeam(page: Page) {
+  const workspaces = (await (await page.request.get("/api/workspaces")).json()) as {
+    id: string;
+    current: boolean;
+  }[];
+  await openTeam(page, workspaces.find((workspace) => workspace.current)?.id ?? "");
+}
+// 가입을 마치면 내 문서함이 열린다. team이 참이면 팀을 하나 만들어 그 업무 탭에서 테스트를 이어 간다.
+export async function signUpAndVerify(
+  page: Page,
+  email = uniqueEmail(),
+  name = "테스트 사용자",
+  team = true,
+) {
   await signUp(page, email, name);
   await page.goto(await verificationLink(email));
-  // Signing in lands on the landing page; the tests continue from the library.
-  await expect(page).toHaveURL(/\/$/);
-  await page.goto("/manuals");
-  await expect(page.getByRole("heading", { name: "업무 문서함", level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/library$/);
+  await expect(page.getByRole("heading", { name: "내 문서함", level: 1 })).toBeVisible();
+  if (team) await createTeam(page);
   return email;
 }
 export async function loadExample(page: Page) {

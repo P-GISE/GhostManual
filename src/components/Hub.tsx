@@ -1,10 +1,13 @@
 "use client";
+import { HTTPError } from "ky";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { http, message, read } from "../lib/client";
+import { requestDiagnostic } from "../lib/request-diagnostic";
 import { taskState } from "../lib/task-state";
-import { roleText } from "./Teams";
+import { RequestDiagnostics, useRequestDiagnostics } from "./RequestDiagnostics";
+import { roleText, TeamCreate } from "./Teams";
 
 const workSchema = z.object({
   id: z.uuid(),
@@ -70,12 +73,17 @@ export function Hub() {
   const paging = useRef(false);
   const focusTarget = useRef<string | null>(null);
   const [query, setQuery] = useState("");
+  const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState<"all" | "todo" | "published">("all");
   const [teamCursor, setTeamCursor] = useState<string | null>(null);
   const [back, setBack] = useState<(string | null)[]>([]);
   const [workCursors, setWorkCursors] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(true);
+  // 로그인 직후 첫 화면이라, 세션이 넘어오지 않았을 때의 진단을 여기서 남긴다.
+  const { record } = useRequestDiagnostics();
   const [failed, setFailed] = useState(false);
+  // 로그인이 풀린 채로 열었을 때는 다시 불러오기 대신 로그인으로 보낸다.
+  const [signedOut, setSignedOut] = useState(false);
   const [loadedKey, setLoadedKey] = useState("");
   const [reload, setReload] = useState(0);
   const [pendingGroup, setPendingGroup] = useState<string | null>(null);
@@ -104,6 +112,7 @@ export function Hub() {
         void read(`/api/overview?${params}`, overviewSchema)
           .then((value) => {
             if (!active || version !== generation.current) return;
+            record(requestDiagnostic("overview", undefined, 200));
             setOverview(value);
             setLoadedKey(key);
             setWorkCursors({});
@@ -113,8 +122,11 @@ export function Hub() {
           .catch(async (e) => {
             const detail = await message(e);
             if (!active || version !== generation.current) return;
+            const status = e instanceof HTTPError ? e.response.status : undefined;
+            record(requestDiagnostic("overview", e, status));
             setError(detail);
             setFailed(true);
+            setSignedOut(status === 401);
             setLoading(false);
             paging.current = false;
           });
@@ -125,7 +137,7 @@ export function Hub() {
       active = false;
       clearTimeout(timer);
     };
-  }, [query, filter, teamCursor, key]);
+  }, [query, filter, teamCursor, key, record]);
   useEffect(() => {
     if (!loading && !pendingGroup && focusTarget.current) {
       const target =
@@ -355,7 +367,19 @@ export function Hub() {
         </p>
       )}
       {switching && <p role="status">문서함을 전환하고 있습니다.</p>}
-      {(failed || retryWork) && (
+      {failed && <RequestDiagnostics />}
+      {signedOut && (
+        <>
+          <p className="help">
+            이 브라우저에서 로그인 상태를 확인할 수 없습니다. 앱 안에서 연 경우 메뉴에서 Safari 또는
+            Chrome으로 이 주소를 열고 다시 로그인해 주세요.
+          </p>
+          <p>
+            <Link href="/login">로그인 화면으로</Link>
+          </p>
+        </>
+      )}
+      {!signedOut && (failed || retryWork) && (
         <button
           type="button"
           className="secondary"
@@ -377,25 +401,7 @@ export function Hub() {
         loadedKey === key &&
         overview &&
         (empty ? (
-          <section className="panel">
-            <h2>팀 문서함을 만들어 시작하세요</h2>
-            <p className="muted">
-              팀을 만들어 함께 쓰거나 개인 문서함에 업무를 등록할 수 있습니다.
-            </p>
-            <div className="actions">
-              <Link className="button" href="/teams">
-                팀 만들기
-              </Link>
-              <Link
-                className="button secondary"
-                href="/sources/new"
-                aria-disabled={busy}
-                onClick={enter(null, "/sources/new")}
-              >
-                개인 문서함에 업무 등록
-              </Link>
-            </div>
-          </section>
+          <TeamCreate heading="팀 문서함을 만들어 시작하세요" />
         ) : (
           <>
             {!overview.teams.length && !overview.personal && (
@@ -486,19 +492,15 @@ export function Hub() {
                 </button>
               </nav>
             )}
-            <div className="actions">
-              <Link
-                className="button secondary"
-                href="/sources/new"
-                aria-disabled={busy}
-                onClick={enter(null, "/sources/new")}
-              >
-                개인 문서함에 업무 등록
-              </Link>
-              <Link className="button secondary" href="/teams">
-                팀 만들기
-              </Link>
-            </div>
+            {creating ? (
+              <TeamCreate />
+            ) : (
+              <div className="actions">
+                <button type="button" className="secondary" onClick={() => setCreating(true)}>
+                  팀 만들기
+                </button>
+              </div>
+            )}
           </>
         ))}
     </>

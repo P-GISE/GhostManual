@@ -24,7 +24,7 @@ function useReady() {
 
 // Keeps a destination (such as a shared manual) when moving between login and signup.
 function withNext(path: string, next: string) {
-  return next === "/manuals" ? path : `${path}?next=${encodeURIComponent(next)}`;
+  return next === "/library" ? path : `${path}?next=${encodeURIComponent(next)}`;
 }
 
 function ResendVerification({ email, next }: { readonly email: string; readonly next: string }) {
@@ -319,7 +319,7 @@ export function SignupForm({ google, next }: { readonly google: boolean; readonl
       <p className="muted">
         {google
           ? "Google 계정으로 바로 시작하거나, 이메일로 가입하세요. 이메일 가입은 인증 메일을 거칩니다."
-          : "이메일 인증을 마치면 나만의 문서함이 만들어집니다."}
+          : "이메일 인증을 마치면 팀 문서함을 만들어 시작합니다."}
       </p>
       {google && <GoogleButton next={next} divider="이메일로 가입" />}
       <form method="post" onSubmit={submit}>

@@ -3,7 +3,7 @@ import { adminSource } from "./admin.ts";
 import { type DbClient, transaction } from "./db.ts";
 import { AppError } from "./errors.ts";
 import { sendMail } from "./mailer.ts";
-import { safeNextPath } from "./next-path.ts";
+import { homePath, safeNextPath } from "./next-path.ts";
 import { hashPassword, verifyPassword } from "./passwords.ts";
 import { removeWorkspace } from "./retention.ts";
 import { assertSession, freshToken, tokenHash } from "./session.ts";
@@ -58,7 +58,7 @@ async function issueVerification(db: DbClient, userId: string) {
 // A same-site destination (such as a shared manual) survives signup and verification.
 async function mailVerification(email: string, token: string, next: string | undefined) {
   const destination = safeNextPath(next);
-  const link = `${process.env["APP_ORIGIN"]}/api/auth/verify?token=${token}${destination === "/" ? "" : `&next=${encodeURIComponent(destination)}`}`;
+  const link = `${process.env["APP_ORIGIN"]}/api/auth/verify?token=${token}${destination === homePath ? "" : `&next=${encodeURIComponent(destination)}`}`;
   await sendMail(
     email,
     "GhostManual 이메일 인증",

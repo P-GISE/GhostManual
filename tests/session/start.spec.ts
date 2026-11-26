@@ -17,10 +17,19 @@ async function fixture(page: Page, sessionStatus = 200, listStatus = 200) {
             ? { role: "owner", expiresAt, manualId: null }
             : { error: { message: "로그인이 필요합니다." } },
       });
-    } else if (path === "/api/manuals" || path === "/api/sources") {
+    } else if (path === "/api/overview") {
+      // 로그인 뒤 첫 화면인 내 문서함이 읽는 목록.
       await route.fulfill({
         status: listStatus,
-        json: listStatus === 200 ? [] : { error: { message: "조회할 수 없습니다." } },
+        json:
+          listStatus === 200
+            ? {
+                counts: { all: 0, todo: 0, published: 0 },
+                nextTeamCursor: null,
+                teams: [],
+                personal: null,
+              }
+            : { error: { message: "조회할 수 없습니다." } },
       });
     } else {
       await route.abort();
@@ -38,7 +47,7 @@ test("login: session round-trip precedes document navigation", async ({ page }) 
   const calls = await fixture(page);
   await page.goto("/login");
   await submitLogin(page);
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/library$/);
   expect(calls.sessions).toBe(1);
   expect(calls.logins).toBe(1);
 });
@@ -50,7 +59,7 @@ test("login keeps a safe next path and ignores external ones", async ({ page }) 
   await expect(page).toHaveURL(/\/ask$/);
   await page.goto("/login?next=%2F%2Fevil.example");
   await submitLogin(page);
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/library$/);
 });
 
 test("login then missing session stays on login; retry checks session without another POST", async ({
@@ -72,7 +81,7 @@ test("login then missing session stays on login; retry checks session without an
     }),
   );
   await page.getByRole("button", { name: "세션 다시 확인" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/library$/);
   expect(calls.logins).toBe(1);
 });
 
@@ -101,27 +110,29 @@ test("reader session cannot satisfy owner login", async ({ page }) => {
 for (const status of [401, 503]) {
   test(`list ${status} is not an empty workspace`, async ({ page }) => {
     await fixture(page, 200, status);
-    await page.goto("/manuals");
+    await page.goto("/library");
     await expect(page.locator("[role=alert].error")).toBeVisible();
-    await expect(page.getByText("아직 등록한 업무가 없습니다.")).toHaveCount(0);
-    await expect(page.getByText("등록된 원본 자료가 없습니다.")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "팀 문서함을 만들어 시작하세요" })).toHaveCount(
+      0,
+    );
+    await expect(page.getByLabel("팀 이름")).toHaveCount(0);
     await expect(page.getByText("계정과 문서 영구 삭제", { exact: true })).toHaveCount(0);
     if (status === 401) {
       await expect(page.getByRole("link", { name: "로그인 화면으로" })).toBeVisible();
       await expect(page.getByText(/Safari 또는 Chrome/)).toBeVisible();
     } else {
-      await expect(page.getByRole("link", { name: "시작 화면으로" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "문서함 다시 불러오기" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "로그인 화면으로" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "다시 불러오기" })).toBeVisible();
     }
   });
 }
 
 test("authenticated empty list retains empty-state actions", async ({ page }) => {
   await fixture(page);
-  await page.goto("/manuals");
-  await expect(page.getByText("아직 등록한 업무가 없습니다.")).toBeVisible();
-  await expect(page.getByRole("link", { name: "첫 자료 등록하기" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "예제 불러오기" })).toBeVisible();
+  await page.goto("/library");
+  await expect(page.getByRole("heading", { name: "팀 문서함을 만들어 시작하세요" })).toBeVisible();
+  await expect(page.getByLabel("팀 이름")).toBeVisible();
+  await expect(page.getByRole("button", { name: "팀 문서함 만들기" })).toBeVisible();
 });
 
 for (const status of [403, 503]) {

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { signUpAndVerify } from "./helpers";
 
 test("profile and settings tabs save the department and delete the account", async ({ page }) => {
-  const email = await signUpAndVerify(page, undefined, "박효민");
+  const email = await signUpAndVerify(page, undefined, "박효민", false);
   await page.getByRole("link", { name: "박효민" }).click();
   await expect(page).toHaveURL(/\/account$/);
   await expect(page.getByRole("tab", { name: "내 프로필" })).toHaveAttribute(
@@ -29,6 +29,6 @@ test("profile and settings tabs save the department and delete the account", asy
   await page.getByLabel("삭제할 내용을 확인했습니다.").check();
   await page.getByRole("button", { name: "계정과 문서 영구 삭제" }).click();
   await expect(page).toHaveURL(/\/$/);
-  await page.goto("/manuals");
+  await page.goto("/library");
   await expect(page.getByRole("link", { name: "로그인 화면으로" })).toBeVisible();
 });

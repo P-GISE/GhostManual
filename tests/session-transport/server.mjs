@@ -87,7 +87,17 @@ async function api(request, scenario) {
   }
   return endpoint(request, async () => {
     await requestSession(request);
-    return json([]);
+    // 로그인 뒤 첫 화면인 내 문서함은 빈 개요를, 나머지 목록은 빈 배열을 받는다.
+    return json(
+      pathname === "/api/overview"
+        ? {
+            counts: { all: 0, todo: 0, published: 0 },
+            nextTeamCursor: null,
+            teams: [],
+            personal: null,
+          }
+        : [],
+    );
   });
 }
 const server = https.createServer(
@@ -120,9 +130,9 @@ const server = https.createServer(
         outgoing.end(Buffer.from(await result.arrayBuffer()));
         return;
       }
-      if (url.pathname === "/manuals")
+      if (url.pathname === "/library")
         observations.push({
-          path: "/manuals",
+          path: "/library",
           prefetch: incoming.headers["next-router-prefetch"] === "1",
           ownerPresent: Boolean(incoming.headers.cookie?.includes("gm_owner=")),
         });

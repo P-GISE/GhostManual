@@ -1,10 +1,12 @@
 import { expect, type Page, test } from "@playwright/test";
 import { runTemplateJob } from "../../src/lib/template-extraction.ts";
 import { docx, pack, wp } from "../fixtures/documents/native/build.ts";
-import { signUpAndVerify } from "./helpers";
+import { openCurrentTeam, signUpAndVerify } from "./helpers";
 
 async function register(page: Page, name: string, buffer: Buffer) {
-  await page.goto("/templates");
+  // 양식은 팀 화면의 양식 탭에서 등록한다.
+  await openCurrentTeam(page);
+  await page.getByRole("tab", { name: "양식", exact: true }).click();
   await expect(page.getByText("등록한 양식이 없습니다.", { exact: true })).toBeVisible();
   await page.getByLabel("양식 파일").setInputFiles({
     name,
@@ -48,7 +50,7 @@ test("owner registers a template, sees candidates with the warning, then deletes
 
 test("a wrong file type is refused and a template without text says so", async ({ page }) => {
   await signUpAndVerify(page);
-  await page.goto("/templates");
+  await page.getByRole("tab", { name: "양식", exact: true }).click();
   await page.getByLabel("양식 파일").setInputFiles({
     name: "메모.docx",
     mimeType: "application/octet-stream",
