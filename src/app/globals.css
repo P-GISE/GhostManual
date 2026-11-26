@@ -918,14 +918,6 @@ select {
 .chat-answer > :first-child {
   margin-top: 0;
 }
-.workspace-switch select {
-  width: auto;
-  max-width: 180px;
-  min-height: 38px;
-  margin: 0;
-  padding: 4px 28px 4px 10px;
-  font-weight: 600;
-}
 .template-rows span.actions {
   display: inline-flex;
   margin: 0 0 0 12px;
@@ -1747,4 +1739,15 @@ button.danger:hover:not(:disabled) {
   border-color: transparent;
   background: #fbf0d6;
   color: #6b4500;
+}
+
+/* 내 문서함 맨 아래의 팀 만들기 폼이 위 팀의 업무 카드에 붙지 않게 한다. */
+.hub-team + .panel {
+  margin-top: 28px;
+}
+/* 업무·매뉴얼·양식 화면 머리의 위치 표시 */
+.crumb {
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 13px;
 }

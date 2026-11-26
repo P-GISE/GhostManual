@@ -1,9 +1,11 @@
 "use client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { z } from "zod";
 import { http, message, read, versionedFilePattern } from "../lib/client";
 import { SourceInputSchema } from "../lib/schemas";
+import { useCurrentWorkspace } from "./Teams";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 
 const similarSchema = z.array(
@@ -29,6 +31,7 @@ export function SourceForm() {
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [similar, setSimilar] = useState<Similar | null>(null);
+  const workspace = useCurrentWorkspace();
   const lookup = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   function invalidateLookup() {
@@ -104,6 +107,21 @@ export function SourceForm() {
       setBusy(false);
     }
   }
+  // 새 업무는 팀 문서함에만 올린다. 세션이 개인 문서함이면 팀을 고르게 돌려보낸다.
+  if (workspace && workspace.name === null)
+    return (
+      <section className="prose">
+        <span className="eyebrow">원본 자료</span>
+        <h1>새 업무 등록</h1>
+        <p className="notice">
+          새 업무는 팀 문서함에 올립니다. 내 문서함에서 올릴 팀의 "새 업무 등록"을 누르거나, 팀이
+          없으면 팀 문서함을 먼저 만들어 주세요.
+        </p>
+        <Link className="button" href="/library">
+          내 문서함으로
+        </Link>
+      </section>
+    );
   return (
     <section className="prose">
       <span className="eyebrow">원본 자료</span>
@@ -115,8 +133,8 @@ export function SourceForm() {
         이전 버전과 비교되지 않는 별개의 업무가 됩니다.
       </p>
       <div className="notice">
-        자료는 내 문서함에 계정을 삭제할 때까지 보관됩니다. AI 기능이 활성화되면 필요한 원문이 외부
-        AI 제공자에게 전송될 수 있습니다.
+        자료는 팀 문서함에 보관되고, 올린 사람이 팀을 떠나도 팀에 남습니다. AI 기능이 활성화되면
+        필요한 원문이 외부 AI 제공자에게 전송될 수 있습니다.
       </div>
       <form onSubmit={submit}>
         <label htmlFor="title">자료 제목</label>

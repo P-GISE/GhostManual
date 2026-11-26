@@ -6,6 +6,7 @@ import "./globals.css";
 import "./responsive.css";
 import { Navigation } from "../components/Navigation";
 import { DiagnosticProvider } from "../components/RequestDiagnostics";
+import { WorkspaceCrumb } from "../components/Teams";
 
 const pretendard = localFont({
   src: "../../public/fonts/PretendardVariable.woff2",
@@ -26,6 +27,7 @@ export default function Layout({ children }: { readonly children: ReactNode }) {
         </a>
         <Navigation />
         <main id="main" tabIndex={-1}>
+          <WorkspaceCrumb />
           <DiagnosticProvider>{children}</DiagnosticProvider>
         </main>
         <footer>

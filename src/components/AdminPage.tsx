@@ -148,7 +148,7 @@ export function AdminPage() {
         <p className="muted">
           이 화면은 서비스 관리자에게만 열립니다. 권한이 필요하면 관리자에게 문의하세요.
         </p>
-        <Link className="button" href="/manuals">
+        <Link className="button" href="/library">
           내 문서함으로
         </Link>
       </section>

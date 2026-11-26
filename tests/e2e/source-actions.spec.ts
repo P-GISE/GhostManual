@@ -37,7 +37,7 @@ test("confirmed source deletion preserves another source", async ({ page }) => {
   await expect(remove).toBeDisabled();
   await page.getByLabel("원본과 연결된 매뉴얼·공유·질문 기록의 영구 삭제를 확인했습니다.").check();
   await remove.click();
-  await expect(page.getByRole("heading", { name: "업무 문서함", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "내 문서함", level: 1 })).toBeVisible();
   await expect(page.getByRole("link", { name: "삭제할 자료", exact: true })).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first(),

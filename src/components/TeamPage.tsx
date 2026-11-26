@@ -220,7 +220,7 @@ export function TeamPage({ id }: { readonly id: string }) {
           : "팀원"
       : roleText[member.role];
   const promote = ready ? "부관리자로 지정" : "팀 관리자로 지정";
-  const home = () => window.location.assign("/teams");
+  const home = () => window.location.assign("/library");
   const waiting = (
     <p className="loading" role="status">
       이 팀 문서함으로 전환하고 있습니다.
@@ -291,7 +291,7 @@ export function TeamPage({ id }: { readonly id: string }) {
   );
   return (
     <>
-      <Link href="/teams">팀 문서함 목록</Link>
+      <Link href="/library">내 문서함</Link>
       <h1 id="team-heading" tabIndex={-1}>
         {team.name}
       </h1>
@@ -374,8 +374,8 @@ export function TeamPage({ id }: { readonly id: string }) {
             ))}
           </div>
           <div id={`panel-${active}`} role="tabpanel" aria-labelledby={`tab-${active}`}>
-            {active === "works" && (aligned ? <ManualList embedded /> : waiting)}
-            {active === "forms" && (aligned ? <TemplateList embedded /> : waiting)}
+            {active === "works" && (aligned ? <ManualList /> : waiting)}
+            {active === "forms" && (aligned ? <TemplateList /> : waiting)}
             {active === "progress" && <TeamProgress id={id} />}
             {active === "members" && (
               <>

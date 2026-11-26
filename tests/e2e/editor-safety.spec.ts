@@ -38,7 +38,10 @@ test("source registration preserves input when navigation is cancelled", async (
     expect(dialog.type()).toBe("confirm");
     await dialog.dismiss();
   });
-  await page.getByRole("link", { name: "문서함", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "주 메뉴" })
+    .getByRole("link", { name: "내 문서함" })
+    .click();
   await expect(page).toHaveURL(sourceUrl);
   await expect(page.getByLabel("자료 제목")).toHaveValue("미저장 원본 제목");
 });

@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { http, message, read } from "../lib/client";
-import { useWorkspaceName } from "./Teams";
 
 export const templateStatusText = {
   reading: "읽는 중",
@@ -22,10 +21,8 @@ const listSchema = z.array(
     isDefault: z.boolean(),
   }),
 );
-// embedded: 팀 화면의 "양식" 탭 안에 넣을 때.
-export function TemplateList({ embedded = false }: { readonly embedded?: boolean } = {}) {
-  const workspaceName = useWorkspaceName();
-  const Heading = embedded ? "h2" : "h1";
+// 팀 화면의 "양식" 탭.
+export function TemplateList() {
   const router = useRouter();
   const [templates, setTemplates] = useState<z.infer<typeof listSchema> | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -54,8 +51,7 @@ export function TemplateList({ embedded = false }: { readonly embedded?: boolean
   }
   return (
     <>
-      {!embedded && <span className="eyebrow">{workspaceName}</span>}
-      <Heading>양식</Heading>
+      <h2>양식</h2>
       <p className="muted">
         회사에서 쓰는 인수인계 양식을 등록하면 그 양식의 항목에 맞춰 매뉴얼을 만들 수 있습니다.
       </p>

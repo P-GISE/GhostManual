@@ -7,7 +7,7 @@ test("owner checks candidates, enters items by hand and confirms the default tem
   page,
 }) => {
   await signUpAndVerify(page);
-  await page.goto("/templates");
+  await page.getByRole("tab", { name: "양식", exact: true }).click();
   await page.getByLabel("양식 파일").setInputFiles({
     name: "인계서.docx",
     mimeType: "application/octet-stream",

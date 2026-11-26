@@ -232,7 +232,7 @@ export function SourceDetail({
     setError("");
     try {
       await http.delete(`/api/sources/${id}`);
-      router.push("/manuals");
+      router.push("/library");
     } catch (error) {
       setError(await message(error));
       setBusy(false);

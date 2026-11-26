@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openAsNewReader, signUpAndVerify, turnOnLinkSharing } from "./helpers";
+import { openAsNewReader, openCurrentTeam, signUpAndVerify, turnOnLinkSharing } from "./helpers";
 
 const fixture = (name: string) => `tests/fixtures/xlsx/${name}`;
 
@@ -402,7 +402,7 @@ test("the library card points to the questions still waiting for an answer", asy
   await page.getByRole("button", { name: "원본 등록" }).click();
   await expect(page.getByRole("heading", { name: "월간 정산", level: 1 })).toBeVisible();
   const sourceUrl = page.url();
-  await page.getByRole("link", { name: "문서함", exact: true }).click();
+  await openCurrentTeam(page);
   await expect(page.getByRole("heading", { name: "월간 정산" })).toBeVisible();
   await expect(page.getByText("매뉴얼 없음", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "답할 질문 2개" }).click();

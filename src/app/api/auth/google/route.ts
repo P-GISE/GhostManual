@@ -4,7 +4,7 @@ import { responseHeaders } from "../../../../lib/http.ts";
 export async function GET(request: Request) {
   const origin = process.env["APP_ORIGIN"] ?? new URL(request.url).origin;
   try {
-    const location = await startGoogle(new URL(request.url).searchParams.get("next") ?? "/manuals");
+    const location = await startGoogle(new URL(request.url).searchParams.get("next") ?? "");
     const state = new URL(location).searchParams.get("state") ?? "";
     // Binds the flow to this browser so a callback link from someone else is refused.
     const secure = origin.startsWith("https:") ? "; Secure" : "";

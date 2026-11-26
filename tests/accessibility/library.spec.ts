@@ -30,9 +30,8 @@ for (const ready of [false, true]) {
     const team = page.getByRole("region", { name: "합성 업무 팀" });
     await expect(team.getByText(ready ? "관리자" : "팀 관리자", { exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "개인 업무" })).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: "개인 문서함에 업무 등록", exact: true }),
-    ).toBeVisible();
+    // 새 업무는 팀에만 올린다. 개인 문서함에 올리는 길은 없다.
+    await expect(page.getByRole("link", { name: "개인 문서함에 업무 등록" })).toHaveCount(0);
     const search = page.getByLabel("업무 검색");
     await search.focus();
     await search.press("Tab");
