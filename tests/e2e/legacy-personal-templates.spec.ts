@@ -18,7 +18,7 @@ test("an existing personal template remains reachable, editable and deletable wi
       },
     },
   });
-  expect(response.status()).toBe(201);
+  expect(response.status()).toBe(202);
   const { id } = await response.json();
   await expect(async () => {
     while (await runTemplateJob());

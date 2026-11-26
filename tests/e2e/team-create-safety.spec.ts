@@ -123,8 +123,11 @@ test("leaving while creation is pending prevents a later session switch or force
     await page.getByRole("button", { name: "팀 문서함 만들기", exact: true }).click();
     await expect.poll(() => creates).toBe(1);
     // Next Link navigation unmounts the form without aborting its pending HTTP callback.
-    await page.getByRole("link", { name: "합성 업무 팀", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/teams/${hubTeamId}$`));
+    await page
+      .getByRole("navigation", { name: "주 메뉴" })
+      .getByRole("link", { name: "도움말", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/help$/);
     const response = page.waitForResponse(
       (value) =>
         value.request().method() === "POST" && new URL(value.url()).pathname === "/api/workspaces",
@@ -133,7 +136,7 @@ test("leaving while creation is pending prevents a later session switch or force
     await (await response).finished();
     await page.waitForTimeout(500);
     expect(switches).toBe(0);
-    await expect(page).toHaveURL(new RegExp(`/teams/${hubTeamId}$`));
+    await expect(page).toHaveURL(/\/help$/);
   } finally {
     gate.resolve();
   }
