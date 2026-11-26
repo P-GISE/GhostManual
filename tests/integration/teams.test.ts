@@ -55,8 +55,8 @@ it("creates a team, invites by email and keeps non-members out", async () => {
   const team = await createTeam(admin.ctx, " 정산팀 ");
   expect(team).toMatchObject({ name: "정산팀", role: "admin" });
   expect(await listWorkspaces(admin.ctx)).toEqual([
-    { id: admin.ctx.workspaceId, name: null, role: null, current: true },
-    { id: team.id, name: "정산팀", role: "admin", current: false },
+    { id: admin.ctx.workspaceId, name: null, role: null, lead: false, current: true },
+    { id: team.id, name: "정산팀", role: "admin", lead: true, current: false },
   ]);
   // 팀원이 아닌 사람에게는 팀이 없는 것처럼 보인다.
   await expect(switchWorkspace(stranger.token, team.id)).rejects.toMatchObject({ httpStatus: 404 });

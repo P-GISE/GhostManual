@@ -8,7 +8,7 @@ import { removeWorkspace } from "../../src/lib/retention.ts";
 import { requireSession } from "../../src/lib/session.ts";
 import { exchangeShare, getSharing, setSharing } from "../../src/lib/shares.ts";
 import { createSource, getSource } from "../../src/lib/sources.ts";
-import { changeRole, createTeam, switchWorkspace } from "../../src/lib/teams.ts";
+import { changeRole, createTeam, listWorkspaces, switchWorkspace } from "../../src/lib/teams.ts";
 import { exampleDraft, exampleSource } from "../fixtures/manual-example.ts";
 import { setupFileMail, signedInUser } from "./mail-helper.ts";
 
@@ -185,5 +185,34 @@ it("keeps legacy create, promotion, account deletion and published sharing behav
       if ((await pool.query("SELECT id FROM users WHERE id=$1", [account.ctx.userId])).rowCount)
         await deleteAccount(account.ctx);
     }
+  }
+});
+
+it("keeps workspace lead guidance disabled on 013 even with a valid own lead pointer", async () => {
+  expect(
+    (await pool.query("SELECT 1 FROM schema_migrations WHERE name='014_team_lead_enforce.sql'"))
+      .rowCount,
+  ).toBe(0);
+  const mail = setupFileMail();
+  const owner = await signedInUser(mail);
+  const team = await createTeam(owner.ctx, "013 대표 안내 비활성 팀");
+  try {
+    const expected = [
+      { id: owner.ctx.workspaceId, name: null, role: null, lead: false, current: true },
+      { id: team.id, name: team.name, role: "admin", lead: false, current: false },
+    ];
+    expect(await listWorkspaces(owner.ctx)).toEqual(expected);
+    await pool.query("UPDATE workspaces SET lead_user_id=$2 WHERE id=$1", [
+      team.id,
+      owner.ctx.userId,
+    ]);
+    expect(
+      (await pool.query("SELECT lead_user_id FROM workspaces WHERE id=$1", [team.id])).rows[0]
+        .lead_user_id,
+    ).toBe(owner.ctx.userId);
+    expect(await listWorkspaces(owner.ctx)).toEqual(expected);
+  } finally {
+    await transaction((db) => removeWorkspace(db, team.id));
+    await deleteAccount(owner.ctx);
   }
 });

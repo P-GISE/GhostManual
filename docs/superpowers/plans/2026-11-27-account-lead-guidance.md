@@ -26,7 +26,7 @@
 **Files:** src/lib/teams.ts; tests/integration/account-lead-workspaces.test.ts; tests/integration/teams.test.ts; 필요 시 기존013 호환 검사.
 **Interface:** listWorkspaces(ctx) returns existing fields + lead:boolean, same one SQL snapshot.
 
-- [ ] 실패하는 실제DB 검사를 작성하고 CI RED를 확인한다.
+- [x] 실패하는 실제DB 검사를 작성하고 CI45861720971에서 기존255성공/신규3실패(missing lead boolean) RED를 확인했다.
 - [ ] 같은 SELECT의 marker/admin/team/pointer boolean만 구현하고 기존 equality 기대값을 갱신한다.
 - [ ] CI의 실제 DB014/013 회귀를 확인한다.
 

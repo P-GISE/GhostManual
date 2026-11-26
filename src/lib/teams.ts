@@ -60,8 +60,16 @@ export async function listWorkspaces(ctx: SessionContext) {
   const userId = account(ctx);
   return transaction(async (db) => {
     await lockAccountSession(db, ctx);
-    const { rows } = await db.query<{ id: string; name: string | null; role: string | null }>(
-      `SELECT w.id,w.team_name AS name,m.role FROM workspaces w
+    const { rows } = await db.query<{
+      id: string;
+      name: string | null;
+      role: string | null;
+      lead: boolean;
+    }>(
+      `SELECT w.id,w.team_name AS name,m.role,
+        COALESCE(w.team_name IS NOT NULL AND m.role='admin' AND w.lead_user_id=$1
+          AND EXISTS(SELECT 1 FROM schema_migrations WHERE name='014_team_lead_enforce.sql'),false) AS lead
+        FROM workspaces w
         LEFT JOIN workspace_members m ON m.workspace_id=w.id AND m.user_id=$1
         WHERE w.user_id=$1 OR m.user_id=$1 ORDER BY w.team_name NULLS FIRST,w.id`,
       [userId],
