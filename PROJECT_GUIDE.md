@@ -1,5 +1,14 @@
 # GhostManual 프로젝트 가이드
 
+## 2026-11-27 현재 개발: 계정 탈퇴 차단의 대표 이양 안내
+
+사용자 지시로 PR116을 f0be15a로 병합했고 병합 후CI45860997292가 성공했다. 박효민의 새 PR117(63a480c)은 메뉴/진입점 개편이며 CI4개가 성공했으나 이 작업에서 병합·배포하지 않는다. 최신 기본 위 자체 PR118에서 대표 탈퇴 차단 안내를 구현한다. 겹치는 공용 Teams.tsx·accounts.ts·client.ts·기존helpers와 원본117 branch를 수정하지 않는다.
+
+GET목록의 본인 lead boolean과 AccountPage의 정확한 lead_transfer_required409만 연결한다. 개인/다른팀 세션에서도 본인 대표팀을 안내하고, 기존팀원화면이 권한 재확인/세션전환/명시적이양을 담당한다. 조회재시도는GET만 수행하고삭제확인을초기화한다.014없음/잘못된응답/일반409를활성화로오인하지않는다.
+
+DB RED(기존255성공·신규3실패) 뒤API보완, 화면RED(기존186성공·신규8기능실패·2selector정정)를거쳐전체CI/독립검토를진행한다. 최종상태는 [PR118](https://github.com/P-GISE/GhostManual/pull/118)과 [검증근거](docs/qa/2026-11-27/account-lead-guidance.md)를따른다. 아래Node26운영은유지하고이번에는운영반영·migration014/backfill/대표지정을하지않는다.
+
+
 ## 2026-11-25 현재 운영: Node26.13.1 앱·워커 배포 완료
 
 PR110(`1dff279`)의 내 문서함 제한 조회·검색·페이지, 대표 이양 UI·진행 현황 통합을 운영 반영한 뒤 PR115/31을 병합했다. PR115 병합 `57d44ef`의 [최초 기본 브랜치 CI45590616880](https://github.com/P-GISE/GhostManual/actions/runs/45590616880) attempt1 전체 성공 후 Node26.13.1 검증 이미지 `0330d1b6…`를 고정 실행기로 앱·문서 워커에 동일하게 직접 배포했다. 직전 정상 `31899d6c…`는 보존한다. 자동 배포는 false이며 별도 Python·Java OCR 이미지는 바꾸지 않았다.
