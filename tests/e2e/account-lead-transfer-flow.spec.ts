@@ -4,10 +4,10 @@ import { expect, type Page, test } from "@playwright/test";
 import { z } from "zod";
 import { signUpAndVerify } from "./helpers";
 
-async function joinTeam(host: Page, guest: Page, teamId: string, origin: string) {
+async function joinTeam(host: Page, guest: Page, teamId: string, headers: Record<string, string>) {
   const { email } = await (await guest.request.get("/api/me")).json();
   const invitation = await host.request.post(`/api/workspaces/${teamId}/invites`, {
-    headers: { Origin: origin },
+    headers,
     data: { email },
   });
   expect(invitation.status()).toBe(201);
@@ -31,7 +31,8 @@ test("another team's session can find both lead teams, explicitly transfer and t
   test.setTimeout(90000);
   await signUpAndVerify(page, undefined, "탈퇴 안내 담당자");
   const origin = new URL(page.url()).origin;
-  const headers = { Origin: origin };
+  const octet = () => Math.floor(Math.random() * 250) + 1;
+  const headers = { Origin: origin, "CF-Connecting-IP": `10.${octet()}.${octet()}.${octet()}` };
   const create = async (who: Page, name: string) => {
     const result = await who.request.post("/api/workspaces", { headers, data: { name } });
     expect(result.status()).toBe(201);
@@ -44,9 +45,9 @@ test("another team's session can find both lead teams, explicitly transfer and t
     const successor = await context.newPage();
     await signUpAndVerify(successor, undefined, "이양 후임 담당자");
     const selected = await create(successor, "합성 참여 팀 C");
-    await joinTeam(page, successor, first, origin);
-    await joinTeam(page, successor, second, origin);
-    await joinTeam(successor, page, selected, origin);
+    await joinTeam(page, successor, first, headers);
+    await joinTeam(page, successor, second, headers);
+    await joinTeam(successor, page, selected, headers);
     expect(
       (
         await page.request.post("/api/session/workspace", { headers, data: { workspaceId: first } })
