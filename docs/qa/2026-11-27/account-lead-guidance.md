@@ -27,4 +27,4 @@ mock UI는503→재조회→401의 오래된 링크 제거·invalidUUID/누락le
 
 ## 테스트 간 요청 한도 오염 보완
 
-0970970/CI45864610472는 새 안내/실제이양검사를 포함한E2E202건성공·기존진행현황2건실패였다. 실패는초대201기대/429수신이며새기능UI18건은통과했다. 새실제흐름의APIRequestContext초대3건이Page의asNewVisitor헤더를상속하지않아공통unknown IP의resend5/hour한도를사용한원인을소스/로그로확인했다. 새파일의API요청에만고유합성CF-Connecting-IP를명시하고기존진행현황/공용helpers/운영한도/DBcounter는수정하지않았다. 재실행없이문제를덮지않고전체최신CI로확인한다.
+0970970/CI45864610472는 새 안내/실제이양검사를 포함한E2E202건성공·기존진행현황2건실패였다. 실패는초대201기대/429수신이며새기능UI18건은통과했다. 새실제흐름의APIRequestContext초대3건이Page의asNewVisitor헤더를상속하지않아프로젝트공용API IP의resend5/hour한도를사용한원인을소스/로그로확인했다. 새파일의API요청에만고유합성CF-Connecting-IP를명시하고기존진행현황/공용helpers/운영한도/DBcounter는수정하지않았다. 재실행없이문제를덮지않고전체최신CI로확인한다.

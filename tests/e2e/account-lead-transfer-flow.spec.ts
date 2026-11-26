@@ -31,6 +31,7 @@ test("another team's session can find both lead teams, explicitly transfer and t
   test.setTimeout(90000);
   await signUpAndVerify(page, undefined, "탈퇴 안내 담당자");
   const origin = new URL(page.url()).origin;
+  // Page-only visitor headers do not isolate APIRequestContext mail limits.
   const octet = () => Math.floor(Math.random() * 250) + 1;
   const headers = { Origin: origin, "CF-Connecting-IP": `10.${octet()}.${octet()}.${octet()}` };
   const create = async (who: Page, name: string) => {
