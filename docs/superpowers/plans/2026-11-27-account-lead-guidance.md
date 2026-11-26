@@ -27,15 +27,15 @@
 **Interface:** listWorkspaces(ctx) returns existing fields + lead:boolean, same one SQL snapshot.
 
 - [x] 실패하는 실제DB 검사를 작성하고 CI45861720971에서 기존255성공/신규3실패(missing lead boolean) RED를 확인했다.
-- [ ] 같은 SELECT의 marker/admin/team/pointer boolean만 구현하고 기존 equality 기대값을 갱신한다.
-- [ ] CI의 실제 DB014/013 회귀를 확인한다.
+- [x] 같은 SELECT의 marker/admin/team/pointer boolean만 구현하고 기존 equality 기대값을 갱신했다.
+- [x] CI45862399498의 실제 DB014/013 회귀를 확인했다.
 
 ### Task 2: 특정409 안내와 안전 재시도
 
 **Files:** src/components/AccountPage.tsx; tests/e2e/account-lead-guidance.spec.ts; tests/e2e/account-lead-transfer-flow.spec.ts; tests/accessibility/account-lead-guidance.spec.ts; docs/현재 가이드/진행 기록.
 **Interface:** 기존 DELETE/GET만 사용, 새 write API 없음. 로컬 확장 목록 schema·명시적 링크·읽기 재시도.
 
-- [ ] mock UI 실패검사를 먼저 CI에서 재현한다.
-- [ ] 기존 panel/alert/링크 구성으로 최소 UI와 동기 중복 잠금·언마운트 가드를 구현한다.
+- [x] CI45862399498에서 기존186성공·신규8기능실패와2selector실패를 확인하고 selector를 main으로 정정했다.
+- [x] 기존 panel/alert/링크 구성으로 최소 UI와 동기 중복 잠금·언마운트 가드를 구현했다.
 - [ ] 실제 격리014 이양/삭제와013·계정/자료/공유 보존, 키보드/3뷰포트 검증을 추가한다.
 - [ ] 전체CI·독립 검토 후 커밋/PR 보고와 가이드를 최신화한다. 병합/운영/014는 별도 지시 전 수행하지 않는다.

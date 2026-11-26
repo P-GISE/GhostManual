@@ -16,6 +16,7 @@ const workspaces = [
 ];
 type State = {
   deletes: number;
+  deleteStatus: number;
   lookups: number;
   code: string;
   lookupStatus: number;
@@ -25,6 +26,7 @@ type State = {
 async function setup(page: Page) {
   const state: State = {
     deletes: 0,
+    deleteStatus: 409,
     lookups: 0,
     code: "lead_transfer_required",
     lookupStatus: 200,
@@ -37,7 +39,7 @@ async function setup(page: Page) {
       state.deletes++;
       await state.releaseDelete;
       return route.fulfill({
-        status: 409,
+        status: state.deleteStatus,
         json: {
           error: {
             code: state.code,
@@ -83,6 +85,7 @@ test("a blocked deletion shows all own led teams without switching or deleting a
   page,
 }) => {
   const state = await setup(page);
+  state.body = workspaces.map((team) => (team.role === "member" ? { ...team, lead: true } : team));
   await remove(page).click();
   await expect(notice(page)).toBeVisible({ timeout: 3000 });
   await expect(notice(page).getByRole("link", { name: "합성 대표 A 대표 이양" })).toHaveAttribute(
@@ -136,7 +139,9 @@ test("an ordinary conflict does not query or show representative links", async (
   const state = await setup(page);
   state.code = "conflict";
   await remove(page).click();
-  await expect(page.getByRole("alert")).toContainText("대표 권한을 이양한 뒤 진행하세요.");
+  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+    "대표 권한을 이양한 뒤 진행하세요.",
+  );
   await expect(notice(page)).toHaveCount(0);
   expect(state.lookups).toBe(0);
   expect(state.deletes).toBe(1);
@@ -171,5 +176,43 @@ test("a pending deletion rejects duplicate submission before showing its fresh r
   expect(state.deletes).toBe(1);
   release();
   await expect(notice(page)).toBeVisible({ timeout: 3000 });
+  expect(state.deletes).toBe(1);
+});
+
+test("an empty refreshed lead list still requires explicit deletion confirmation", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  state.body = [];
+  await remove(page).click();
+  await expect(
+    notice(page).getByText("대표인 팀을 찾지 못했습니다.", { exact: false }),
+  ).toBeVisible();
+  await expect(notice(page).getByRole("link", { name: /대표 이양$/ })).toHaveCount(0);
+  await expect(page.getByLabel("삭제할 내용을 확인했습니다.")).not.toBeChecked();
+  await expect(remove(page)).toBeDisabled();
+  expect(state.deletes).toBe(1);
+});
+
+test("an older response without the lead field cannot silently suggest a completed handoff", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  state.body = [{ id: ids.first, name: "합성 대표 A", role: "admin", current: false }];
+  await remove(page).click();
+  await expect(notice(page).getByRole("alert")).toBeVisible();
+  await expect(notice(page).getByRole("link", { name: /대표 이양$/ })).toHaveCount(0);
+  expect(state.deletes).toBe(1);
+});
+
+test("the lead error code with a different HTTP status is not a handoff instruction", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  state.deleteStatus = 503;
+  await remove(page).click();
+  await expect(page.getByRole("main").getByRole("alert")).toBeVisible();
+  await expect(notice(page)).toHaveCount(0);
+  expect(state.lookups).toBe(0);
   expect(state.deletes).toBe(1);
 });

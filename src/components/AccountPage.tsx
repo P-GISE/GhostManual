@@ -1,7 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { HTTPError } from "ky";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { fileSize, http, message } from "../lib/client";
+import { workspacesSchema } from "./Teams";
 
 const profileSchema = z.object({
   name: z.string(),
@@ -11,6 +14,16 @@ const profileSchema = z.object({
   usage: z.object({ bytes: z.number(), limitBytes: z.number() }),
 });
 type Profile = z.infer<typeof profileSchema>;
+const leadWorkspacesSchema = z.array(workspacesSchema.element.extend({ lead: z.boolean() }));
+const leadTransferRequired = z.object({
+  error: z.object({ code: z.literal("lead_transfer_required") }),
+});
+type LeadNotice =
+  | { phase: "idle" }
+  | { phase: "loading" }
+  | { phase: "ready"; teams: { id: string; name: string }[] }
+  | { phase: "failed"; detail: string };
+
 const tabs = [
   { id: "profile", label: "내 프로필" },
   { id: "settings", label: "설정" },
@@ -25,28 +38,74 @@ export function AccountPage() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [leadNotice, setLeadNotice] = useState<LeadNotice>({ phase: "idle" });
+  const active = useRef(true);
+  const acting = useRef(false);
+  const leadHeading = useRef<HTMLHeadingElement>(null);
+
   useEffect(() => {
+    active.current = true;
     http
       .get("/api/me", { cache: "no-store" })
       .json()
       .then((body) => {
+        if (!active.current) return;
         const me = profileSchema.parse(body);
         setProfile(me);
         setName(me.name);
         setDepartment(me.department ?? "");
       })
-      .catch(async (e) => setError(await message(e)));
+      .catch(async (e) => {
+        const detail = await message(e);
+        if (active.current) setError(detail);
+      });
+    return () => {
+      active.current = false;
+    };
   }, []);
+  useEffect(() => {
+    if (
+      !busy &&
+      tab === "settings" &&
+      leadNotice.phase !== "idle" &&
+      leadNotice.phase !== "loading"
+    )
+      leadHeading.current?.focus();
+  }, [busy, tab, leadNotice.phase]);
   async function run(action: () => Promise<void>) {
+    if (acting.current || !active.current) return;
+    acting.current = true;
     setBusy(true);
     setError("");
     setStatus("");
     try {
       await action();
     } catch (e) {
-      setError(await message(e));
+      const detail = await message(e);
+      if (active.current) setError(detail);
     } finally {
-      setBusy(false);
+      acting.current = false;
+      if (active.current) setBusy(false);
+    }
+  }
+  async function loadLeadTeams() {
+    if (!active.current) return;
+    setConfirmed(false);
+    setLeadNotice({ phase: "loading" });
+    try {
+      const list = leadWorkspacesSchema.parse(
+        await http.get("/api/workspaces", { cache: "no-store" }).json(),
+      );
+      if (!active.current) return;
+      const teams = list.flatMap((team) =>
+        team.lead && team.role === "admin" && team.name !== null
+          ? [{ id: team.id, name: team.name }]
+          : [],
+      );
+      setLeadNotice({ phase: "ready", teams });
+    } catch (e) {
+      const detail = await message(e);
+      if (active.current) setLeadNotice({ phase: "failed", detail });
     }
   }
   const save = () =>
@@ -56,6 +115,7 @@ export function AccountPage() {
           .patch("/api/me", { json: { name: name.trim(), department: department.trim() || null } })
           .json(),
       );
+      if (!active.current) return;
       setProfile(me);
       setStatus("저장했습니다. 새로 올리는 버전부터 바뀐 이름·소속이 기록됩니다.");
     });
@@ -63,14 +123,26 @@ export function AccountPage() {
     run(async () => {
       if (!profile) return;
       await http.post("/api/auth/password-reset", { json: { email: profile.email } });
+      if (!active.current) return;
       setStatus(
         `${profile.email}로 비밀번호 변경 링크를 보냈습니다. 링크는 1시간 동안 쓸 수 있습니다.`,
       );
     });
   const remove = () =>
     run(async () => {
-      await http.delete("/api/me");
-      window.location.assign("/");
+      setLeadNotice({ phase: "idle" });
+      try {
+        await http.delete("/api/me");
+        if (active.current) window.location.assign("/");
+      } catch (e) {
+        if (
+          !(e instanceof HTTPError) ||
+          e.response.status !== 409 ||
+          !leadTransferRequired.safeParse(e.data).success
+        )
+          throw e;
+        await loadLeadTeams();
+      }
     });
   // Arrow keys move between tabs as in the WAI-ARIA tabs pattern.
   function onKey(event: React.KeyboardEvent, index: number) {
@@ -196,9 +268,52 @@ export function AccountPage() {
             <p>
               계정과 원본, 엑셀 버전, 매뉴얼, 답변, 공유 권한을 모두 삭제합니다. 복구할 수 없습니다.
             </p>
+            {leadNotice.phase !== "idle" && (
+              <section
+                className="notice"
+                aria-label="대표 권한 이양 안내"
+                aria-busy={leadNotice.phase === "loading"}
+              >
+                <h3 ref={leadHeading} tabIndex={-1}>
+                  대표 권한을 먼저 이양해 주세요
+                </h3>
+                <p>아래 팀에서 대표 권한을 이양한 뒤 돌아와 삭제 내용을 다시 확인해 주세요.</p>
+                {leadNotice.phase === "loading" && (
+                  <p role="status">대표인 팀 목록을 확인하고 있습니다.</p>
+                )}
+                {leadNotice.phase === "failed" && (
+                  <p className="error" role="alert">
+                    {leadNotice.detail}
+                  </p>
+                )}
+                {leadNotice.phase === "ready" &&
+                  (leadNotice.teams.length ? (
+                    <ul>
+                      {leadNotice.teams.map((team) => (
+                        <li key={team.id}>
+                          <Link href={`/teams/${team.id}?tab=members`} prefetch={false}>
+                            {team.name} 대표 이양
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>대표인 팀을 찾지 못했습니다. 팀 목록에서 현재 권한을 확인해 주세요.</p>
+                  ))}
+                <div className="actions">
+                  <button type="button" disabled={busy} onClick={() => void run(loadLeadTeams)}>
+                    대표 팀 다시 확인
+                  </button>
+                  <Link href="/teams" prefetch={false}>
+                    팀 목록에서 확인
+                  </Link>
+                </div>
+              </section>
+            )}
             <label className="check">
               <input
                 type="checkbox"
+                disabled={busy}
                 checked={confirmed}
                 onChange={(e) => setConfirmed(e.target.checked)}
               />
