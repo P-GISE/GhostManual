@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { z } from "zod";
 import { signUpAndVerify } from "./helpers";
 
 async function joinTeam(host: Page, guest: Page, teamId: string, origin: string) {
@@ -118,10 +119,24 @@ test("another team's session can find both lead teams, explicitly transfer and t
     await settings();
     await expect(page).toHaveURL(/\/$/);
     expect(deletes).toBe(3);
+    await successor.route("**/api/session/workspace", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await route.continue();
+    });
     await successor.goto(`/teams/${first}?tab=members`);
     await expect(
       successor.getByRole("heading", { name: "합성 대표 팀 A", exact: true }),
     ).toBeVisible();
+    await expect
+      .poll(async () => {
+        const response = await successor.request.get("/api/workspaces");
+        expect(response.status()).toBe(200);
+        const list = z
+          .array(z.object({ id: z.uuid(), current: z.boolean() }))
+          .parse(await response.json());
+        return list.find((workspace) => workspace.current)?.id;
+      })
+      .toBe(first);
     const preserved = await successor.request.get(`/api/manuals/${manual.id}`);
     expect(preserved.status()).toBe(200);
     expect(await preserved.json()).toMatchObject({ id: manual.id, draft: manual.draft });
