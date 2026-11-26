@@ -22,7 +22,7 @@ const listSchema = z.array(
   }),
 );
 // 팀 화면의 "양식" 탭.
-export function TemplateList() {
+export function TemplateList({ allowUpload = true }: { readonly allowUpload?: boolean } = {}) {
   const router = useRouter();
   const [templates, setTemplates] = useState<z.infer<typeof listSchema> | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -34,7 +34,7 @@ export function TemplateList() {
       .catch(async (e) => setError(await message(e)));
   }, []);
   async function upload() {
-    if (!file) return;
+    if (!allowUpload || !file) return;
     setBusy(true);
     setError("");
     try {
@@ -60,26 +60,28 @@ export function TemplateList() {
           {error}
         </p>
       )}
-      <section className="panel">
-        <h2>양식 등록</h2>
-        <label htmlFor="template-file">양식 파일</label>
-        <input
-          id="template-file"
-          type="file"
-          accept=".docx,.hwpx"
-          aria-describedby="template-file-help"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-        />
-        <p id="template-file-help" className="help">
-          내용이 채워진 문서가 아니라 빈 양식을 올리세요. DOCX·HWPX, 최대 5 MB, 20개까지 보관할 수
-          있습니다.
-        </p>
-        <div className="actions">
-          <button type="button" disabled={!file || busy} onClick={upload}>
-            {busy ? "등록 중…" : "양식 등록"}
-          </button>
-        </div>
-      </section>
+      {allowUpload && (
+        <section className="panel">
+          <h2>양식 등록</h2>
+          <label htmlFor="template-file">양식 파일</label>
+          <input
+            id="template-file"
+            type="file"
+            accept=".docx,.hwpx"
+            aria-describedby="template-file-help"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+          <p id="template-file-help" className="help">
+            내용이 채워진 문서가 아니라 빈 양식을 올리세요. DOCX·HWPX, 최대 5 MB, 20개까지 보관할 수
+            있습니다.
+          </p>
+          <div className="actions">
+            <button type="button" disabled={!file || busy} onClick={upload}>
+              {busy ? "등록 중…" : "양식 등록"}
+            </button>
+          </div>
+        </section>
+      )}
       <h2>등록한 양식</h2>
       {!templates ? (
         !error && (

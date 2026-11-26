@@ -27,9 +27,9 @@ type Template = z.infer<typeof templateSchema>;
 type Item = Template["items"][number];
 export function TemplateDetail({ id }: { readonly id: string }) {
   const router = useRouter();
-  // 양식 목록은 팀 화면의 양식 탭에 있다. 개인 문서함의 양식이면 내 문서함으로 돌아간다.
+  // 팀 양식은 팀 화면으로, 기존 개인 양식은 보존한 개인 목록으로 돌아간다.
   const workspace = useCurrentWorkspace();
-  const list = workspace?.name ? `/teams/${workspace.id}?tab=forms` : "/library";
+  const list = workspace?.name ? `/teams/${workspace.id}?tab=forms` : "/templates";
   const [template, setTemplate] = useState<Template | null>(null);
   const [error, setError] = useState("");
   const [confirmed, setConfirmed] = useState(false);

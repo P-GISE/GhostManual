@@ -1,7 +1,8 @@
 "use client";
+import { HTTPError } from "ky";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { http, message, read } from "../lib/client";
 
@@ -26,9 +27,17 @@ export function useCurrentWorkspace() {
     undefined,
   );
   useEffect(() => {
+    let active = true;
     read("/api/workspaces", workspacesSchema)
-      .then((list) => setCurrent(list.find((workspace) => workspace.current) ?? null))
-      .catch(() => setCurrent(null));
+      .then((list) => {
+        if (active) setCurrent(list.find((workspace) => workspace.current) ?? null);
+      })
+      .catch(() => {
+        if (active) setCurrent(null);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
   return current;
 }
@@ -53,21 +62,78 @@ export function WorkspaceCrumb() {
 }
 
 // 팀 문서함 만들기. 만들면 그 팀으로 세션을 맞추고, 초대 안내가 나오는 팀 화면을 연다.
-export function TeamCreate({ heading = "팀 문서함 만들기" }: { readonly heading?: string }) {
+export function TeamCreate({
+  heading = "팀 문서함 만들기",
+  disabled = false,
+  onBusyChange,
+}: {
+  readonly heading?: string;
+  readonly disabled?: boolean;
+  // 다른 문서함 전환이 먼저 시작됐으면 부모가 생성을 거절할 수 있다.
+  readonly onBusyChange?: (busy: boolean) => boolean;
+}) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const [uncertain, setUncertain] = useState(false);
+  const alive = useRef(true);
+  const pending = useRef(false);
+  const attempted = useRef(false);
+  const created = useRef<string | null>(null);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
   async function create() {
+    if (
+      !alive.current ||
+      disabled ||
+      pending.current ||
+      (!created.current && (attempted.current || !name.trim()))
+    )
+      return;
+    if (onBusyChange?.(true) === false) return;
+    pending.current = true;
     setBusy(true);
     setError("");
+    let navigated = false;
     try {
-      const team = z
-        .object({ id: z.uuid() })
-        .parse(await http.post("/api/workspaces", { json: { name } }).json());
-      await switchWorkspace(team.id, `/teams/${team.id}?created=1`);
+      if (!created.current) {
+        attempted.current = true;
+        const body = await http.post("/api/workspaces", { json: { name } }).json();
+        if (!alive.current) return;
+        const team = z.object({ id: z.uuid() }).parse(body);
+        created.current = team.id;
+        setCreatedId(team.id);
+      }
+      if (!alive.current) return;
+      await http.post("/api/session/workspace", { json: { workspaceId: created.current } });
+      if (!alive.current) return;
+      window.location.assign(`/teams/${created.current}?created=1`);
+      navigated = true;
     } catch (e) {
-      setError(await message(e));
-      setBusy(false);
+      if (!alive.current) return;
+      const detail = await message(e);
+      if (!alive.current) return;
+      if (!created.current) {
+        const rejected =
+          e instanceof HTTPError &&
+          e.response.status >= 400 &&
+          e.response.status < 500 &&
+          e.response.status !== 408;
+        attempted.current = !rejected;
+        setUncertain(!rejected);
+      }
+      setError(detail);
+    } finally {
+      if (alive.current && !navigated) {
+        pending.current = false;
+        setBusy(false);
+        onBusyChange?.(false);
+      }
     }
   }
   return (
@@ -78,6 +144,7 @@ export function TeamCreate({ heading = "팀 문서함 만들기" }: { readonly h
         id="team-name"
         value={name}
         maxLength={40}
+        disabled={disabled || busy || uncertain || createdId !== null}
         onChange={(event) => setName(event.target.value)}
         aria-describedby="team-name-help"
       />
@@ -85,15 +152,37 @@ export function TeamCreate({ heading = "팀 문서함 만들기" }: { readonly h
         업무는 팀 문서함에 올립니다. 혼자 쓰는 경우에도 팀을 하나 만들어 씁니다. 만든 사람이 팀
         관리자가 되고, 관리하는 팀은 5개까지 만들 수 있습니다.
       </p>
+      {createdId && (
+        <p className="help">
+          팀은 만들어졌습니다. 이동에 실패하면 팀을 다시 만들지 않고 이동만 재시도합니다.
+        </p>
+      )}
+      {uncertain && (
+        <p className="help">
+          팀 생성 결과를 확인하지 못했습니다. 다시 만들기 전에 내 문서함에서 팀 목록을 확인해
+          주세요.
+        </p>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
         </p>
       )}
       <div className="actions">
-        <button type="button" disabled={busy || !name.trim()} onClick={create}>
-          {busy ? "만드는 중…" : "팀 문서함 만들기"}
+        <button
+          type="button"
+          disabled={disabled || busy || uncertain || (!createdId && !name.trim())}
+          onClick={create}
+        >
+          {busy
+            ? createdId
+              ? "이동 중…"
+              : "만드는 중…"
+            : createdId
+              ? "만든 팀으로 다시 이동"
+              : "팀 문서함 만들기"}
         </button>
+        {uncertain && <a href="/library">내 문서함에서 생성 결과 확인</a>}
       </div>
     </section>
   );

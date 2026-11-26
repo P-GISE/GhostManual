@@ -107,6 +107,26 @@ export function SourceForm() {
       setBusy(false);
     }
   }
+  if (!workspace)
+    return (
+      <section className="prose">
+        <h1>새 업무 등록</h1>
+        {workspace === undefined ? (
+          <p className="loading" role="status">
+            문서함을 확인하고 있습니다.
+          </p>
+        ) : (
+          <>
+            <p className="error" role="alert">
+              문서함을 확인하지 못했습니다. 새로고침하거나 내 문서함에서 다시 선택해 주세요.
+            </p>
+            <Link className="button" href="/library">
+              내 문서함으로
+            </Link>
+          </>
+        )}
+      </section>
+    );
   // 새 업무는 팀 문서함에만 올린다. 세션이 개인 문서함이면 팀을 고르게 돌려보낸다.
   if (workspace && workspace.name === null)
     return (

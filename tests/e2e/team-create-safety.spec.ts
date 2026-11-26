@@ -166,3 +166,41 @@ test("successful overview refresh removes an earlier signed-out hint", async ({ 
     page.getByText("이 브라우저에서 로그인 상태를 확인할 수 없습니다.", { exact: false }),
   ).toHaveCount(0);
 });
+
+test("pending team creation prevents a competing Hub session switch", async ({ page }) => {
+  await mockHub(page);
+  const gate = deferred();
+  let creates = 0;
+  let switches = 0;
+  await page.route("**/api/workspaces", async (route) => {
+    if (route.request().method() === "GET") return route.fallback();
+    creates++;
+    await gate.promise;
+    await route.fulfill({ status: 503, json: failure });
+  });
+  await page.route("**/api/session/workspace", async (route) => {
+    switches++;
+    await route.fulfill({ status: 503, json: failure });
+  });
+  try {
+    await openCreate(page);
+    await page.getByRole("button", { name: "팀 문서함 만들기", exact: true }).click();
+    await expect.poll(() => creates).toBe(1);
+    const work = page.getByRole("link", { name: "합성 팀 업무", exact: true });
+    await expect(work).toHaveAttribute("aria-disabled", "true");
+    await work.dispatchEvent("click");
+    for (const name of ["합성 업무 팀", "합성 업무 팀 팀원 초대", "합성 업무 팀 팀 화면 열기"]) {
+      const link = page.getByRole("link", { name, exact: true });
+      await expect(link).toHaveAttribute("aria-disabled", "true");
+      await link.dispatchEvent("click");
+    }
+    await page.waitForTimeout(300);
+    expect(switches).toBe(0);
+    await expect(page).toHaveURL(/\/library$/);
+    gate.resolve();
+    await expect(page.getByRole("alert").filter({ hasText: "합성 요청 실패" })).toBeVisible();
+    await expect(work).toHaveAttribute("aria-disabled", "false");
+  } finally {
+    gate.resolve();
+  }
+});
