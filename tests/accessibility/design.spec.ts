@@ -148,6 +148,22 @@ test("starting is visible without scrolling", async ({ page }) => {
 });
 
 test("form placeholder remains readable against its input background", async ({ page }) => {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({ json: { name: "합성 팀원", admin: false } }),
+  );
+  await page.route("**/api/workspaces", async (route) => {
+    expect(route.request().method()).toBe("GET");
+    await route.fulfill({
+      json: [
+        {
+          id: "30000000-0000-4000-8000-000000000001",
+          name: "합성 준비된 팀",
+          role: "member",
+          current: true,
+        },
+      ],
+    });
+  });
   await page.goto("/sources/new");
   const colors = await page.getByLabel("자료 제목").evaluate((input) => ({
     text: getComputedStyle(input, "::placeholder").color,
