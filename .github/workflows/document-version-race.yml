@@ -36,15 +36,6 @@ jobs:
           node-version: 26.13.1
           cache: npm
       - run: npm ci
-      - name: Format race tests on ephemeral runner
-        run: npx biome check --write tests/e2e/document-version-race.spec.ts
-      - name: Retain formatted test evidence
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: version-race-review-source
-          path: tests/e2e/document-version-race.spec.ts
-          retention-days: 3
       - run: npx biome check tests/performance/latency-metrics.ts tests/performance/latency-recorder.ts tests/performance/setup-latency.ts tests/performance/user-flows.spec.ts tests/unit/latency-metrics.test.ts tests/performance/playwright.config.ts
       - run: npm test -- tests/unit/latency-metrics.test.ts tests/unit/document-progress.test.ts
       - run: node --input-type=module -e 'import setup from "./tests/performance/setup-latency.ts"; await setup()'
