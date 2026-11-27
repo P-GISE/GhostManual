@@ -35,6 +35,7 @@ test.afterAll(async () => { await pool.end(); });
 test("status endpoint returns only scoped revision identity and state", async ({ page }) => {
   const saved = await pending(page);
   const response = await page.request.get("/api/sources/" + saved.id + "/revisions/1/status");
+  await complete();
   expect(response.status()).toBe(200);
   expect(await response.json()).toEqual({ revisionId: saved.revisionId, status: "queued" });
   expect(response.headers()["cache-control"]).toContain("no-store");
