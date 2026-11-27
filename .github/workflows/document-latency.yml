@@ -1,7 +1,7 @@
 name: Isolated document latency
 on:
   push:
-    branches: ["chore/document-latency-baseline"]
+    branches: ["chore/document-latency-baseline", "fix/document-read-roundtrips"]
 permissions:
   contents: read
 jobs:

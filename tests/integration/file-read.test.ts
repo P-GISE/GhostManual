@@ -161,10 +161,14 @@ it("bootstrap keeps legacy history and latest preview in one response", async ()
   const response = await bootstrap(token, v1.id);
   expect(response.status).toBe(200);
   expect(response.headers.get("cache-control")).toContain("no-store");
-  expect(await response.json()).toEqual(JSON.parse(JSON.stringify({
-    revisions: await listFileRevisions(ctx, v1.id),
-    latest: await getFileRevision(ctx, v1.id, 2),
-  })));
+  expect(await response.json()).toEqual(
+    JSON.parse(
+      JSON.stringify({
+        revisions: await listFileRevisions(ctx, v1.id),
+        latest: await getFileRevision(ctx, v1.id, 2),
+      }),
+    ),
+  );
   const other = await signedInUser(mail);
   expect((await bootstrap(other.token, v1.id)).status).toBe(404);
   expect((await bootstrap("invalid", v1.id)).status).toBe(401);

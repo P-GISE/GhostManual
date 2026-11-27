@@ -4,42 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { http, message, read } from "../lib/client";
+import { http, message } from "../lib/client";
 
-export const workspacesSchema = z.array(
-  z.object({
-    id: z.uuid(),
-    name: z.string().nullable(),
-    role: z.enum(["admin", "member"]).nullable(),
-    current: z.boolean(),
-  }),
-);
+import { useCurrentWorkspace } from "./CurrentWorkspace";
+export { useCurrentWorkspace, workspacesSchema } from "./CurrentWorkspace";
+
 export const roleText = { admin: "팀 관리자", member: "팀원" } as const;
 // 전환은 로그인 쿠키를 대상 문서함의 세션으로 바꾼다. 화면이 들고 있던 자료는 이전 문서함 것이므로 새로 연다.
 export async function switchWorkspace(workspaceId: string | null, to = "/library") {
   await http.post("/api/session/workspace", { json: { workspaceId } });
   window.location.assign(to);
-}
-
-// 지금 세션이 묶인 문서함. 아직 모르면 undefined, 로그인하지 않았거나 공유 독자면 null. name이 null이면 개인 문서함이다.
-export function useCurrentWorkspace() {
-  const [current, setCurrent] = useState<{ id: string; name: string | null } | null | undefined>(
-    undefined,
-  );
-  useEffect(() => {
-    let active = true;
-    read("/api/workspaces", workspacesSchema)
-      .then((list) => {
-        if (active) setCurrent(list.find((workspace) => workspace.current) ?? null);
-      })
-      .catch(() => {
-        if (active) setCurrent(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-  return current;
 }
 
 // 표시할 경로마다 이름을 다시 확인하고, 상단 경로가 없는 화면에서는 목록을 읽지 않는다.

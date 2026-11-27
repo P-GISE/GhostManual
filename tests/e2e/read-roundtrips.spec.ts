@@ -34,9 +34,7 @@ test("initial file read bundles history and latest detail without a second detai
   expect(created.status()).toBe(202);
   const source = (await created.json()) as { id: string };
   expect(await runDocumentJob(async (format, bytes) => readDocument(format, bytes))).toBe(true);
-  const response = await page.request.get(
-    `/api/sources/${source.id}/revisions?includeLatest=1`,
-  );
+  const response = await page.request.get(`/api/sources/${source.id}/revisions?includeLatest=1`);
   expect(response.status()).toBe(200);
   expect(await response.json()).toMatchObject({
     revisions: [{ revision: 1 }],
@@ -53,8 +51,8 @@ test("initial file read bundles history and latest detail without a second detai
   await page.getByText(/^현재 추출 내용 [0-9]+개$/).click();
   await expect(page.getByText("ROUNDTRIP_NATIVE_MARKER", { exact: true })).toBeVisible();
   expect(requests.filter((url) => url === "/api/workspaces")).toHaveLength(1);
-  expect(requests.filter((url) => url === `/api/sources/${source.id}/revisions?includeLatest=1`))
-    .toHaveLength(1);
-  expect(requests.filter((url) => url === `/api/sources/${source.id}/revisions/1`))
-    .toHaveLength(0);
+  expect(
+    requests.filter((url) => url === `/api/sources/${source.id}/revisions?includeLatest=1`),
+  ).toHaveLength(1);
+  expect(requests.filter((url) => url === `/api/sources/${source.id}/revisions/1`)).toHaveLength(0);
 });

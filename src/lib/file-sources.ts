@@ -485,37 +485,43 @@ export type RevisionSummary = {
   answeredCount: number;
   extraction?: SourceView["extraction"];
 };
-export async function listFileRevisions(
-  ctx: SessionContext,
-  id: string,
-): Promise<RevisionSummary[]> {
+async function readFileRevisions(db: DbClient, ctx: SessionContext, id: string) {
+  await assertSession(db, ctx);
+  // sourceInTransaction resolves a reader to the revision its shared manual was published from.
+  const latest = await sourceInTransaction(db, ctx, id);
+  const rows = await db.query<{ revision: number }>(
+    "SELECT revision FROM source_revisions WHERE source_id=$1 AND workspace_id=$2 ORDER BY revision DESC",
+    [id, ctx.workspaceId],
+  );
+  const list: RevisionSummary[] = [];
+  let first: FileRevisionView | null = null;
+  for (const { revision } of rows.rows) {
+    if (ctx.role === "reader" && revision !== latest.revision) continue;
+    const view = await fileRevisionInTransaction(db, ctx, id, revision);
+    first ??= view;
+    list.push({
+      extraction: view.extraction,
+      revision: view.revision,
+      revisionId: view.revisionId,
+      createdAt: view.createdAt,
+      uploadedByName: view.uploadedByName,
+      uploadedByDepartment: view.uploadedByDepartment,
+      file: view.file,
+      compareStatus: view.compareStatus,
+      changeCount: view.changes.length,
+      questionCount: view.questions.length,
+      answeredCount: view.questions.filter((q) => q.answer !== null).length,
+    });
+  }
+  return { revisions: list, first };
+}
+export async function listFileRevisions(ctx: SessionContext, id: string): Promise<RevisionSummary[]> {
+  return transaction(async (db) => (await readFileRevisions(db, ctx, id)).revisions);
+}
+export async function getFileRevisionBootstrap(ctx: SessionContext, id: string) {
   return transaction(async (db) => {
-    await assertSession(db, ctx);
-    // sourceInTransaction resolves a reader to the revision its shared manual was published from.
-    const latest = await sourceInTransaction(db, ctx, id);
-    const rows = await db.query<{ revision: number }>(
-      "SELECT revision FROM source_revisions WHERE source_id=$1 AND workspace_id=$2 ORDER BY revision DESC",
-      [id, ctx.workspaceId],
-    );
-    const list: RevisionSummary[] = [];
-    for (const { revision } of rows.rows) {
-      if (ctx.role === "reader" && revision !== latest.revision) continue;
-      const view = await fileRevisionInTransaction(db, ctx, id, revision);
-      list.push({
-        extraction: view.extraction,
-        revision: view.revision,
-        revisionId: view.revisionId,
-        createdAt: view.createdAt,
-        uploadedByName: view.uploadedByName,
-        uploadedByDepartment: view.uploadedByDepartment,
-        file: view.file,
-        compareStatus: view.compareStatus,
-        changeCount: view.changes.length,
-        questionCount: view.questions.length,
-        answeredCount: view.questions.filter((q) => q.answer !== null).length,
-      });
-    }
-    return list;
+    const { revisions, first } = await readFileRevisions(db, ctx, id);
+    return { revisions, latest: first ? await revisionPreview(db, first) : null };
   });
 }
 export type SheetPreview = {
@@ -545,16 +551,18 @@ export function preview(snapshot: Snapshot): SheetPreview[] {
     ),
   }));
 }
+async function revisionPreview(db: DbClient, view: FileRevisionView) {
+  const file = await db.query<{ snapshot: Snapshot | null }>(
+    "SELECT snapshot FROM source_files WHERE revision_id=$1",
+    [view.revisionId],
+  );
+  const snapshot = file.rows[0]?.snapshot;
+  return { ...view, preview: snapshot ? preview(snapshot) : [] };
+}
 export async function getFileRevision(ctx: SessionContext, id: string, revision: number) {
   return transaction(async (db) => {
     await assertSession(db, ctx);
-    const view = await fileRevisionInTransaction(db, ctx, id, revision);
-    const file = await db.query<{ snapshot: Snapshot | null }>(
-      "SELECT snapshot FROM source_files WHERE revision_id=$1",
-      [view.revisionId],
-    );
-    const snapshot = file.rows[0]?.snapshot;
-    return { ...view, preview: snapshot ? preview(snapshot) : [] };
+    return revisionPreview(db, await fileRevisionInTransaction(db, ctx, id, revision));
   });
 }
 export async function fileContent(ctx: SessionContext, id: string, revision: number) {
