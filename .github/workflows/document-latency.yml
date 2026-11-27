@@ -36,7 +36,7 @@ jobs:
           node-version: 26.13.1
           cache: npm
       - run: npm ci
-      - run: npx biome check tests/performance/latency-metrics.ts tests/performance/setup-latency.ts tests/performance/user-flows.spec.ts tests/unit/latency-metrics.test.ts playwright.latency.config.ts
+      - run: npx biome check tests/performance/latency-metrics.ts tests/performance/latency-recorder.ts tests/performance/setup-latency.ts tests/performance/user-flows.spec.ts tests/unit/latency-metrics.test.ts playwright.latency.config.ts
       - run: npm test -- tests/unit/latency-metrics.test.ts
       - run: npm run build
       - run: npx playwright install chromium

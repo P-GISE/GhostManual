@@ -1,105 +1,20 @@
 import { writeFile } from "node:fs/promises";
 import { cpus, totalmem } from "node:os";
-import { expect, type Page, type Request, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { pool } from "../../src/lib/db.ts";
 import { extractDocument } from "../../src/lib/document-extractor.ts";
 import { claimDocumentJob, completeDocumentJob } from "../../src/lib/document-jobs.ts";
 import { createTeam, openTeam, signUpAndVerify } from "../e2e/helpers";
 import { docx, hwpx, pack, pptx, wp } from "../fixtures/documents/native/build.ts";
-import { apiCategory, assertLatencyTarget, percentile } from "./latency-metrics.ts";
+import { assertLatencyTarget, percentile } from "./latency-metrics.ts";
+import { add, measure, rows } from "./latency-recorder.ts";
 
 const formats = ["docx", "hwpx", "pptx"] as const;
 type Format = (typeof formats)[number];
-type Row = {
-  phase: string;
-  format: string;
-  sample: number;
-  warmup: boolean;
-  elapsedMs: number;
-  startedRequests: number;
-  unobservedResponses: number;
-  api: { category: string; status: number; elapsedMs: number; decodedBytes: number }[];
-};
-const rows: Row[] = [];
 function fixture(format: Format, marker: string) {
   return Buffer.from(
     pack(format === "docx" ? docx(wp(marker)) : format === "hwpx" ? hwpx(marker) : pptx(marker)),
   );
-}
-async function measure(
-  page: Page,
-  phase: string,
-  format: string,
-  sample: number,
-  action: () => Promise<void>,
-) {
-  const starts = new Map<Request, number>();
-  const pending: Promise<void>[] = [];
-  const observed = new Set<Request>();
-  const api: Row["api"] = [];
-  const started = performance.now();
-  const onRequest = (request: Request) => {
-    if (new URL(request.url()).pathname.startsWith("/api/")) starts.set(request, performance.now());
-  };
-  const onResponse = (response: import("@playwright/test").Response) => {
-    const at = starts.get(response.request());
-    if (at === undefined) return;
-    observed.add(response.request());
-    pending.push(
-      (async () => {
-        try {
-          const body = await response.body();
-          api.push({
-            category: apiCategory(response.url()),
-            status: response.status(),
-            elapsedMs: performance.now() - at,
-            decodedBytes: body.byteLength,
-          });
-        } catch {
-          api.push({
-            category: apiCategory(response.url()),
-            status: 0,
-            elapsedMs: performance.now() - at,
-            decodedBytes: 0,
-          });
-        }
-      })(),
-    );
-  };
-  page.on("request", onRequest);
-  page.on("response", onResponse);
-  try {
-    await action();
-    const elapsedMs = performance.now() - started;
-    page.off("request", onRequest);
-    page.off("response", onResponse);
-    await Promise.all(pending);
-    rows.push({
-      phase,
-      format,
-      sample,
-      warmup: sample === 0,
-      elapsedMs,
-      startedRequests: starts.size,
-      unobservedResponses: starts.size - observed.size,
-      api,
-    });
-  } finally {
-    page.off("request", onRequest);
-    page.off("response", onResponse);
-  }
-}
-function add(phase: string, format: string, sample: number, elapsedMs: number) {
-  rows.push({
-    phase,
-    format,
-    sample,
-    warmup: sample === 0,
-    elapsedMs,
-    startedRequests: 0,
-    unobservedResponses: 0,
-    api: [],
-  });
 }
 test("isolated native upload and read baseline", async ({ page }) => {
   assertLatencyTarget(process.env);

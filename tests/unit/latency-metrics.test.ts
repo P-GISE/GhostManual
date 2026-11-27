@@ -5,7 +5,7 @@ const safe = {
   GITHUB_ACTIONS: "true",
   AI_ENABLED: "false",
   APP_ORIGIN: "http://localhost:3200",
-  DATABASE_URL: "***localhost:5432/ghostmanual_latency_test",
+  DATABASE_URL: "postgresql://localhost:5432/ghostmanual_latency_test",
 };
 describe("isolated latency measurements", () => {
   test("nearest-rank percentiles retain outliers and do not mutate samples", () => {
