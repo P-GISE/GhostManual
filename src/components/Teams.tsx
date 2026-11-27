@@ -42,11 +42,16 @@ export function useCurrentWorkspace() {
   return current;
 }
 
-// 업무·매뉴얼·양식 화면 머리의 위치 표시. 지금 어느 팀의 것을 보고 있는지 알려 준다.
+// 표시할 경로마다 이름을 다시 확인하고, 상단 경로가 없는 화면에서는 목록을 읽지 않는다.
 export function WorkspaceCrumb() {
   const pathname = usePathname();
+  if (!/^\/(sources|manuals|templates)\//.test(pathname)) return null;
+  return <CurrentWorkspaceCrumb key={pathname} />;
+}
+
+function CurrentWorkspaceCrumb() {
   const current = useCurrentWorkspace();
-  if (!current || !/^\/(sources|manuals|templates)\//.test(pathname)) return null;
+  if (!current) return null;
   return (
     <p className="crumb">
       <span className="visually-hidden">현재 위치: </span>
