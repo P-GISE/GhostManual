@@ -5,7 +5,7 @@ const safe = {
   GITHUB_ACTIONS: "true",
   AI_ENABLED: "false",
   APP_ORIGIN: "http://localhost:3200",
-  DATABASE_URL: "postgresql://synthetic:synthetic@localhost:5432/ghostmanual_latency_test",
+  DATABASE_URL: "***localhost:5432/ghostmanual_latency_test",
 };
 describe("isolated latency measurements", () => {
   test("nearest-rank percentiles retain outliers and do not mutate samples", () => {
@@ -29,8 +29,10 @@ describe("isolated latency measurements", () => {
       expect(() => assertLatencyTarget({ ...safe, ...patch })).toThrow();
   });
   test("retains route categories without IDs, search terms or fragments", () => {
-    expect(apiCategory(
-      "http://localhost:3200/api/sources/12345678-1234-1234-1234-123456789abc/revisions/1/document?secret=hidden#token",
-    )).toBe("/api/sources/:id/revisions/:revision/document");
+    expect(
+      apiCategory(
+        "http://localhost:3200/api/sources/12345678-1234-1234-1234-123456789abc/revisions/1/document?secret=hidden#token",
+      ),
+    ).toBe("/api/sources/:id/revisions/:revision/document");
   });
 });

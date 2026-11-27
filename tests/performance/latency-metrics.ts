@@ -6,7 +6,7 @@ export function percentile(values: readonly number[], fraction: number): number 
   return sorted[Math.ceil(sorted.length * fraction) - 1] ?? 0;
 }
 
-export function assertLatencyTarget(env: NodeJS.ProcessEnv): void {
+export function assertLatencyTarget(env: Readonly<Record<string, string | undefined>>): void {
   const url = new URL(env["DATABASE_URL"] ?? "https://invalid");
   if (
     env["GITHUB_ACTIONS"] !== "true" ||

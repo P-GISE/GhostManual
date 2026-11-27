@@ -2,8 +2,8 @@ import { writeFile } from "node:fs/promises";
 import { cpus, totalmem } from "node:os";
 import { expect, type Page, type Request, test } from "@playwright/test";
 import { pool } from "../../src/lib/db.ts";
-import { claimDocumentJob, completeDocumentJob } from "../../src/lib/document-jobs.ts";
 import { extractDocument } from "../../src/lib/document-extractor.ts";
+import { claimDocumentJob, completeDocumentJob } from "../../src/lib/document-jobs.ts";
 import { createTeam, openTeam, signUpAndVerify } from "../e2e/helpers";
 import { docx, hwpx, pack, pptx, wp } from "../fixtures/documents/native/build.ts";
 import { apiCategory, assertLatencyTarget, percentile } from "./latency-metrics.ts";
@@ -22,35 +22,49 @@ type Row = {
 };
 const rows: Row[] = [];
 function fixture(format: Format, marker: string) {
-  return Buffer.from(pack(format === "docx" ? docx(wp(marker)) : format === "hwpx" ? hwpx(marker) : pptx(marker)));
+  return Buffer.from(
+    pack(format === "docx" ? docx(wp(marker)) : format === "hwpx" ? hwpx(marker) : pptx(marker)),
+  );
 }
-async function measure(page: Page, phase: string, format: string, sample: number, action: () => Promise<void>) {
+async function measure(
+  page: Page,
+  phase: string,
+  format: string,
+  sample: number,
+  action: () => Promise<void>,
+) {
   const starts = new Map<Request, number>();
   const pending: Promise<void>[] = [];
   const observed = new Set<Request>();
   const api: Row["api"] = [];
   const started = performance.now();
   const onRequest = (request: Request) => {
-    if (new URL(request.url()).pathname.startsWith("/api/"))
-      starts.set(request, performance.now());
+    if (new URL(request.url()).pathname.startsWith("/api/")) starts.set(request, performance.now());
   };
   const onResponse = (response: import("@playwright/test").Response) => {
     const at = starts.get(response.request());
     if (at === undefined) return;
     observed.add(response.request());
-    pending.push((async () => {
-      try {
-        const body = await response.body();
-        api.push({
-          category: apiCategory(response.url()),
-          status: response.status(),
-          elapsedMs: performance.now() - at,
-          decodedBytes: body.byteLength,
-        });
-      } catch {
-        api.push({ category: apiCategory(response.url()), status: 0, elapsedMs: performance.now() - at, decodedBytes: 0 });
-      }
-    })());
+    pending.push(
+      (async () => {
+        try {
+          const body = await response.body();
+          api.push({
+            category: apiCategory(response.url()),
+            status: response.status(),
+            elapsedMs: performance.now() - at,
+            decodedBytes: body.byteLength,
+          });
+        } catch {
+          api.push({
+            category: apiCategory(response.url()),
+            status: 0,
+            elapsedMs: performance.now() - at,
+            decodedBytes: 0,
+          });
+        }
+      })(),
+    );
   };
   page.on("request", onRequest);
   page.on("response", onResponse);
@@ -60,20 +74,39 @@ async function measure(page: Page, phase: string, format: string, sample: number
     page.off("request", onRequest);
     page.off("response", onResponse);
     await Promise.all(pending);
-    rows.push({ phase, format, sample, warmup: sample === 0, elapsedMs, startedRequests: starts.size, unobservedResponses: starts.size - observed.size, api });
+    rows.push({
+      phase,
+      format,
+      sample,
+      warmup: sample === 0,
+      elapsedMs,
+      startedRequests: starts.size,
+      unobservedResponses: starts.size - observed.size,
+      api,
+    });
   } finally {
     page.off("request", onRequest);
     page.off("response", onResponse);
   }
 }
 function add(phase: string, format: string, sample: number, elapsedMs: number) {
-  rows.push({ phase, format, sample, warmup: sample === 0, elapsedMs, startedRequests: 0, unobservedResponses: 0, api: [] });
+  rows.push({
+    phase,
+    format,
+    sample,
+    warmup: sample === 0,
+    elapsedMs,
+    startedRequests: 0,
+    unobservedResponses: 0,
+    api: [],
+  });
 }
 test("isolated native upload and read baseline", async ({ page }) => {
   assertLatencyTarget(process.env);
   const usageStart = process.resourceUsage();
   const sizes: Record<string, number[]> = {};
   const checks: Record<string, number> = {};
+  let completed = false;
   try {
     await signUpAndVerify(page, undefined, "지연 측정 합성 사용자", false);
     const teams = new Map<Format, string>();
@@ -103,8 +136,11 @@ test("isolated native upload and read baseline", async ({ page }) => {
         });
         let sourceId = "";
         await measure(page, "click-to-accepted", format, sample, async () => {
-          const response = page.waitForResponse((value) =>
-            value.request().method() === "POST" && new URL(value.url()).pathname === "/api/sources");
+          const response = page.waitForResponse(
+            (value) =>
+              value.request().method() === "POST" &&
+              new URL(value.url()).pathname === "/api/sources",
+          );
           await page.getByRole("button", { name: "원본 등록", exact: true }).click();
           const received = await response;
           expect(received.status()).toBe(202);
@@ -137,7 +173,9 @@ test("isolated native upload and read baseline", async ({ page }) => {
         });
         await measure(page, "read-to-content-visible", format, sample, async () => {
           await page.reload();
-          await expect(page.getByRole("heading", { name: "추출 내용·문서 변경 보기", exact: true })).toBeVisible();
+          await expect(
+            page.getByRole("heading", { name: "추출 내용·문서 변경 보기", exact: true }),
+          ).toBeVisible();
           await page.getByText(/^현재 추출 내용 [0-9]+개$/).click();
           await expect(page.getByText(marker, { exact: true }).first()).toBeVisible();
         });
@@ -152,42 +190,93 @@ test("isolated native upload and read baseline", async ({ page }) => {
     const missing = await page.request.get("/api/sources/00000000-0000-4000-8000-000000000000");
     expect(missing.status()).toBe(404);
     checks["missingSource404"] = 1;
-    await page.route("**/api/workspaces", (route) => route.fulfill({
-      status: 503, contentType: "application/json", body: '{"error":{"message":"Synthetic unavailable"}}',
-    }));
+    await page.route("**/api/workspaces", (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: '{"error":{"message":"Synthetic unavailable"}}',
+      }),
+    );
     await page.goto("/sources/new");
     await expect(page.getByRole("alert").first()).toBeVisible();
     await expect(page.getByLabel("자료 제목")).toHaveCount(0);
     checks["unavailableWorkspaceBlocksInput"] = 1;
     await page.unrouteAll();
-    expect(rows.filter((row) => !row.warmup).every((row) => row.api.every((api) => api.status === 200 || api.status === 202))).toBe(true);
+    expect(
+      rows
+        .filter((row) => !row.warmup)
+        .every((row) => row.api.every((api) => api.status === 200 || api.status === 202)),
+    ).toBe(true);
+    expect(rows).toHaveLength(775);
+    completed = true;
   } finally {
-    const groups = [...new Set(rows.filter((row) => !row.warmup).map((row) => row.phase + "/" + row.format))];
+    const groups = [
+      ...new Set(rows.filter((row) => !row.warmup).map((row) => row.phase + "/" + row.format)),
+    ];
     const summary = groups.map((key) => {
       const samples = rows.filter((row) => !row.warmup && row.phase + "/" + row.format === key);
       return {
-        key, samples: samples.length,
-        p50Ms: percentile(samples.map((row) => row.elapsedMs), 0.5),
-        p95Ms: percentile(samples.map((row) => row.elapsedMs), 0.95),
+        key,
+        samples: samples.length,
+        p50Ms: percentile(
+          samples.map((row) => row.elapsedMs),
+          0.5,
+        ),
+        p95Ms: percentile(
+          samples.map((row) => row.elapsedMs),
+          0.95,
+        ),
         apiResponses: samples.reduce((sum, row) => sum + row.api.length, 0),
         apiStarted: samples.reduce((sum, row) => sum + row.startedRequests, 0),
         unobservedResponses: samples.reduce((sum, row) => sum + row.unobservedResponses, 0),
-        decodedResponseBytes: samples.reduce((sum, row) => sum + row.api.reduce((bytes, api) => bytes + api.decodedBytes, 0), 0),
+        decodedResponseBytes: samples.reduce(
+          (sum, row) => sum + row.api.reduce((bytes, api) => bytes + api.decodedBytes, 0),
+          0,
+        ),
       };
     });
-    await writeFile("user-flow-latency.json", JSON.stringify({
-      schema: 1, commit: process.env["GITHUB_SHA"], run: process.env["GITHUB_RUN_ID"],
-      node: process.version, cpuCount: cpus().length, cpuModel: cpus()[0]?.model, runnerMemoryBytes: totalmem(),
-      profile: "GitHub hosted runner, no production cgroup limits; one desktop Chromium user",
-      migrations: "001-013 only; dedicated ephemeral service",
-      cache: "first sample per format is warmup; remaining browser/HTTP cache is not disabled",
-      fixture: "small synthetic native packages; 31 files per format/team; growing upload/read population",
-      excluded: ["production network", "DB query and lock attribution", "app RSS/CPU", "OCR", "multi-user load", "actual worker idle scheduling"],
-      queueBoundary: "controlled claim after pending UI and blocked download check; observed queue age includes harness verification",
-      responseBytes: "decoded API body bytes, requests responding within phase; not wire bytes or every late request",
-      resourceScope: "resourceUsage is harness and inline native extraction only, not Next or PostgreSQL",
-      sizes, checks, resourceStart: usageStart, resourceEnd: process.resourceUsage(), summary, rows,
-    }, null, 2));
+    await writeFile(
+      "user-flow-latency.json",
+      JSON.stringify(
+        {
+          schema: 1,
+          completed,
+          commit: process.env["GITHUB_SHA"],
+          run: process.env["GITHUB_RUN_ID"],
+          node: process.version,
+          cpuCount: cpus().length,
+          cpuModel: cpus()[0]?.model,
+          runnerMemoryBytes: totalmem(),
+          profile: "GitHub hosted runner, no production cgroup limits; one desktop Chromium user",
+          migrations: "001-013 only; dedicated ephemeral service",
+          cache: "first sample per format is warmup; remaining browser/HTTP cache is not disabled",
+          fixture:
+            "small synthetic native packages; 31 files per format/team; growing upload/read population",
+          excluded: [
+            "production network",
+            "DB query and lock attribution",
+            "app RSS/CPU",
+            "OCR",
+            "multi-user load",
+            "actual worker idle scheduling",
+          ],
+          queueBoundary:
+            "controlled claim after pending UI and blocked download check; observed queue age includes harness verification",
+          responseBytes:
+            "decoded API body bytes, requests responding within phase; not wire bytes or every late request",
+          resourceScope:
+            "resourceUsage is harness and inline native extraction only, not Next or PostgreSQL",
+          sizes,
+          checks,
+          resourceStart: usageStart,
+          resourceEnd: process.resourceUsage(),
+          summary,
+          rows,
+        },
+        null,
+        2,
+      ),
+    );
     await pool.end();
   }
 });

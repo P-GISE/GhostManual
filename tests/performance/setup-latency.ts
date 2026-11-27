@@ -8,7 +8,9 @@ export default async function setup(): Promise<void> {
   await db.connect();
   try {
     await db.query("BEGIN");
-    await db.query("CREATE TABLE schema_migrations(name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT now())");
+    await db.query(
+      "CREATE TABLE schema_migrations(name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT now())",
+    );
     const names = (await readdir("db/migrations"))
       .filter((name) => /^\d{3}_.+\.sql$/.test(name) && Number(name.slice(0, 3)) <= 13)
       .sort();
