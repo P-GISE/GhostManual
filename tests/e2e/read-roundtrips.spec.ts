@@ -57,7 +57,9 @@ test("initial file read bundles history and latest detail without a second detai
   expect(requests.filter((url) => url === `/api/sources/${source.id}/revisions/1`)).toHaveLength(0);
 });
 
-test("leaving and returning ignores the old route's delayed workspace response", async ({ page }) => {
+test("leaving and returning ignores the old route's delayed workspace response", async ({
+  page,
+}) => {
   await signUpAndVerify(page);
   const entries = await (await page.request.get("/api/workspaces")).json();
   const current = entries.find((entry: { current: boolean }) => entry.current) as { id: string };
