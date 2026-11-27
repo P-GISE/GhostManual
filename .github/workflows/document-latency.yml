@@ -37,8 +37,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx biome check tests/performance/latency-metrics.ts tests/performance/setup-latency.ts tests/performance/user-flows.spec.ts tests/unit/latency-metrics.test.ts playwright.latency.config.ts --write
-      - name: Expose formatting patch for review
-        run: git diff -- tests/performance tests/unit/latency-metrics.test.ts playwright.latency.config.ts
+      - name: Expose formatted probe sources for review
+        run: |
+          node --input-type=module -e 'import{readFileSync}from"node:fs"; console.log("FORMATTED_PROBE="+JSON.stringify(Object.fromEntries(process.argv.slice(1).map(p=>[p,readFileSync(p,"utf8")]))))' tests/performance/latency-metrics.ts tests/performance/setup-latency.ts tests/performance/user-flows.spec.ts tests/unit/latency-metrics.test.ts playwright.latency.config.ts
       - run: npm test -- tests/unit/latency-metrics.test.ts
       - run: npm run build
       - run: npx playwright install chromium

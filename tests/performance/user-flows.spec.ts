@@ -88,7 +88,8 @@ test("isolated native upload and read baseline", async ({ page }) => {
       for (let sample = 0; sample <= 30; sample++) {
         const marker = "LATENCY_" + format.toUpperCase() + "_" + sample;
         const payload = fixture(format, marker);
-        (sizes[format] ??= []).push(payload.length);
+        sizes[format] ??= [];
+        sizes[format].push(payload.length);
         await measure(page, "registration-form", format, sample, async () => {
           await page.goto("/sources/new");
           await expect(page.getByLabel("자료 제목")).toBeVisible();
