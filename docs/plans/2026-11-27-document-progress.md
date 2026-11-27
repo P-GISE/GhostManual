@@ -26,3 +26,6 @@ Ruling: 지속 연결/SSE 대신 경량 progressive polling을 사용한다. 기
 - PR122 최신 CI8개 성공 후 초안 해제·병합 완료. 병합 후 CI 확인 중.
 - RED: 사례별 queued job 분리 후 run45999321555에서 상태404 및 완료후1200ms 미충족을 실제 DB013/Next/Chromium으로 확인했다.
 - 구현: 경량 상태/순차 폴링/상세 재검증/선택 세대 가드와 명시 재시도를 추가한다. GREEN·최종 CI·동일조건 측정은 대기 중.
+
+- GREEN: head63977cb 집중6건 성공. 전체CI46000003468에서 새 spec의 pool.end가 다음 document-versions spec의 공용 pool을 닫아2건 실패했다. 해당 teardown만 제거하고 두 spec 동시 집중 실행을 추가한다. 제품 코드 변경은 없다.
+- Final: minor (deferred): 이전 완료 응답을 지연하고 다른 버전을 선택하는 전용 E2E는 후속이다. 선택 세대/identity/abort 가드는 코드 검토했고 현재 단위·이탈·불일치 회귀를 유지한다.

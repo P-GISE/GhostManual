@@ -1,5 +1,4 @@
 import { expect, type Page, test } from "@playwright/test";
-import { pool } from "../../src/lib/db.ts";
 import { extractDocument } from "../../src/lib/document-extractor.ts";
 import { claimDocumentJob, completeDocumentJob } from "../../src/lib/document-jobs.ts";
 import { docx, pack, wp } from "../fixtures/documents/native/build.ts";
@@ -34,9 +33,6 @@ async function complete() {
   expect(result.status).toBe("ready");
   expect(await completeDocumentJob(job, result)).toBe(true);
 }
-test.afterAll(async () => {
-  await pool.end();
-});
 test("status endpoint returns only scoped revision identity and state", async ({ page }) => {
   const saved = await pending(page);
   const response = await page.request.get("/api/sources/" + saved.id + "/revisions/1/status");

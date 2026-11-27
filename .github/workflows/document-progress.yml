@@ -42,4 +42,4 @@ jobs:
       - run: npm run build
       - run: npx playwright install chromium
       - name: Verify focused request and authority regressions
-        run: npx playwright test tests/e2e/document-progress.spec.ts --project desktop
+        run: npx playwright test tests/e2e/document-progress.spec.ts tests/e2e/document-versions.spec.ts --project desktop
