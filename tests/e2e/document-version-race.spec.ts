@@ -132,9 +132,12 @@ test("detail completes while another version selection is pending", async ({ pag
     const response = await delivered;
     expect(response.status()).toBe(200);
     expect(await response.finished()).toBeNull();
-    await page.evaluate(() => new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-    }));
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        }),
+    );
     await expect(page.getByRole("heading", { name: "버전 2", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "직접 작성하기", exact: true })).toBeDisabled();
     await expect(page.getByRole("link", { name: "v2 원본 내려받기" })).toHaveCount(0);
