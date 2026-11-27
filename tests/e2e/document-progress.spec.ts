@@ -45,3 +45,61 @@ test("completed native document is visible within 1200ms", async ({ page }) => {
   await complete();
   await expect(page.getByRole("link", { name: "v1 원본 내려받기" })).toBeVisible({ timeout: 1200 });
 });
+
+test("status failures stop and explicit retry reads the same revision", async ({ page }) => {
+  let calls = 0;
+  await page.route("**/revisions/1/status", (route) => {
+    calls++;
+    return route.fulfill({ status: 503, json: { error: { message: "합성 상태 오류" } } });
+  });
+  const saved = await pending(page);
+  await expect(page.getByRole("button", { name: "처리 상태 다시 확인" })).toBeVisible();
+  const stopped = calls;
+  await page.waitForTimeout(600);
+  expect(calls).toBe(stopped);
+  expect(calls).toBe(1);
+  await expect(page.getByRole("link", { name: "v1 원본 내려받기" })).toHaveCount(0);
+  await complete();
+  await page.unroute("**/revisions/1/status");
+  await page.getByRole("button", { name: "처리 상태 다시 확인" }).click();
+  await expect(page.getByRole("link", { name: "v1 원본 내려받기" })).toBeVisible({ timeout: 1500 });
+  const revisions = await (await page.request.get("/api/sources/" + saved.id + "/revisions")).json();
+  expect(revisions).toHaveLength(1);
+});
+test("terminal metadata never enables a document when authorized detail fails", async ({ page }) => {
+  await pending(page);
+  await page.route("**/revisions/1", (route) =>
+    route.fulfill({ status: 403, json: { error: { message: "권한 변경" } } }));
+  await complete();
+  await expect(page.getByRole("button", { name: "처리 상태 다시 확인" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "v1 원본 내려받기" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "직접 작성하기", exact: true })).toBeDisabled();
+  await page.unroute("**/revisions/1");
+  await page.getByRole("button", { name: "처리 상태 다시 확인" }).click();
+  await expect(page.getByRole("link", { name: "v1 원본 내려받기" })).toBeVisible({ timeout: 1500 });
+});
+test("leaving a pending document cancels its status loop", async ({ page }) => {
+  const saved = await pending(page);
+  let calls = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/status")) calls++;
+  });
+  await page.getByRole("link", { name: "도움말", exact: true }).click();
+  await expect(page).toHaveURL(/\/help$/);
+  const stopped = calls;
+  await page.waitForTimeout(700);
+  expect(calls).toBe(stopped);
+  await complete();
+  expect((await page.request.get("/api/sources/" + saved.id + "/revisions/1/status")).status()).toBe(200);
+});
+
+test("a mismatched status identity cannot enable the selected document", async ({ page }) => {
+  await page.route("**/revisions/1/status", (route) => route.fulfill({
+    json: { revisionId: "00000000-0000-4000-8000-000000000001", status: "ready" },
+  }));
+  await pending(page);
+  await expect(page.getByRole("button", { name: "처리 상태 다시 확인" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "v1 원본 내려받기" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "직접 작성하기", exact: true })).toBeDisabled();
+  await complete();
+});

@@ -36,8 +36,26 @@ jobs:
           node-version: 26.13.1
           cache: npm
       - run: npm ci
+      - name: Format completion changes on ephemeral runner
+        run: npx biome check --write 'src/lib/document-progress.ts' 'src/lib/document-status.ts' 'src/app/api/sources/[id]/revisions/[revision]/status/route.ts' 'src/components/DocumentProgress.tsx' 'src/components/FileVersions.tsx' 'tests/e2e/document-progress.spec.ts' 'tests/unit/document-progress.test.ts' 'tests/integration/document-progress.test.ts'
+      - name: Retain formatted review files
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: completion-review-sources
+          path: |
+            src/lib/document-progress.ts
+            src/lib/document-status.ts
+            src/app/api/sources/[id]/revisions/[revision]/status/route.ts
+            src/components/DocumentProgress.tsx
+            src/components/FileVersions.tsx
+            tests/e2e/document-progress.spec.ts
+            tests/unit/document-progress.test.ts
+            tests/integration/document-progress.test.ts
+          retention-days: 3
+
       - run: npx biome check tests/performance/latency-metrics.ts tests/performance/latency-recorder.ts tests/performance/setup-latency.ts tests/performance/user-flows.spec.ts tests/unit/latency-metrics.test.ts tests/performance/playwright.config.ts
-      - run: npm test -- tests/unit/latency-metrics.test.ts
+      - run: npm test -- tests/unit/latency-metrics.test.ts tests/unit/document-progress.test.ts
       - run: node --input-type=module -e 'import setup from "./tests/performance/setup-latency.ts"; await setup()'
       - run: npm run build
       - run: npx playwright install chromium
