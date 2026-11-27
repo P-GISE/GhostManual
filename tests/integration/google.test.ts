@@ -85,7 +85,7 @@ it("rejects unverified google email", async () => {
 });
 it("only keeps same-site next paths", async () => {
   const result = await finishGoogle(await stateFrom("//evil.example"), "code", as(profile()));
-  expect(result.nextPath).toBe("/");
+  expect(result.nextPath).toBe("/library");
 });
 it("callback refuses a state that this browser did not start", async () => {
   const { GET: start } = await import("../../src/app/api/auth/google/route.ts");
@@ -99,4 +99,17 @@ it("callback refuses a state that this browser did not start", async () => {
   const foreign = await callback(new Request(url));
   expect(foreign.headers.get("location")).toBe("http://localhost:3200/login?error=google_failed");
   expect(foreign.headers.get("set-cookie") ?? "").not.toContain("gm_owner=");
+});
+
+it("the Google start route without next stores the library destination", async () => {
+  const { GET: start } = await import("../../src/app/api/auth/google/route.ts");
+  const started = await start(new Request("http://localhost:3200/api/auth/google"));
+  expect(started.status).toBe(303);
+  const location = new URL(started.headers.get("location") ?? "");
+  expect(location.origin).toBe("https://accounts.google.com");
+  const state = location.searchParams.get("state") ?? "";
+  expect(Boolean(state)).toBe(true);
+  const result = await finishGoogle(state, "code", as(profile()));
+  expect(result.nextPath).toBe("/library");
+  expect((await requireSession(result.token, { allowPendingTerms: true })).role).toBe("owner");
 });

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { http, message } from "../lib/client";
+import { useCurrentWorkspace } from "./Teams";
 import { templateStatusText } from "./TemplateList";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 
@@ -26,6 +27,9 @@ type Template = z.infer<typeof templateSchema>;
 type Item = Template["items"][number];
 export function TemplateDetail({ id }: { readonly id: string }) {
   const router = useRouter();
+  // 팀 양식은 팀 화면으로, 기존 개인 양식은 보존한 개인 목록으로 돌아간다.
+  const workspace = useCurrentWorkspace();
+  const list = workspace?.name ? `/teams/${workspace.id}?tab=forms` : "/templates";
   const [template, setTemplate] = useState<Template | null>(null);
   const [error, setError] = useState("");
   const [confirmed, setConfirmed] = useState(false);
@@ -83,7 +87,7 @@ export function TemplateDetail({ id }: { readonly id: string }) {
     setError("");
     try {
       await http.delete(`/api/templates/${id}`).json();
-      router.push("/templates");
+      router.push(list);
     } catch (e) {
       setError(await message(e));
       setBusy(false);
@@ -142,7 +146,7 @@ export function TemplateDetail({ id }: { readonly id: string }) {
   };
   return (
     <>
-      <Link href="/templates">양식 목록</Link>
+      <Link href={list}>양식 목록</Link>
       <h1>{template.name}</h1>
       <p>
         <span className="badge">{templateStatusText[template.status]}</span>{" "}

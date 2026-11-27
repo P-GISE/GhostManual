@@ -13,6 +13,12 @@ beforeEach(() => {
 });
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("../../src/components/Teams", () => ({
+  useCurrentWorkspace: () => ({
+    id: "30000000-0000-4000-8000-000000000001",
+    name: "합성 준비된 팀",
+  }),
+}));
 
 import { SourceForm } from "../../src/components/SourceForm";
 

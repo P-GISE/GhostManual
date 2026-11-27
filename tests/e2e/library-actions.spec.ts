@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { loadExample, signUpAndVerify } from "./helpers";
+import { loadExample, openCurrentTeam, signUpAndVerify } from "./helpers";
 
 async function registerWorkbook(page: Page, title: string) {
   await page.getByRole("link", { name: "새 업무 등록" }).click();
@@ -10,7 +10,7 @@ async function registerWorkbook(page: Page, title: string) {
     .setInputFiles("tests/fixtures/xlsx/정산_1029.xlsx");
   await page.getByRole("button", { name: "원본 등록" }).click();
   await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
-  await page.getByRole("link", { name: "문서함", exact: true }).click();
+  await openCurrentTeam(page);
 }
 
 test("signing in returns to the landing page with a way into the library", async ({ page }) => {

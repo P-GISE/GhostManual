@@ -1,4 +1,5 @@
-import { TemplateList } from "../../components/TemplateList";
+import { LegacyTemplates } from "../../components/LegacyTemplates";
+
 export default function Page() {
-  return <TemplateList />;
+  return <LegacyTemplates />;
 }

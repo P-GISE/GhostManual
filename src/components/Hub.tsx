@@ -1,10 +1,13 @@
 "use client";
+import { HTTPError } from "ky";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { http, message, read } from "../lib/client";
+import { requestDiagnostic } from "../lib/request-diagnostic";
 import { taskState } from "../lib/task-state";
-import { roleText } from "./Teams";
+import { RequestDiagnostics, useRequestDiagnostics } from "./RequestDiagnostics";
+import { roleText, TeamCreate } from "./Teams";
 
 const workSchema = z.object({
   id: z.uuid(),
@@ -70,12 +73,19 @@ export function Hub() {
   const paging = useRef(false);
   const focusTarget = useRef<string | null>(null);
   const [query, setQuery] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createPending, setCreatePending] = useState(false);
+  const creatingBusy = useRef(false);
   const [filter, setFilter] = useState<"all" | "todo" | "published">("all");
   const [teamCursor, setTeamCursor] = useState<string | null>(null);
   const [back, setBack] = useState<(string | null)[]>([]);
   const [workCursors, setWorkCursors] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(true);
+  // 로그인 직후 첫 화면이라, 세션이 넘어오지 않았을 때의 진단을 여기서 남긴다.
+  const { record } = useRequestDiagnostics();
   const [failed, setFailed] = useState(false);
+  // 로그인이 풀린 채로 열었을 때는 다시 불러오기 대신 로그인으로 보낸다.
+  const [signedOut, setSignedOut] = useState(false);
   const [loadedKey, setLoadedKey] = useState("");
   const [reload, setReload] = useState(0);
   const [pendingGroup, setPendingGroup] = useState<string | null>(null);
@@ -104,7 +114,17 @@ export function Hub() {
         void read(`/api/overview?${params}`, overviewSchema)
           .then((value) => {
             if (!active || version !== generation.current) return;
+            record(requestDiagnostic("overview", undefined, 200));
             setOverview(value);
+            setSignedOut(false);
+            if (
+              !value.teams.length &&
+              !value.personal &&
+              !query.trim() &&
+              filter === "all" &&
+              !teamCursor
+            )
+              setCreating(true);
             setLoadedKey(key);
             setWorkCursors({});
             setLoading(false);
@@ -113,8 +133,11 @@ export function Hub() {
           .catch(async (e) => {
             const detail = await message(e);
             if (!active || version !== generation.current) return;
+            const status = e instanceof HTTPError ? e.response.status : undefined;
+            record(requestDiagnostic("overview", e, status));
             setError(detail);
             setFailed(true);
+            setSignedOut(status === 401);
             setLoading(false);
             paging.current = false;
           });
@@ -125,7 +148,7 @@ export function Hub() {
       active = false;
       clearTimeout(timer);
     };
-  }, [query, filter, teamCursor, key]);
+  }, [query, filter, teamCursor, key, record]);
   useEffect(() => {
     if (!loading && !pendingGroup && focusTarget.current) {
       const target =
@@ -188,11 +211,12 @@ export function Hub() {
       }
     }
   };
-  const busy = switching || loading || pendingGroup !== null;
+  const busy = switching || createPending || loading || pendingGroup !== null;
   // 다른 탭이 쿠키를 바꿀 수 있으므로 캐시된 current 대신 선택한 문서함을 맞춘다.
   const enter = (workspaceId: string | null, href: string) => (event: React.MouseEvent) => {
     event.preventDefault();
-    if (navigating.current || paging.current || failed || loadedKey !== key) return;
+    if (navigating.current || creatingBusy.current || paging.current || failed || loadedKey !== key)
+      return;
     navigating.current = true;
     setSwitching(true);
     setError("");
@@ -355,7 +379,19 @@ export function Hub() {
         </p>
       )}
       {switching && <p role="status">문서함을 전환하고 있습니다.</p>}
-      {(failed || retryWork) && (
+      {failed && <RequestDiagnostics />}
+      {signedOut && (
+        <>
+          <p className="help">
+            이 브라우저에서 로그인 상태를 확인할 수 없습니다. 앱 안에서 연 경우 메뉴에서 Safari 또는
+            Chrome으로 이 주소를 열고 다시 로그인해 주세요.
+          </p>
+          <p>
+            <Link href="/login">로그인 화면으로</Link>
+          </p>
+        </>
+      )}
+      {!signedOut && (failed || retryWork) && (
         <button
           type="button"
           className="secondary"
@@ -372,135 +408,145 @@ export function Hub() {
           다시 불러오기
         </button>
       )}
-      {!loading &&
-        !failed &&
-        loadedKey === key &&
-        overview &&
-        (empty ? (
-          <section className="panel">
-            <h2>팀 문서함을 만들어 시작하세요</h2>
-            <p className="muted">
-              팀을 만들어 함께 쓰거나 개인 문서함에 업무를 등록할 수 있습니다.
-            </p>
-            <div className="actions">
-              <Link className="button" href="/teams">
-                팀 만들기
-              </Link>
-              <Link
-                className="button secondary"
-                href="/sources/new"
-                aria-disabled={busy}
-                onClick={enter(null, "/sources/new")}
-              >
-                개인 문서함에 업무 등록
-              </Link>
-            </div>
-          </section>
-        ) : (
-          <>
-            {!overview.teams.length && !overview.personal && (
-              <p className="muted">조건에 맞는 업무가 없습니다.</p>
-            )}
-            {overview.teams.map((team) => {
-              const role = team.leadReady
-                ? team.lead
-                  ? "관리자"
-                  : team.role === "admin"
-                    ? "부관리자"
-                    : "팀원"
-                : roleText[team.role];
-              return (
-                <section key={team.id} className="hub-team" aria-labelledby={`team-${team.id}`}>
-                  <div className="hub-team-head">
-                    <h2 id={`team-${team.id}`} tabIndex={-1}>
-                      <Link href={`/teams/${team.id}`}>{team.name}</Link>
-                    </h2>
-                    <span className="badge">{role}</span>
-                    <span className="help">
-                      팀원 {team.memberCount}명 · 업무 {team.workCount}개
-                    </span>
-                    <span className="actions">
-                      <Link
-                        className="button"
-                        href="/sources/new"
-                        aria-label={`${team.name}에 새 업무 등록`}
-                        aria-disabled={busy}
-                        onClick={enter(team.id, "/sources/new")}
-                      >
-                        새 업무 등록
-                      </Link>
-                      {team.role === "admin" && (
-                        <Link
-                          className="button secondary"
-                          href={`/teams/${team.id}?tab=members`}
-                          aria-label={`${team.name} 팀원 초대`}
-                        >
-                          팀원 초대
-                        </Link>
-                      )}
+      {!loading && !failed && loadedKey === key && overview && !empty && (
+        <>
+          {!overview.teams.length && !overview.personal && (
+            <p className="muted">조건에 맞는 업무가 없습니다.</p>
+          )}
+          {overview.teams.map((team) => {
+            const role = team.leadReady
+              ? team.lead
+                ? "관리자"
+                : team.role === "admin"
+                  ? "부관리자"
+                  : "팀원"
+              : roleText[team.role];
+            return (
+              <section key={team.id} className="hub-team" aria-labelledby={`team-${team.id}`}>
+                <div className="hub-team-head">
+                  <h2 id={`team-${team.id}`} tabIndex={-1}>
+                    <Link
+                      href={`/teams/${team.id}`}
+                      aria-disabled={busy}
+                      onClick={enter(team.id, `/teams/${team.id}`)}
+                    >
+                      {team.name}
+                    </Link>
+                  </h2>
+                  <span className="badge">{role}</span>
+                  <span className="help">
+                    팀원 {team.memberCount}명 · 업무 {team.workCount}개
+                  </span>
+                  <span className="actions">
+                    <Link
+                      className="button"
+                      href="/sources/new"
+                      aria-label={`${team.name}에 새 업무 등록`}
+                      aria-disabled={busy}
+                      onClick={enter(team.id, "/sources/new")}
+                    >
+                      새 업무 등록
+                    </Link>
+                    {team.role === "admin" && (
                       <Link
                         className="button secondary"
-                        href={`/teams/${team.id}`}
-                        aria-label={`${team.name} 팀 화면 열기`}
+                        href={`/teams/${team.id}?tab=members`}
+                        aria-label={`${team.name} 팀원 초대`}
+                        aria-disabled={busy}
+                        onClick={enter(team.id, `/teams/${team.id}?tab=members`)}
                       >
-                        팀 화면 열기
+                        팀원 초대
                       </Link>
-                    </span>
-                  </div>
-                  {rows(team)}
-                </section>
-              );
-            })}
-            {overview.personal && (
-              <section className="hub-team" aria-labelledby="personal-works">
-                <div className="hub-team-head">
-                  <h2 id="personal-works" tabIndex={-1}>
-                    개인 업무
-                  </h2>
-                  <span className="help">업무 {overview.personal.workCount}개</span>
+                    )}
+                    <Link
+                      className="button secondary"
+                      href={`/teams/${team.id}`}
+                      aria-label={`${team.name} 팀 화면 열기`}
+                      aria-disabled={busy}
+                      onClick={enter(team.id, `/teams/${team.id}`)}
+                    >
+                      팀 화면 열기
+                    </Link>
+                  </span>
                 </div>
-                <p className="help">
-                  개인 문서함에 보관한 업무입니다. 그대로 이용하거나, 필요하면 업무를 열어 팀
-                  문서함으로 옮길 수 있습니다.
-                </p>
-                {rows(overview.personal, true)}
+                {rows(team)}
               </section>
-            )}
-            {(back.length > 0 || overview.nextTeamCursor) && (
-              <nav className="actions" aria-label="문서함 페이지">
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={busy || !back.length}
-                  onClick={() => changeTeam(back.at(-1) ?? null, true)}
-                >
-                  이전 문서함
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={busy || !overview.nextTeamCursor}
-                  onClick={() => changeTeam(overview.nextTeamCursor)}
-                >
-                  다음 문서함
-                </button>
-              </nav>
-            )}
-            <div className="actions">
-              <Link
-                className="button secondary"
-                href="/sources/new"
-                aria-disabled={busy}
-                onClick={enter(null, "/sources/new")}
+            );
+          })}
+          {overview.personal && (
+            <section className="hub-team" aria-labelledby="personal-works">
+              <div className="hub-team-head">
+                <h2 id="personal-works" tabIndex={-1}>
+                  개인 업무
+                </h2>
+                <span className="help">업무 {overview.personal.workCount}개</span>
+              </div>
+              <p className="help">
+                개인 문서함에 보관한 업무입니다. 그대로 이용하거나, 필요하면 업무를 열어 팀
+                문서함으로 옮길 수 있습니다.
+              </p>
+              {rows(overview.personal, true)}
+            </section>
+          )}
+          {(back.length > 0 || overview.nextTeamCursor) && (
+            <nav className="actions" aria-label="문서함 페이지">
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy || !back.length}
+                onClick={() => changeTeam(back.at(-1) ?? null, true)}
               >
-                개인 문서함에 업무 등록
-              </Link>
-              <Link className="button secondary" href="/teams">
-                팀 만들기
-              </Link>
-            </div>
-          </>
-        ))}
+                이전 문서함
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy || !overview.nextTeamCursor}
+                onClick={() => changeTeam(overview.nextTeamCursor)}
+              >
+                다음 문서함
+              </button>
+            </nav>
+          )}
+        </>
+      )}
+      {overview && (
+        <div className="actions">
+          <Link
+            href="/templates"
+            aria-disabled={busy || failed || loadedKey !== key}
+            onClick={enter(null, "/templates")}
+          >
+            기존 개인 양식
+          </Link>
+        </div>
+      )}
+      {creating ? (
+        <TeamCreate
+          heading={empty ? "팀 문서함을 만들어 시작하세요" : "팀 문서함 만들기"}
+          disabled={switching || loading || pendingGroup !== null || failed || loadedKey !== key}
+          onBusyChange={(nextBusy) => {
+            if (
+              nextBusy &&
+              (navigating.current ||
+                creatingBusy.current ||
+                paging.current ||
+                failed ||
+                loadedKey !== key)
+            )
+              return false;
+            creatingBusy.current = nextBusy;
+            setCreatePending(nextBusy);
+            return true;
+          }}
+        />
+      ) : !busy && !failed && loadedKey === key && overview ? (
+        <div className="actions">
+          <button type="button" className="secondary" onClick={() => setCreating(true)}>
+            팀 만들기
+          </button>
+        </div>
+      ) : null}
     </>
   );
 }

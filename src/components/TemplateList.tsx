@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { http, message, read } from "../lib/client";
-import { useWorkspaceName } from "./Teams";
 
 export const templateStatusText = {
   reading: "읽는 중",
@@ -22,10 +21,8 @@ const listSchema = z.array(
     isDefault: z.boolean(),
   }),
 );
-// embedded: 팀 화면의 "양식" 탭 안에 넣을 때.
-export function TemplateList({ embedded = false }: { readonly embedded?: boolean } = {}) {
-  const workspaceName = useWorkspaceName();
-  const Heading = embedded ? "h2" : "h1";
+// 팀 화면의 "양식" 탭.
+export function TemplateList({ allowUpload = true }: { readonly allowUpload?: boolean } = {}) {
   const router = useRouter();
   const [templates, setTemplates] = useState<z.infer<typeof listSchema> | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -37,7 +34,7 @@ export function TemplateList({ embedded = false }: { readonly embedded?: boolean
       .catch(async (e) => setError(await message(e)));
   }, []);
   async function upload() {
-    if (!file) return;
+    if (!allowUpload || !file) return;
     setBusy(true);
     setError("");
     try {
@@ -54,8 +51,7 @@ export function TemplateList({ embedded = false }: { readonly embedded?: boolean
   }
   return (
     <>
-      {!embedded && <span className="eyebrow">{workspaceName}</span>}
-      <Heading>양식</Heading>
+      <h2>양식</h2>
       <p className="muted">
         회사에서 쓰는 인수인계 양식을 등록하면 그 양식의 항목에 맞춰 매뉴얼을 만들 수 있습니다.
       </p>
@@ -64,26 +60,28 @@ export function TemplateList({ embedded = false }: { readonly embedded?: boolean
           {error}
         </p>
       )}
-      <section className="panel">
-        <h2>양식 등록</h2>
-        <label htmlFor="template-file">양식 파일</label>
-        <input
-          id="template-file"
-          type="file"
-          accept=".docx,.hwpx"
-          aria-describedby="template-file-help"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-        />
-        <p id="template-file-help" className="help">
-          내용이 채워진 문서가 아니라 빈 양식을 올리세요. DOCX·HWPX, 최대 5 MB, 20개까지 보관할 수
-          있습니다.
-        </p>
-        <div className="actions">
-          <button type="button" disabled={!file || busy} onClick={upload}>
-            {busy ? "등록 중…" : "양식 등록"}
-          </button>
-        </div>
-      </section>
+      {allowUpload && (
+        <section className="panel">
+          <h2>양식 등록</h2>
+          <label htmlFor="template-file">양식 파일</label>
+          <input
+            id="template-file"
+            type="file"
+            accept=".docx,.hwpx"
+            aria-describedby="template-file-help"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+          <p id="template-file-help" className="help">
+            내용이 채워진 문서가 아니라 빈 양식을 올리세요. DOCX·HWPX, 최대 5 MB, 20개까지 보관할 수
+            있습니다.
+          </p>
+          <div className="actions">
+            <button type="button" disabled={!file || busy} onClick={upload}>
+              {busy ? "등록 중…" : "양식 등록"}
+            </button>
+          </div>
+        </section>
+      )}
       <h2>등록한 양식</h2>
       {!templates ? (
         !error && (

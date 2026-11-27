@@ -15,11 +15,8 @@ import {
 import { type RequestStage, requestDiagnostic } from "../lib/request-diagnostic";
 import { taskState } from "../lib/task-state";
 import { RequestDiagnostics, useRequestDiagnostics } from "./RequestDiagnostics";
-import { useWorkspaceName } from "./Teams";
-// embedded: 팀 화면의 "업무" 탭 안에 넣을 때. 화면 제목은 팀 화면이 갖는다.
-export function ManualList({ embedded = false }: { readonly embedded?: boolean } = {}) {
-  const workspaceName = useWorkspaceName();
-  const Heading = embedded ? "h2" : "h1";
+// 팀 화면의 "업무" 탭. 화면 제목은 팀 화면이 갖는다.
+export function ManualList() {
   const { record } = useRequestDiagnostics();
   const mounted = useRef(false);
   const [manuals, setManuals] = useState<Manual[]>([]);
@@ -138,7 +135,7 @@ export function ManualList({ embedded = false }: { readonly embedded?: boolean }
   if (loadError) {
     return (
       <section className="panel">
-        <Heading>업무 문서함</Heading>
+        <h2>업무</h2>
         <p className="error" role="alert">
           {loadError.message}
         </p>
@@ -155,7 +152,7 @@ export function ManualList({ embedded = false }: { readonly embedded?: boolean }
         )}
         <p>
           {loadError.unauthorized ? (
-            <Link href="/login?next=%2Fmanuals">로그인 화면으로</Link>
+            <Link href="/login">로그인 화면으로</Link>
           ) : (
             <Link href="/">시작 화면으로</Link>
           )}
@@ -167,8 +164,7 @@ export function ManualList({ embedded = false }: { readonly embedded?: boolean }
     <>
       <div className="section-heading">
         <div>
-          {!embedded && <span className="eyebrow">{workspaceName}</span>}
-          <Heading>{embedded ? "업무" : "업무 문서함"}</Heading>
+          <h2>업무</h2>
           <p className="muted">
             업무 하나에 원본 파일과 매뉴얼이 함께 있습니다. 오른쪽 버튼이 지금 할 일입니다.
           </p>

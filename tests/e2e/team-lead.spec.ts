@@ -7,7 +7,7 @@ test("the lead appoints a deputy and hands the lead over; only the lead sees lea
   page,
   browser,
 }) => {
-  await signUpAndVerify(page, undefined, "대표 담당자");
+  await signUpAndVerify(page, undefined, "대표 담당자", false);
   const origin = new URL(page.url()).origin;
   const created = await page.request.post("/api/workspaces", {
     headers: { Origin: origin },
@@ -18,7 +18,7 @@ test("the lead appoints a deputy and hands the lead over; only the lead sees lea
 
   const context = await browser.newContext({ viewport: page.viewportSize() });
   const other = await context.newPage();
-  await signUpAndVerify(other, undefined, "신입");
+  await signUpAndVerify(other, undefined, "신입", false);
   const invitee = await (await other.request.get("/api/me")).json();
   const invited = await page.request.post(`/api/workspaces/${teamId}/invites`, {
     headers: { Origin: origin },
@@ -35,7 +35,7 @@ test("the lead appoints a deputy and hands the lead over; only the lead sees lea
     : undefined;
   if (!link) throw new Error("Missing synthetic invite");
   await other.goto(link);
-  await expect(other).toHaveURL(/\/manuals$/);
+  await expect(other).toHaveURL(new RegExp(`/teams/${teamId}$`));
 
   // 관리자의 팀원 목록: 내 줄에는 역할 버튼이 없고, 팀원 줄에 지정·넘기기·내보내기가 있다.
   await page.goto(`/teams/${teamId}?tab=members`);

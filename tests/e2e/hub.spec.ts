@@ -1,13 +1,15 @@
 import { expect, test } from "@playwright/test";
-import { signUpAndVerify } from "./helpers";
+import { signUpAndVerify, usePersonalSession } from "./helpers";
 
 test("my library shows every team's work and opens it in the right team", async ({ page }) => {
-  await signUpAndVerify(page, undefined, "허브 담당자");
-  await page.getByRole("link", { name: "내 문서함", exact: true }).click();
+  await signUpAndVerify(page, undefined, "허브 담당자", false);
+  await page
+    .getByRole("navigation", { name: "주 메뉴" })
+    .getByRole("link", { name: "내 문서함" })
+    .click();
   await expect(page.getByRole("heading", { name: "내 문서함", level: 1 })).toBeVisible();
   // 팀도 개인 업무도 없으면 팀 만들기부터 안내한다.
   await expect(page.getByRole("heading", { name: "팀 문서함을 만들어 시작하세요" })).toBeVisible();
-  await page.getByRole("link", { name: "팀 만들기" }).click();
   await page.getByLabel("팀 이름").fill("허브 팀");
   await page.getByRole("button", { name: "팀 문서함 만들기" }).click();
   await page.getByRole("link", { name: "새 업무 등록" }).click();
@@ -20,9 +22,7 @@ test("my library shows every team's work and opens it in the right team", async 
   const sourceUrl = page.url();
 
   // 세션을 개인 문서함으로 돌려 놓아도 내 문서함에는 팀의 업무가 보인다.
-  await page.getByLabel("문서함 전환").selectOption({ label: "내 문서함" });
-  await expect(page.getByRole("heading", { name: "업무 문서함", level: 1 })).toBeVisible();
-  await expect(page.getByText("허브에서 볼 업무")).toHaveCount(0);
+  await usePersonalSession(page);
   await page.goto("/library");
   const team = page.getByRole("region", { name: "허브 팀" });
   await expect(team.getByText("팀원 1명 · 업무 1개", { exact: true })).toBeVisible();
@@ -48,5 +48,6 @@ test("my library shows every team's work and opens it in the right team", async 
   await team.getByRole("link", { name: "허브에서 볼 업무" }).click();
   await expect(page).toHaveURL(sourceUrl);
   await expect(page.getByRole("heading", { name: "허브에서 볼 업무" })).toBeVisible();
-  await expect(page.getByLabel("문서함 전환").locator("option:checked")).toHaveText("허브 팀");
+  // 업무 화면 머리의 위치 표시가 지금 어느 팀인지 알려 준다.
+  await expect(page.locator(".crumb")).toHaveText("현재 위치: 내 문서함 › 허브 팀");
 });

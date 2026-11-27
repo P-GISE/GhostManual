@@ -60,6 +60,7 @@ test("workspace and document surfaces remain aligned with synthetic API data", a
   page,
 }, testInfo) => {
   const { manual, source } = await import("./design-data");
+  const { hubOverview } = await import("../fixtures/hub-overview");
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -67,6 +68,7 @@ test("workspace and document surfaces remain aligned with synthetic API data", a
     const values: Record<string, unknown> = {
       "/api/manuals": [manual],
       "/api/sources": [source],
+      "/api/overview": hubOverview(),
       [`/api/manuals/${manual.id}`]: manual,
       [`/api/sources/${source.id}`]: source,
       [`/api/manuals/${manual.id}/versions`]: [manual.published],
@@ -83,7 +85,7 @@ test("workspace and document surfaces remain aligned with synthetic API data", a
     await route.fulfill({ json: values[path] });
   });
   for (const [name, path, heading] of [
-    ["library", "/manuals", "업무 문서함"],
+    ["library", "/library", "내 문서함"],
     ["manual", `/manuals/${manual.id}`, manual.draft.title],
     ["editor", `/manuals/${manual.id}/edit`, "매뉴얼 수정"],
     ["source", `/sources/${source.id}`, source.title],
@@ -146,6 +148,22 @@ test("starting is visible without scrolling", async ({ page }) => {
 });
 
 test("form placeholder remains readable against its input background", async ({ page }) => {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({ json: { name: "합성 팀원", admin: false } }),
+  );
+  await page.route("**/api/workspaces", async (route) => {
+    expect(route.request().method()).toBe("GET");
+    await route.fulfill({
+      json: [
+        {
+          id: "30000000-0000-4000-8000-000000000001",
+          name: "합성 준비된 팀",
+          role: "member",
+          current: true,
+        },
+      ],
+    });
+  });
   await page.goto("/sources/new");
   const colors = await page.getByLabel("자료 제목").evaluate((input) => ({
     text: getComputedStyle(input, "::placeholder").color,
@@ -224,14 +242,14 @@ test("a first Google sign-in must agree before starting", async ({ page }) => {
       await route.fulfill({ json: [] });
     else await route.fulfill({ json: {} });
   });
-  await page.goto("/welcome?next=%2Fmanuals");
+  await page.goto("/welcome");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("이용약관을 확인해 주세요");
   await expect(page.getByText("new@example.com")).toBeVisible();
   const start = page.getByRole("button", { name: "동의하고 시작하기" });
   await expect(start).toBeDisabled();
   await page.getByLabel("이용약관과 개인정보 안내에 동의합니다.").check();
   await start.click();
-  await expect(page).toHaveURL(/\/manuals$/);
+  await expect(page).toHaveURL(/\/library$/);
   expect(calls.agreed).toBe(1);
 });
 

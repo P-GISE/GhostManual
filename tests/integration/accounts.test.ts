@@ -174,3 +174,29 @@ it("verification mail keeps a same-site destination and drops others", async () 
   await signup({ email: other, name: "외부", password, next: "//evil.example", agreed: true });
   expect(mailsTo(mail, other).at(-1)).not.toContain("next=");
 });
+
+it.each([
+  { next: undefined, destination: "/library" },
+  {
+    next: "/share#synthetic-reader-destination",
+    destination: "/share#synthetic-reader-destination",
+  },
+])(
+  "verification route preserves $destination and opens an owner session",
+  async ({ next, destination }) => {
+    const { GET: verify } = await import("../../src/app/api/auth/verify/route.ts");
+    const email = uniqueEmail();
+    await signup({ email, name: "합성 인증 목적지", password, agreed: true });
+    const url = new URL("http://localhost:3200/api/auth/verify");
+    url.searchParams.set("token", verificationToken(mail, email));
+    if (next !== undefined) url.searchParams.set("next", next);
+    const response = await verify(new Request(url));
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(`http://localhost:3200${destination}`);
+    const cookie = response.headers.get("set-cookie") ?? "";
+    const ownerToken = /^gm_owner=([^;]+)/.exec(cookie)?.[1];
+    expect(Boolean(ownerToken)).toBe(true);
+    expect(cookie.includes("HttpOnly")).toBe(true);
+    expect((await requireSession(ownerToken ?? "")).role).toBe("owner");
+  },
+);

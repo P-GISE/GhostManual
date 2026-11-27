@@ -199,7 +199,7 @@ export const http = ky.create({
               body: JSON.stringify({ workspaceId: null }),
               credentials: "same-origin",
             });
-            window.location.assign("/manuals");
+            window.location.assign("/library");
           }
           return;
         }

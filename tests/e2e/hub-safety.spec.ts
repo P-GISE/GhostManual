@@ -78,7 +78,7 @@ test("hub rechecks a cached-current task and serializes repeated navigation whil
   }
 });
 
-test("hub keeps personal registration available and does not classify current personal work as legacy", async ({
+test("hub offers team creation, not personal registration, and shows personal work without calling it legacy", async ({
   page,
 }) => {
   await mockHub(page, {
@@ -88,9 +88,10 @@ test("hub keeps personal registration available and does not classify current pe
     counts: { all: 0, todo: 0, published: 0 },
   });
   await page.goto("/library");
-  await expect(
-    page.getByRole("link", { name: "개인 문서함에 업무 등록", exact: true }),
-  ).toBeVisible();
+  // 새 업무는 팀에만 올린다. 팀이 없으면 팀 만들기가 바로 나온다.
+  await expect(page.getByRole("heading", { name: "팀 문서함을 만들어 시작하세요" })).toBeVisible();
+  await expect(page.getByLabel("팀 이름")).toBeVisible();
+  await expect(page.getByRole("link", { name: "개인 문서함에 업무 등록" })).toHaveCount(0);
   await page.unroute("**/api/**");
   await mockHub(page, hubOverview(false, true));
   await page.reload();
@@ -99,7 +100,9 @@ test("hub keeps personal registration available and does not classify current pe
     0,
   );
   await expect(page.getByRole("link", { name: "합성 개인 업무", exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "개인 문서함에 업무 등록", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "개인 문서함에 업무 등록" })).toHaveCount(0);
+  // 팀이 있으면 팀 만들기는 버튼을 눌러야 나온다.
+  await expect(page.getByLabel("팀 이름")).toHaveCount(0);
+  await page.getByRole("button", { name: "팀 만들기", exact: true }).click();
+  await expect(page.getByLabel("팀 이름")).toBeVisible();
 });

@@ -18,12 +18,14 @@ test("sign up, verify by mail, log out and log back in", async ({ page }) => {
   await expect(page.getByText("박효민")).toBeVisible();
   await page.getByRole("button", { name: "로그아웃" }).click();
   await expect(page).toHaveURL(/\/$/);
+  // 예전 주소는 내 문서함으로 가고, 로그인이 풀려 있으면 로그인으로 가는 길을 보여 준다.
   await page.goto("/manuals");
+  await expect(page).toHaveURL(/\/library$/);
   await expect(page.getByRole("link", { name: "로그인 화면으로" })).toBeVisible();
   await page.getByRole("link", { name: "로그인 화면으로" }).click();
   await logIn(page, email);
-  await expect(page).toHaveURL(/\/manuals$/);
-  await expect(page.getByText("아직 등록한 업무가 없습니다.")).toBeVisible();
+  await expect(page).toHaveURL(/\/library$/);
+  await expect(page.getByRole("region", { name: "테스트 팀" })).toBeVisible();
 });
 
 test("wrong password and unverified accounts get plain guidance", async ({ page }) => {
@@ -119,7 +121,7 @@ test("a forgotten password is reset by mail and the new one works", async ({ pag
   await expect(page.locator("[role=alert].error")).toContainText("올바르지 않습니다");
   await page.getByLabel("비밀번호", { exact: true }).fill(fresh);
   await page.getByRole("button", { name: "로그인", exact: true }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/library$/);
 });
 
 test("signup cannot be sent without agreeing to the terms", async ({ page }) => {

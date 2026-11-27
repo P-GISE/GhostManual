@@ -9,7 +9,6 @@ test("prewritten example can be reviewed shared and searched without pretending 
   page.on("pageerror", (error) => errors.push(error.message));
   await signUpAndVerify(page);
   await loadExample(page);
-  await expect(page.getByRole("heading", { name: "업무 문서함" })).toBeVisible();
   await page.getByRole("link", { name: "신입 구성원 업무 계정 발급" }).first().click();
   await expect(page.getByText("미리 작성된 합성 예제", { exact: true })).toBeVisible();
   await page.getByLabel("원본과 업무 내용을 확인했습니다.").check();

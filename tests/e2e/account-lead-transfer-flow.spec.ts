@@ -21,7 +21,17 @@ async function joinTeam(host: Page, guest: Page, teamId: string, headers: Record
     : undefined;
   if (!url) throw new Error("Missing isolated team invitation");
   await guest.goto(url);
-  await expect(guest).toHaveURL(/\/manuals$/);
+  await expect(guest).toHaveURL(`${new URL(url).origin}/teams/${teamId}`);
+  await expect
+    .poll(async () => {
+      const response = await guest.request.get("/api/workspaces");
+      expect(response.status()).toBe(200);
+      const list = z
+        .array(z.object({ id: z.uuid(), current: z.boolean() }))
+        .parse(await response.json());
+      return list.find((workspace) => workspace.current)?.id;
+    })
+    .toBe(teamId);
 }
 
 test("another team's session can find both lead teams, explicitly transfer and then delete without losing team content", async ({
@@ -29,7 +39,7 @@ test("another team's session can find both lead teams, explicitly transfer and t
   browser,
 }) => {
   test.setTimeout(90000);
-  await signUpAndVerify(page, undefined, "탈퇴 안내 담당자");
+  await signUpAndVerify(page, undefined, "탈퇴 안내 담당자", false);
   const origin = new URL(page.url()).origin;
   // Page-only visitor headers do not isolate APIRequestContext mail limits.
   const octet = () => Math.floor(Math.random() * 250) + 1;
@@ -44,7 +54,7 @@ test("another team's session can find both lead teams, explicitly transfer and t
   const context = await browser.newContext({ viewport: page.viewportSize() });
   try {
     const successor = await context.newPage();
-    await signUpAndVerify(successor, undefined, "이양 후임 담당자");
+    await signUpAndVerify(successor, undefined, "이양 후임 담당자", false);
     const selected = await create(successor, "합성 참여 팀 C");
     await joinTeam(page, successor, first, headers);
     await joinTeam(page, successor, second, headers);
