@@ -22,3 +22,5 @@ Ruling: sourceMove가 늦게 마운트되므로 pending Promise만 합치는 대
 801162a의 집중 회귀45993300365는 지연 응답을 포함한3건을 통과했다. 일반CI에서 새 테스트 선언 줄바꿈1건이 실패해 포맷만 정정했다. 앱 구현과 측정 도구는 그대로 유지한다.
 
 11f88ef의 기존 단위 document-source-state fixture는 첫 GET에도 개별 saved 객체를 반환해 새 bootstrap schema 검증에서 실패했다(282성공/1실패). 부모 추출 갱신 기대값은 유지하고 fixture 응답을 {revisions,latest:saved}로 맞춘다. 실제 브라우저의 동일 동작은 집중 회귀에서 통과했다.
+
+Ruling: 첫12f2 측정은 요청 수3→2/9→7을 확인했지만 기준f080 CPU가Intel6975P-C, 후보CPU가AMD9V74로 달랐고 DOCX p95가 커졌다. 실행기 차이를 성능 향상으로 오인하지 않도록 같은 runner에서 baseline41dd4e7→후보를 순차 실행하는 paired workflow를 추가한다. 각 단계는 같은 기존 harness/fixture 해시·Node·CPU와 별도 새 DB013을 사용한다. 두 checkout의 실제 commit을 기록하고 event SHA와 구분하며, 기동 순서/캐시/공유 호스트 잡음은 여전히 한계다. 운영 자원·DB를 사용하지 않는다.
