@@ -1,5 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { cpus, totalmem } from "node:os";
+import { setTimeout } from "node:timers/promises";
 import { expect, test } from "@playwright/test";
 import { pool } from "../../src/lib/db.ts";
 import { extractDocument } from "../../src/lib/document-extractor.ts";
@@ -33,7 +34,10 @@ test("isolated native upload and read baseline", async ({ page }) => {
       });
       expect(switched.ok()).toBe(true);
       await openTeam(page, teams.get(format) ?? "");
+      let lastStarted = 0;
       for (let sample = 0; sample <= 30; sample++) {
+        await setTimeout(Math.max(0, 3500 - (performance.now() - lastStarted)));
+        lastStarted = performance.now();
         const marker = "LATENCY_" + format.toUpperCase() + "_" + sample;
         const payload = fixture(format, marker);
         sizes[format] ??= [];
@@ -165,6 +169,7 @@ test("isolated native upload and read baseline", async ({ page }) => {
           profile: "GitHub hosted runner, no production cgroup limits; one desktop Chromium user",
           migrations: "001-013 only; dedicated ephemeral service",
           cache: "first sample per format is warmup; remaining browser/HTTP cache is not disabled",
+          pacing: "minimum3500ms between registration samples, outside measured phases; source write20/min unchanged",
           fixture:
             "small synthetic native packages; 31 files per format/team; growing upload/read population",
           excluded: [
