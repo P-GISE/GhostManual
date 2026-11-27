@@ -23,3 +23,9 @@ tests/e2e/workspace-crumb-refresh.spec.ts는 실제 격리 DB에서 회원/팀/�
 ## 운영 경계
 
 이번 작업은 GitHub 코드·격리 CI·합성 자료 범위다. 운영 배포·DB014·backfill·대표 지정·운영 부하·환경/보호 설정 변경·실제 AI/메일·자료/이미지 삭제는 하지 않는다. 기존 개인 자료·양식·공유를 보존한다.
+
+## 최신 문서 커밋 재검증 중 기존 fixture 경합 보완
+
+1eeff6d의 PR CI45984368997은 E2E223통과/1실패였다. mobile의 account-lead-transfer-flow가 초대 수락 직후 API로 다른 팀 세션을 선택한 뒤 공유 설정200 대신404를 받았다. TeamPage는 members→workspaces 초기화 뒤 현재 팀이 다르면 session/workspace POST·전체 reload를 한다. 기존 helper는 초대 쿠키의 current만 poll하므로 그 초기화/reload와 API fixture의 세션 변경이 겹칠 수 있었다.
+
+joinTeam helper에서 aligned=true인 경우에만 표시되는 업무H2를 기다린 뒤 후속 API fixture를 시작하도록 보완한다. 임의 sleep/공유404 허용/권한 우회/테스트 제외·재시도는 추가하지 않는다. 기존 앱 코드는 변경하지 않는다. 이 경합은 이번 이름 갱신과 별개의 기존 fixture 준비 조건이며 최종 커밋의 전체 CI 결과는 PR120 최신 head를 따른다.

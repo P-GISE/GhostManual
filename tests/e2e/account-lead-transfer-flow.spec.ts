@@ -32,6 +32,9 @@ async function joinTeam(host: Page, guest: Page, teamId: string, headers: Record
       return list.find((workspace) => workspace.current)?.id;
     })
     .toBe(teamId);
+  // The invitation cookie can arrive before TeamPage finishes its own alignment/reload.
+  // Wait for the aligned work panel before API setup changes the shared cookie again.
+  await expect(guest.getByRole("heading", { name: "업무", level: 2, exact: true })).toBeVisible();
 }
 
 test("another team's session can find both lead teams, explicitly transfer and then delete without losing team content", async ({
