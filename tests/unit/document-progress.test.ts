@@ -3,7 +3,9 @@ import { documentStatusSchema, waitForDocument } from "../../src/lib/document-pr
 
 const revisionId = "00000000-0000-4000-8000-000000000001";
 const status = (value: "queued" | "ready") => ({ revisionId, status: value });
-afterEach(() => { vi.useRealTimers(); });
+afterEach(() => {
+  vi.useRealTimers();
+});
 it("uses 250,500,1000,2000ms capped delays and stops at terminal", async () => {
   vi.useFakeTimers();
   const read = vi.fn().mockResolvedValue(status("queued"));
@@ -27,7 +29,12 @@ it("uses 250,500,1000,2000ms capped delays and stops at terminal", async () => {
 it("does not overlap a slow status request", async () => {
   vi.useFakeTimers();
   let resolve = (_value: ReturnType<typeof status>) => {};
-  const read = vi.fn(() => new Promise<ReturnType<typeof status>>((done) => { resolve = done; }));
+  const read = vi.fn(
+    () =>
+      new Promise<ReturnType<typeof status>>((done) => {
+        resolve = done;
+      }),
+  );
   const task = waitForDocument(read, new AbortController().signal);
   await vi.advanceTimersByTimeAsync(10000);
   expect(read).toHaveBeenCalledTimes(1);
@@ -49,7 +56,12 @@ it("ignores a request completing after abort", async () => {
   vi.useFakeTimers();
   const controller = new AbortController();
   let resolve = (_value: ReturnType<typeof status>) => {};
-  const read = vi.fn(() => new Promise<ReturnType<typeof status>>((done) => { resolve = done; }));
+  const read = vi.fn(
+    () =>
+      new Promise<ReturnType<typeof status>>((done) => {
+        resolve = done;
+      }),
+  );
   const task = waitForDocument(read, controller.signal).catch((error) => error);
   await vi.advanceTimersByTimeAsync(250);
   controller.abort();

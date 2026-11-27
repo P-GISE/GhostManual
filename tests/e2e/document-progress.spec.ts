@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { pool } from "../../src/lib/db.ts";
 import { extractDocument } from "../../src/lib/document-extractor.ts";
 import { claimDocumentJob, completeDocumentJob } from "../../src/lib/document-jobs.ts";
@@ -11,12 +11,15 @@ async function pending(page: Page) {
     headers: { Origin: "http://localhost:3200" },
     multipart: {
       title: "완료 감지 합성 자료",
-      file: { name: "progress.docx", mimeType: "application/octet-stream",
-        buffer: Buffer.from(pack(docx(wp("완료 확인 합성 본문")))) },
+      file: {
+        name: "progress.docx",
+        mimeType: "application/octet-stream",
+        buffer: Buffer.from(pack(docx(wp("완료 확인 합성 본문")))),
+      },
     },
   });
   expect(response.status()).toBe(202);
-  const saved = await response.json() as { id: string; revisionId: string };
+  const saved = (await response.json()) as { id: string; revisionId: string };
   const loaded = page.waitForResponse((r) => r.url().includes("/revisions?includeLatest=1"));
   await page.goto("/sources/" + saved.id);
   await loaded;
@@ -31,7 +34,9 @@ async function complete() {
   expect(result.status).toBe("ready");
   expect(await completeDocumentJob(job, result)).toBe(true);
 }
-test.afterAll(async () => { await pool.end(); });
+test.afterAll(async () => {
+  await pool.end();
+});
 test("status endpoint returns only scoped revision identity and state", async ({ page }) => {
   const saved = await pending(page);
   const response = await page.request.get("/api/sources/" + saved.id + "/revisions/1/status");
@@ -63,13 +68,18 @@ test("status failures stop and explicit retry reads the same revision", async ({
   await page.unroute("**/revisions/1/status");
   await page.getByRole("button", { name: "처리 상태 다시 확인" }).click();
   await expect(page.getByRole("link", { name: "v1 원본 내려받기" })).toBeVisible({ timeout: 1500 });
-  const revisions = await (await page.request.get("/api/sources/" + saved.id + "/revisions")).json();
+  const revisions = await (
+    await page.request.get("/api/sources/" + saved.id + "/revisions")
+  ).json();
   expect(revisions).toHaveLength(1);
 });
-test("terminal metadata never enables a document when authorized detail fails", async ({ page }) => {
+test("terminal metadata never enables a document when authorized detail fails", async ({
+  page,
+}) => {
   await pending(page);
   await page.route("**/revisions/1", (route) =>
-    route.fulfill({ status: 403, json: { error: { message: "권한 변경" } } }));
+    route.fulfill({ status: 403, json: { error: { message: "권한 변경" } } }),
+  );
   await complete();
   await expect(page.getByRole("button", { name: "처리 상태 다시 확인" })).toBeVisible();
   await expect(page.getByRole("link", { name: "v1 원본 내려받기" })).toHaveCount(0);
@@ -90,13 +100,17 @@ test("leaving a pending document cancels its status loop", async ({ page }) => {
   await page.waitForTimeout(700);
   expect(calls).toBe(stopped);
   await complete();
-  expect((await page.request.get("/api/sources/" + saved.id + "/revisions/1/status")).status()).toBe(200);
+  expect(
+    (await page.request.get("/api/sources/" + saved.id + "/revisions/1/status")).status(),
+  ).toBe(200);
 });
 
 test("a mismatched status identity cannot enable the selected document", async ({ page }) => {
-  await page.route("**/revisions/1/status", (route) => route.fulfill({
-    json: { revisionId: "00000000-0000-4000-8000-000000000001", status: "ready" },
-  }));
+  await page.route("**/revisions/1/status", (route) =>
+    route.fulfill({
+      json: { revisionId: "00000000-0000-4000-8000-000000000001", status: "ready" },
+    }),
+  );
   await pending(page);
   await expect(page.getByRole("button", { name: "처리 상태 다시 확인" })).toBeVisible();
   await expect(page.getByRole("link", { name: "v1 원본 내려받기" })).toHaveCount(0);

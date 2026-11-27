@@ -234,16 +234,19 @@ export function FileVersions({
       ++selectionRequest.current;
     };
   }, [id, query, reader, onUploaded]);
-  const completeExtraction = useCallback((detail: FileRevision, selectionVersion: number) => {
-    if (selectionVersion !== selectionRequest.current) return;
-    setSelected((current) => current?.revisionId === detail.revisionId ? detail : current);
-    setStatus(`v${detail.revision}: ${statusText[detail.compareStatus]}.`);
-    onUploaded(detail);
-    void refresh().catch(async (error) => {
-      const detail = await message(error);
-      if (selectionVersion === selectionRequest.current) setError(detail);
-    });
-  }, [onUploaded, refresh]);
+  const completeExtraction = useCallback(
+    (detail: FileRevision, selectionVersion: number) => {
+      if (selectionVersion !== selectionRequest.current) return;
+      setSelected((current) => (current?.revisionId === detail.revisionId ? detail : current));
+      setStatus(`v${detail.revision}: ${statusText[detail.compareStatus]}.`);
+      onUploaded(detail);
+      void refresh().catch(async (error) => {
+        const detail = await message(error);
+        if (selectionVersion === selectionRequest.current) setError(detail);
+      });
+    },
+    [onUploaded, refresh],
+  );
   async function retryExtraction() {
     if (!selected || busy || reader) return;
     onBusyChange(true);
@@ -366,17 +369,19 @@ export function FileVersions({
           {status}
         </p>
       )}
-      {!reader && selected && ["queued", "processing"].includes(selected.extraction?.status ?? "") && (
-        <DocumentProgress
-          key={selected.revisionId}
-          sourceId={id}
-          revision={selected.revision}
-          revisionId={selected.revisionId}
-          selectionVersion={selectionRequest.current}
-          readDetail={readDetail}
-          onComplete={completeExtraction}
-        />
-      )}
+      {!reader &&
+        selected &&
+        ["queued", "processing"].includes(selected.extraction?.status ?? "") && (
+          <DocumentProgress
+            key={selected.revisionId}
+            sourceId={id}
+            revision={selected.revision}
+            revisionId={selected.revisionId}
+            selectionVersion={selectionRequest.current}
+            readDetail={readDetail}
+            onComplete={completeExtraction}
+          />
+        )}
       {!reader &&
         (uploading ? (
           <form className="panel" onSubmit={upload}>

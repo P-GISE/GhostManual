@@ -2,8 +2,8 @@ import { afterAll, expect, it } from "vitest";
 import { GET } from "../../src/app/api/sources/[id]/revisions/[revision]/status/route.ts";
 import { pool } from "../../src/lib/db.ts";
 import { claimDocumentJob, completeDocumentJob } from "../../src/lib/document-jobs.ts";
-import { readDocument } from "../../src/lib/documents/read.ts";
 import { getDocumentStatus } from "../../src/lib/document-status.ts";
+import { readDocument } from "../../src/lib/documents/read.ts";
 import { createFileSource, fileContent, getFileRevision } from "../../src/lib/file-sources.ts";
 import { publishManual, saveDraft } from "../../src/lib/manuals.ts";
 import { createWorkspace, requireSession } from "../../src/lib/session.ts";
@@ -18,9 +18,15 @@ async function fixture() {
   return { session, ctx, saved };
 }
 async function request(token: string, id: string, reader = false, revision = "1") {
-  return GET(new Request("http://localhost:3200/api/sources/" + id + "/revisions/" + revision + "/status", {
-    headers: { cookie: (reader ? "gm_reader=" : "gm_owner=") + token, ...(reader ? { "x-ghost-role": "reader" } : {}) },
-  }), { params: Promise.resolve({ id, revision }) });
+  return GET(
+    new Request("http://localhost:3200/api/sources/" + id + "/revisions/" + revision + "/status", {
+      headers: {
+        cookie: (reader ? "gm_reader=" : "gm_owner=") + token,
+        ...(reader ? { "x-ghost-role": "reader" } : {}),
+      },
+    }),
+    { params: Promise.resolve({ id, revision }) },
+  );
 }
 async function complete() {
   const job = await claimDocumentJob();
@@ -37,7 +43,10 @@ it("returns only identity and status with no-store and preserves pending downloa
   expect(await response.json()).toEqual({ revisionId: saved.revisionId, status: "queued" });
   await expect(fileContent(ctx, saved.id, 1)).rejects.toMatchObject({ httpStatus: 409 });
   await complete();
-  expect(await getDocumentStatus(ctx, saved.id, 1)).toEqual({ revisionId: saved.revisionId, status: "ready" });
+  expect(await getDocumentStatus(ctx, saved.id, 1)).toEqual({
+    revisionId: saved.revisionId,
+    status: "ready",
+  });
 });
 it("scopes source, revision and workspace and rechecks expired sessions", async () => {
   const { session, ctx, saved } = await fixture();
@@ -47,7 +56,9 @@ it("scopes source, revision and workspace and rechecks expired sessions", async 
   expect((await request("invalid", saved.id)).status).toBe(401);
   expect((await request(session.token, saved.id, false, "0")).status).toBe(422);
   await complete();
-  await pool.query("UPDATE sessions SET expires_at=now()-interval '1 second' WHERE id=$1", [ctx.sessionId]);
+  await pool.query("UPDATE sessions SET expires_at=now()-interval '1 second' WHERE id=$1", [
+    ctx.sessionId,
+  ]);
   expect((await request(session.token, saved.id)).status).toBe(401);
   await expect(getDocumentStatus(ctx, saved.id, 1)).rejects.toMatchObject({ httpStatus: 401 });
 });
@@ -55,7 +66,11 @@ it("keeps Reader out even when its published document is readable", async () => 
   const { ctx } = await signedInUser(setupFileMail());
   const saved = await createFileSource(ctx, { title: "게시 합성", fileName: "case.csv", bytes });
   await complete();
-  const draft = await saveDraft(ctx, saved.revisionId, { ...exampleDraft, references: [], unknowns: [] });
+  const draft = await saveDraft(ctx, saved.revisionId, {
+    ...exampleDraft,
+    references: [],
+    unknowns: [],
+  });
   await publishManual(ctx, draft.id, draft.draftRevision, draft.draft.unknowns);
   const share = await shareWithNewReader(ctx, draft.id);
   const reader = await requireSession(share.token);
@@ -75,12 +90,16 @@ it("rechecks team membership both at the route and inside the locked transaction
   const { session, ctx, saved } = await fixture();
   await complete();
   await pool.query("UPDATE sessions SET user_id=$1 WHERE id=$2", [account.userId, ctx.sessionId]);
-  await pool.query("INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'member')",
-    [ctx.workspaceId, account.userId]);
+  await pool.query(
+    "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'member')",
+    [ctx.workspaceId, account.userId],
+  );
   const member = await requireSession(session.token);
   expect((await request(session.token, saved.id)).status).toBe(200);
-  await pool.query("DELETE FROM workspace_members WHERE workspace_id=$1 AND user_id=$2",
-    [ctx.workspaceId, account.userId]);
+  await pool.query("DELETE FROM workspace_members WHERE workspace_id=$1 AND user_id=$2", [
+    ctx.workspaceId,
+    account.userId,
+  ]);
   expect((await request(session.token, saved.id)).status).toBe(401);
   await expect(getDocumentStatus(member, saved.id, 1)).rejects.toMatchObject({ httpStatus: 401 });
 });
