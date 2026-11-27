@@ -149,8 +149,10 @@ it("keeps Reader detail and counts frozen until the manual is published again", 
 
 async function bootstrap(token: string, id: string, reader = false) {
   const { GET } = await import("../../src/app/api/sources/[id]/revisions/route.ts");
+  const url = new URL(`http://localhost:3200/api/sources/${id}/revisions?includeLatest=1`);
+  if (reader) url.searchParams.set("view", "shared");
   return GET(
-    new Request(`http://localhost:3200/api/sources/${id}/revisions?includeLatest=1`, {
+    new Request(url, {
       headers: { cookie: `${reader ? "gm_reader" : "gm_owner"}=${token}` },
     }),
     { params: Promise.resolve({ id }) },

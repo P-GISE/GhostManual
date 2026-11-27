@@ -515,7 +515,10 @@ async function readFileRevisions(db: DbClient, ctx: SessionContext, id: string) 
   }
   return { revisions: list, first };
 }
-export async function listFileRevisions(ctx: SessionContext, id: string): Promise<RevisionSummary[]> {
+export async function listFileRevisions(
+  ctx: SessionContext,
+  id: string,
+): Promise<RevisionSummary[]> {
   return transaction(async (db) => (await readFileRevisions(db, ctx, id)).revisions);
 }
 export async function getFileRevisionBootstrap(ctx: SessionContext, id: string) {

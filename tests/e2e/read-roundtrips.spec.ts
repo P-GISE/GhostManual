@@ -56,3 +56,45 @@ test("initial file read bundles history and latest detail without a second detai
   ).toHaveLength(1);
   expect(requests.filter((url) => url === `/api/sources/${source.id}/revisions/1`)).toHaveLength(0);
 });
+
+test("leaving and returning ignores the old route's delayed workspace response", async ({ page }) => {
+  await signUpAndVerify(page);
+  const entries = await (await page.request.get("/api/workspaces")).json();
+  const current = entries.find((entry: { current: boolean }) => entry.current) as { id: string };
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let calls = 0;
+  await page.route("**/api/workspaces", async (route) => {
+    const first = ++calls === 1;
+    if (first) await held;
+    await route.fulfill({
+      json: [
+        {
+          id: current.id,
+          name: first ? "OLD_ROUTE_METADATA" : "FRESH_ROUTE_METADATA",
+          role: "admin",
+          current: true,
+        },
+      ],
+    });
+  });
+  try {
+    await page.goto("/sources/new");
+    await expect(page.getByText("문서함을 확인하고 있습니다.", { exact: true })).toBeVisible();
+    await page.evaluate(() => {
+      document.documentElement.dataset["roundtripDocument"] = "same";
+    });
+    await page.getByRole("link", { name: "도움말", exact: true }).click();
+    await expect(page).toHaveURL(/\/help$/);
+    release();
+    await page.goBack();
+    await expect(page.getByLabel("자료 제목", { exact: true })).toBeVisible();
+    await expect(page.locator(".crumb")).toContainText("FRESH_ROUTE_METADATA");
+    await expect(page.locator(".crumb")).not.toContainText("OLD_ROUTE_METADATA");
+    await expect(page.locator("html")).toHaveAttribute("data-roundtrip-document", "same");
+  } finally {
+    release();
+  }
+});
