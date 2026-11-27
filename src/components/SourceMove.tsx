@@ -1,17 +1,10 @@
 "use client";
 import { HTTPError } from "ky";
-import { useEffect, useId, useState } from "react";
-import { z } from "zod";
-import { http, message, read } from "../lib/client";
+import { useId, useState } from "react";
+import { http, message } from "../lib/client";
+import { useWorkspaceList } from "./CurrentWorkspace";
 import { switchWorkspace } from "./Teams";
 
-const workspaces = z.array(
-  z.object({
-    id: z.uuid(),
-    name: z.string().nullable(),
-    current: z.boolean(),
-  }),
-);
 export function SourceMove({
   id,
   disabled,
@@ -24,23 +17,14 @@ export function SourceMove({
   readonly onMoved: (target: string) => void;
 }) {
   const fieldId = useId();
-  const [teams, setTeams] = useState<z.infer<typeof workspaces>>([]);
+  const list = useWorkspaceList();
+  const teams = list?.some((entry) => entry.current && entry.name === null)
+    ? list.filter((entry) => entry.name !== null)
+    : [];
   const [target, setTarget] = useState("");
   const [confirm, setConfirm] = useState(false);
   const [error, setError] = useState("");
   const [uncertain, setUncertain] = useState(false);
-  useEffect(() => {
-    let active = true;
-    read("/api/workspaces", workspaces)
-      .then((list) => {
-        if (active && list.some((entry) => entry.current && entry.name === null))
-          setTeams(list.filter((entry) => entry.name !== null));
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, []);
   if (!teams.length) return null;
   async function move() {
     if (!confirm || !target) return;

@@ -357,7 +357,13 @@ export function SourceDetail({
         </p>
       )}
       {!reader && (
-        <SourceMove id={id} disabled={busy || editing} onBusy={setBusy} onMoved={setMovedTarget} />
+        <SourceMove
+          key={id}
+          id={id}
+          disabled={busy || editing}
+          onBusy={setBusy}
+          onMoved={setMovedTarget}
+        />
       )}
       {busy && <p role="status">요청을 처리하고 있습니다.</p>}
       {source.canDelete ? (
@@ -390,6 +396,7 @@ export function SourceDetail({
           </p>
         )}
         <FileVersions
+          key={`${id}:${reader}`}
           id={id}
           reader={reader}
           startUploading={upload}

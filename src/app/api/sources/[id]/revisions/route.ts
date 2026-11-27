@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AppError } from "../../../../../lib/errors.ts";
 import {
   addFileRevision,
+  getFileRevisionBootstrap,
   listFileRevisions,
   MAX_FILE_BYTES,
 } from "../../../../../lib/file-sources.ts";
@@ -9,14 +10,15 @@ import { endpoint, json, readBody, requestSession } from "../../../../../lib/htt
 
 type Context = { params: Promise<{ id: string }> };
 export async function GET(request: Request, context: Context) {
-  return endpoint(request, async () =>
-    json(
-      await listFileRevisions(
-        await requestSession(request),
-        z.uuid().parse((await context.params).id),
-      ),
-    ),
-  );
+  return endpoint(request, async () => {
+    const ctx = await requestSession(request);
+    const id = z.uuid().parse((await context.params).id);
+    return json(
+      new URL(request.url).searchParams.get("includeLatest") === "1"
+        ? await getFileRevisionBootstrap(ctx, id)
+        : await listFileRevisions(ctx, id),
+    );
+  });
 }
 export async function POST(request: Request, context: Context) {
   return endpoint(request, async () => {

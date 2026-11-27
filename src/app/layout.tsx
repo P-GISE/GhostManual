@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import "./globals.css";
 import "./responsive.css";
+import { CurrentWorkspaceProvider } from "../components/CurrentWorkspace";
 import { Navigation } from "../components/Navigation";
 import { DiagnosticProvider } from "../components/RequestDiagnostics";
 import { WorkspaceCrumb } from "../components/Teams";
@@ -27,8 +28,10 @@ export default function Layout({ children }: { readonly children: ReactNode }) {
         </a>
         <Navigation />
         <main id="main" tabIndex={-1}>
-          <WorkspaceCrumb />
-          <DiagnosticProvider>{children}</DiagnosticProvider>
+          <CurrentWorkspaceProvider>
+            <WorkspaceCrumb />
+            <DiagnosticProvider>{children}</DiagnosticProvider>
+          </CurrentWorkspaceProvider>
         </main>
         <footer>
           <span>원본 → 검수 매뉴얼 → 근거 답변</span>

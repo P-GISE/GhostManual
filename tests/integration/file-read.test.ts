@@ -146,3 +146,54 @@ it("keeps Reader detail and counts frozen until the manual is published again", 
   });
   expect((await listFileRevisions(reader, v1.id))[0]?.answeredCount).toBe(0);
 });
+
+async function bootstrap(token: string, id: string, reader = false) {
+  const { GET } = await import("../../src/app/api/sources/[id]/revisions/route.ts");
+  const url = new URL(`http://localhost:3200/api/sources/${id}/revisions?includeLatest=1`);
+  if (reader) url.searchParams.set("view", "shared");
+  return GET(
+    new Request(url, {
+      headers: { cookie: `${reader ? "gm_reader" : "gm_owner"}=${token}` },
+    }),
+    { params: Promise.resolve({ id }) },
+  );
+}
+it("bootstrap keeps legacy history and latest preview in one response", async () => {
+  const { ctx, token, v1 } = await twoVersions();
+  const response = await bootstrap(token, v1.id);
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toContain("no-store");
+  expect(await response.json()).toEqual(
+    JSON.parse(
+      JSON.stringify({
+        revisions: await listFileRevisions(ctx, v1.id),
+        latest: await getFileRevision(ctx, v1.id, 2),
+      }),
+    ),
+  );
+  const other = await signedInUser(mail);
+  expect((await bootstrap(other.token, v1.id)).status).toBe(404);
+  expect((await bootstrap("invalid", v1.id)).status).toBe(401);
+});
+it("Reader bootstrap keeps published-only revision and frozen answers after owner edits", async () => {
+  const { ctx, v1, v2, manualId } = await twoVersions();
+  const question = v2.questions[0];
+  if (!question) throw new Error("expected question");
+  await answerQuestion(ctx, v1.id, 2, question.id, { answer: "PUBLISHED_BOOTSTRAP" });
+  const manual = await getManual(ctx, manualId);
+  await publishManual(ctx, manualId, manual.draftRevision, manual.draft.unknowns);
+  const shared = await shareWithNewReader(ctx, manualId);
+  await answerQuestion(ctx, v1.id, 2, question.id, { answer: "UNPUBLISHED_BOOTSTRAP" });
+  const response = await bootstrap(shared.token, v1.id, true);
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body).toMatchObject({
+    revisions: [{ revision: 2, answeredCount: 1 }],
+    latest: { revision: 2 },
+  });
+  expect(body.revisions).toHaveLength(1);
+  expect(JSON.stringify(body)).toContain("PUBLISHED_BOOTSTRAP");
+  expect(JSON.stringify(body)).not.toContain("UNPUBLISHED_BOOTSTRAP");
+  await pool.query("UPDATE shares SET revoked_at=now() WHERE manual_id=$1", [manualId]);
+  expect((await bootstrap(shared.token, v1.id, true)).status).toBe(401);
+});

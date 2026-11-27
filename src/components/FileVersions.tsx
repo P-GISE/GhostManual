@@ -193,10 +193,46 @@ export function FileVersions({
     return revisions;
   }, [id, query, reader]);
   useEffect(() => {
-    void refresh()
-      .then((revisions) => (revisions[0] ? open(revisions[0].revision) : undefined))
-      .catch(async (e) => setError(await message(e)));
-  }, [refresh, open]);
+    let active = true;
+    const controller = new AbortController();
+    const listVersion = ++listRequest.current;
+    const selectionVersion = ++selectionRequest.current;
+    const separator = query ? "&" : "?";
+    void http
+      .get(`/api/sources/${id}/revisions${query}${separator}includeLatest=1`, {
+        signal: controller.signal,
+        timeout: 15000,
+        headers: reader ? { "x-ghost-role": "reader" } : {},
+      })
+      .json()
+      .then((body) => {
+        const data = z
+          .object({
+            revisions: z.array(revisionSummarySchema),
+            latest: fileRevisionSchema.nullable(),
+          })
+          .parse(body);
+        if (
+          !active ||
+          listVersion !== listRequest.current ||
+          selectionVersion !== selectionRequest.current
+        )
+          return;
+        setList(data.revisions);
+        setSelected(data.latest);
+        if (data.latest) onUploaded(data.latest);
+      })
+      .catch(async (error) => {
+        const detail = await message(error);
+        if (active) setError(detail);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+      ++listRequest.current;
+      ++selectionRequest.current;
+    };
+  }, [id, query, reader, onUploaded]);
   useEffect(() => {
     if (
       reader ||
