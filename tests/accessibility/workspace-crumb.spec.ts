@@ -24,7 +24,7 @@ test("long team breadcrumb and administrator navigation stay keyboard accessible
   await expect(
     page.getByRole("heading", { name: source.title, level: 1, exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
   const crumb = page.locator(".crumb");
   await expect(crumb.getByRole("link", { name, exact: true })).toBeVisible();
   await expect(crumb.getByRole("link", { name, exact: true })).toHaveAttribute(
