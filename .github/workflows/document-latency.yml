@@ -36,12 +36,12 @@ jobs:
           node-version: 26.13.1
           cache: npm
       - run: npm ci
-      - run: npx biome check tests/performance/latency-metrics.ts tests/performance/latency-recorder.ts tests/performance/setup-latency.ts tests/performance/user-flows.spec.ts tests/unit/latency-metrics.test.ts playwright.latency.config.ts
+      - run: npx biome check tests/performance/latency-metrics.ts tests/performance/latency-recorder.ts tests/performance/setup-latency.ts tests/performance/user-flows.spec.ts tests/unit/latency-metrics.test.ts tests/performance/playwright.config.ts
       - run: npm test -- tests/unit/latency-metrics.test.ts
       - run: npm run build
       - run: npx playwright install chromium
       - name: Measure one isolated desktop user
-        run: npx playwright test --config playwright.latency.config.ts
+        run: npx playwright test --config tests/performance/playwright.config.ts
       - name: Retain synthetic timing rows only
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

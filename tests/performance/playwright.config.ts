@@ -1,21 +1,22 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
-import { assertLatencyTarget } from "./tests/performance/latency-metrics.ts";
+import { assertLatencyTarget } from "./latency-metrics.ts";
 
 assertLatencyTarget(process.env);
 const mailDir = join(tmpdir(), "ghostmanual-latency-mail");
 process.env["E2E_MAIL_DIR"] = mailDir;
 export default defineConfig({
-  testDir: "./tests/performance",
+  testDir: ".",
   testMatch: "user-flows.spec.ts",
-  globalSetup: "./tests/performance/setup-latency.ts",
+  globalSetup: "./setup-latency.ts",
   workers: 1,
   retries: 0,
   timeout: 600_000,
   expect: { timeout: 15_000 },
   reporter: "line",
-  outputDir: "latency-test-results",
+  outputDir: "../../latency-test-results",
   use: {
     ...devices["Desktop Chrome"],
     baseURL: "http://localhost:3200",
@@ -25,6 +26,7 @@ export default defineConfig({
   },
   webServer: {
     command: "npm run start",
+    cwd: fileURLToPath(new URL("../../", import.meta.url)),
     url: "http://localhost:3200",
     reuseExistingServer: false,
     timeout: 120_000,
