@@ -1,0 +1,45 @@
+name: Focused document completion regressions
+on:
+  push:
+    branches: ["fix/document-completion-latency"]
+permissions:
+  contents: read
+jobs:
+  security:
+    uses: ./.github/workflows/security-gate.yml
+  regressions:
+    needs: ["security"]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18.4-bookworm@sha256:882236b897e39051d2368c5ccc6cda944904723506b2dfc97f2a8f5bc9afa382
+        env:
+          POSTGRES_USER: ghostmanual
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: ghostmanual_latency_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ghostmanual -d ghostmanual_latency_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://ghostmanual:ci-only-password@localhost:5432/ghostmanual_latency_test
+      APP_ORIGIN: http://localhost:3200
+      AI_ENABLED: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 26.13.1
+          cache: npm
+      - run: npm ci
+      - run: npx biome check tests/performance/latency-metrics.ts tests/performance/latency-recorder.ts tests/performance/setup-latency.ts tests/performance/user-flows.spec.ts tests/unit/latency-metrics.test.ts tests/performance/playwright.config.ts
+      - run: npm test -- tests/unit/latency-metrics.test.ts tests/unit/document-progress.test.ts
+      - run: node --input-type=module -e 'import setup from "./tests/performance/setup-latency.ts"; await setup()'
+      - run: npm run build
+      - run: npx playwright install chromium
+      - name: Verify focused request and authority regressions
+        run: npx playwright test tests/e2e/document-progress.spec.ts tests/e2e/document-versions.spec.ts --project desktop

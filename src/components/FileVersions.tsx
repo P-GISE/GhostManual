@@ -16,6 +16,7 @@ import {
 } from "../lib/client";
 import { CellChanges } from "./CellChanges";
 import { DocumentChanges } from "./DocumentChanges";
+import { DocumentProgress } from "./DocumentProgress";
 
 export const changeLabels: Record<string, string> = {
   sheet_added: "시트 추가",
@@ -233,44 +234,19 @@ export function FileVersions({
       ++selectionRequest.current;
     };
   }, [id, query, reader, onUploaded]);
-  useEffect(() => {
-    if (
-      reader ||
-      !selected ||
-      !["queued", "processing"].includes(selected.extraction?.status ?? "")
-    )
-      return;
-    let stopped = false;
-    let inFlight = false;
-    const controller = new AbortController();
-    const timer = setInterval(() => {
-      if (inFlight) return;
-      inFlight = true;
-      void readDetail(selected.revision, controller.signal)
-        .then((detail) => {
-          if (stopped) return;
-          setSelected((current) => (current?.revisionId === detail.revisionId ? detail : current));
-          if (!["queued", "processing"].includes(detail.extraction?.status ?? "")) {
-            setStatus(`v${detail.revision}: ${statusText[detail.compareStatus]}.`);
-            onUploaded(detail);
-            void refresh().catch(async (e) => {
-              if (!stopped) setError(await message(e));
-            });
-          }
-        })
-        .catch(async (e) => {
-          if (!stopped) setError(await message(e));
-        })
-        .finally(() => {
-          inFlight = false;
-        });
-    }, 2000);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-      controller.abort();
-    };
-  }, [reader, selected, readDetail, refresh, onUploaded]);
+  const completeExtraction = useCallback(
+    (detail: FileRevision, selectionVersion: number) => {
+      if (selectionVersion !== selectionRequest.current) return;
+      setSelected((current) => (current?.revisionId === detail.revisionId ? detail : current));
+      setStatus(`v${detail.revision}: ${statusText[detail.compareStatus]}.`);
+      onUploaded(detail);
+      void refresh().catch(async (error) => {
+        const detail = await message(error);
+        if (selectionVersion === selectionRequest.current) setError(detail);
+      });
+    },
+    [onUploaded, refresh],
+  );
   async function retryExtraction() {
     if (!selected || busy || reader) return;
     onBusyChange(true);
@@ -393,6 +369,19 @@ export function FileVersions({
           {status}
         </p>
       )}
+      {!reader &&
+        selected &&
+        ["queued", "processing"].includes(selected.extraction?.status ?? "") && (
+          <DocumentProgress
+            key={selected.revisionId}
+            sourceId={id}
+            revision={selected.revision}
+            revisionId={selected.revisionId}
+            selectionVersion={selectionRequest.current}
+            readDetail={readDetail}
+            onComplete={completeExtraction}
+          />
+        )}
       {!reader &&
         (uploading ? (
           <form className="panel" onSubmit={upload}>
