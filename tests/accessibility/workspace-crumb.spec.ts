@@ -11,20 +11,20 @@ test("long team breadcrumb and administrator navigation stay keyboard accessible
     const path = new URL(route.request().url()).pathname;
     const values: Record<string, unknown> = {
       "/api/me": { name: "합성 관리자", admin: true },
+      "/api/session": { role: "owner" },
+      "/api/templates": [],
       "/api/workspaces": [{ id, name, role: "admin", current: true }],
       [`/api/sources/${source.id}`]: source,
       [`/api/sources/${source.id}/history`]: [],
     };
-    await route.fulfill(
-      path in values
-        ? { json: values[path] }
-        : {
-            status: 404,
-            json: { error: { code: "not_found", message: "합성 대상 없음", retryable: false } },
-          },
-    );
+    if (!(path in values)) throw new Error(`Unexpected breadcrumb audit request: ${path}`);
+    await route.fulfill({ json: values[path] });
   });
   await page.goto(`/sources/${source.id}`);
+  await expect(
+    page.getByRole("heading", { name: source.title, level: 1, exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
   const crumb = page.locator(".crumb");
   await expect(crumb.getByRole("link", { name, exact: true })).toBeVisible();
   await expect(crumb.getByRole("link", { name, exact: true })).toHaveAttribute(
