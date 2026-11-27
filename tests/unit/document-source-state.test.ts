@@ -129,7 +129,7 @@ it("advances to a newly uploaded revision and keeps its pending guards", () => {
   expectDisabled(html, true);
 });
 
-it("refreshes parent extraction when opening the latest selected version", async () => {
+it("refreshes parent extraction from the bundled initial latest version", async () => {
   const effects: Array<() => unknown> = [];
   vi.mocked(useEffect).mockImplementation((effect) => {
     effects.push(effect);
@@ -137,10 +137,11 @@ it("refreshes parent extraction when opening the latest selected version", async
   state.slots = [];
   state.cursor = 0;
   const saved = detail(4, "ready");
-  vi.mocked(read).mockResolvedValue([
-    { ...saved, changeCount: 0, questionCount: 0, answeredCount: 0 },
-  ]);
-  vi.mocked(http.get).mockImplementation(vi.fn().mockReturnValue({ json: async () => saved }));
+  const revisions = [{ ...saved, changeCount: 0, questionCount: 0, answeredCount: 0 }];
+  vi.mocked(read).mockResolvedValue(revisions);
+  vi.mocked(http.get).mockImplementation(
+    vi.fn().mockReturnValue({ json: async () => ({ revisions, latest: saved }) }),
+  );
   const { FileVersions: ActualVersions } = await vi.importActual<
     typeof import("../../src/components/FileVersions")
   >("../../src/components/FileVersions");

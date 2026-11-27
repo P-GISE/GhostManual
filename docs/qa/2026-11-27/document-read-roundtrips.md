@@ -20,3 +20,5 @@ a8570d57의 [집중 RED45992269087](https://github.com/P-GISE/GhostManual/action
 Ruling: sourceMove가 늦게 마운트되므로 pending Promise만 합치는 대신 route 표시 목록을 공유한다. 같은 경로의 타 브라우저 rename 실시간 동기화·query-only 모드 전환은 이 작업의 보장 범위가 아니며, 현재의 전체 reload 문서함/로그아웃 경계를 유지한다.
 
 801162a의 집중 회귀45993300365는 지연 응답을 포함한3건을 통과했다. 일반CI에서 새 테스트 선언 줄바꿈1건이 실패해 포맷만 정정했다. 앱 구현과 측정 도구는 그대로 유지한다.
+
+11f88ef의 기존 단위 document-source-state fixture는 첫 GET에도 개별 saved 객체를 반환해 새 bootstrap schema 검증에서 실패했다(282성공/1실패). 부모 추출 갱신 기대값은 유지하고 fixture 응답을 {revisions,latest:saved}로 맞춘다. 실제 브라우저의 동일 동작은 집중 회귀에서 통과했다.
