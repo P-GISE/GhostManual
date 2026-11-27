@@ -169,7 +169,8 @@ test("isolated native upload and read baseline", async ({ page }) => {
           profile: "GitHub hosted runner, no production cgroup limits; one desktop Chromium user",
           migrations: "001-013 only; dedicated ephemeral service",
           cache: "first sample per format is warmup; remaining browser/HTTP cache is not disabled",
-          pacing: "minimum3500ms between registration samples, outside measured phases; source write20/min unchanged",
+          pacing:
+            "minimum3500ms between registration samples, outside measured phases; source write20/min unchanged",
           fixture:
             "small synthetic native packages; 31 files per format/team; growing upload/read population",
           excluded: [
