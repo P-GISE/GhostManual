@@ -1,5 +1,16 @@
 # GhostManual 프로젝트 가이드
 
+## 2026-11-27 현재: PR120 병합·격리 지연 측정 착수
+
+사용자 지시로 [PR120](https://github.com/P-GISE/GhostManual/pull/120)을 초안 해제하고 `eac0039d38a5dad98fdafee6d61488d1dd6bb24c`로 병합했다. 최종 head80c2c806의 [push CI45985951794](https://github.com/P-GISE/GhostManual/actions/runs/45985951794)·[PR CI45985958990](https://github.com/P-GISE/GhostManual/actions/runs/45985958990)는 모두 성공했다. 단위280·DB262·E2E224·세션11·쿠키7·접근성117을 통과했고, 기존 대표 이양 fixture의 초대 후 팀 정렬 경합도 준비 조건을 보완해 해결했다. 이전 미병합/검증 중 기록은 당시 이력이다. 병합 후 CI45987983344는 이 문서 작성 시 대기 중이며 최종 상태는 해당 실행에서 확인한다.
+
+박기성은 [PR121](https://github.com/P-GISE/GhostManual/pull/121)에서 문서함·등록·추출·읽기의 첫 기준선을 수집한다. 전용 GitHub Actions DB001~013·desktop1명·합성 DOCX/HWPX/PPTX별 워밍업1+30표본으로 요청/응답 바이트·접수·claim/추출/저장·UI 감지를 구분한다. 기존 분당20회 제한은 유지하고 표본 간 최소3.5초를 계측 밖에 둔다. 앱 권한·쿼리·폴링·워커 병렬 수를 바꾸는 성능 최적화는 아직 하지 않았다.
+
+측정 산출물/결론과 현재 CI는 PR121을 따르며, 완료 플래그·정확한 표본 수와 성공 실행을 대조한 결과만 채택한다. [측정 경계와 한계](docs/qa/2026-11-27/document-latency-baseline.md)·[후속 계획](docs/superpowers/plans/2026-11-27-document-latency.md)을 따른다. 생산 서버 지연·SQL/잠금별 시간·OCR·동시 부하는 이 첫 기준선에 포함하지 않는다.
+
+운영 반영·migration014/backfill·대표 지정은 보류한다. 마지막 운영 검증 기록은 PR115/Node26.13.1·DB013이며 이번 작업에서 운영 상태를 재조회하거나 변경하지 않았다. 기존 개인 자료·공유 링크·권한 회수 재확인·용량/안전 제한을 유지한다.
+
+
 ## 2026-11-27 최신 검증: PR120 수정 완료·미병합
 
 [PR #120](https://github.com/P-GISE/GhostManual/pull/120)의 앱 수정 기준은 `403981c08c271a15a65acfb87c80175b21234af2`다. 팀 이름 저장 뒤 Next Link로 이동할 때 상단 경로가 이전 이름을 유지하던 문제를 수정했다. 실제 격리 DB를 쓰는 desktop/mobile 회귀4건에서 새 이름·같은 팀 링크·이전 이름 제거와 조회 실패 시 이전 경로 비표시를 확인했다. 문서 전체 새로고침으로 문제를 우회하지 않았다.
