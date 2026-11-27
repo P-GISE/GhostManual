@@ -62,7 +62,10 @@ for (const unavailable of [false, true]) {
     await expect(page).toHaveURL(`${origin}/sources/new`);
     if (unavailable) {
       await expect(
-        page.getByRole("main").getByRole("alert").filter({ hasText: "문서함을 확인하지 못했습니다." }),
+        page
+          .getByRole("main")
+          .getByRole("alert")
+          .filter({ hasText: "문서함을 확인하지 못했습니다." }),
       ).toBeVisible();
       await expect(crumb).toHaveCount(0);
       await expect(page.getByLabel("자료 제목", { exact: true })).toHaveCount(0);
